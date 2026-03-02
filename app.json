@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Harmonia",
+    "slug": "harmonia-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "harmonia",
+    "userInterfaceStyle": "dark",
+    "plugins": ["expo-router"],
+    "android": {
+      "package": "com.shreeharsh.harmonia"
+    },
+    "ios": {
+      "bundleIdentifier": "com.shreeharsh.harmonia",
+      "supportsTablet": false
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
