@@ -1,5 +1,5 @@
 import { HARMONIA_API_URL } from '@/src/config';
-import { normalizeSong } from '@/src/lib/song';
+import { artistNames, normalizeSong } from '@/src/lib/song';
 import type {
   HarmoniaUser,
   LibraryPayload,
@@ -8,6 +8,14 @@ import type {
   SearchPayload,
   Song,
 } from '@/src/types';
+
+export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
+
+export type LyricsResult = {
+  syncedLyrics?: string | null;
+  plainLyrics?: string | null;
+  lyricsProvider?: string | null;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -125,13 +133,72 @@ export async function fetchSongs(ids: string[]): Promise<Song[]> {
   return (payload.data || []).map((song) => normalizeSong(song as any));
 }
 
-function qualityScore(item: { quality?: string }) {
-  const label = String(item?.quality || '').toLowerCase();
-  if (/(lossless|flac|alac|wav)/.test(label)) return 1_000_000;
-  return Number(label.match(/\d+/)?.[0] || 0);
+export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
+  const artist = artistNames(song);
+  const title = song.name || song.title || '';
+  if (!title) return null;
+
+  const params = new URLSearchParams({
+    endpoint: 'get',
+    artist_name: artist,
+    track_name: title,
+  });
+  if (song.duration) params.set('duration', String(Math.round(song.duration)));
+
+  try {
+    const exact = await requestJson<LyricsResult>(`/api/proxy/lyrics?${params.toString()}`);
+    if (exact?.syncedLyrics || exact?.plainLyrics) {
+      return { ...exact, lyricsProvider: 'LRCLib' };
+    }
+  } catch {}
+
+  try {
+    const search = await requestJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
+      `/api/proxy/lyrics?endpoint=search&q=${encodeURIComponent(`${artist} ${title}`)}`
+    );
+    const best = Array.isArray(search)
+      ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
+      : null;
+    return best ? { ...best, lyricsProvider: 'LRCLib' } : null;
+  } catch {
+    return null;
+  }
 }
 
-export async function resolvePlayableSong(song: Song): Promise<{ song: Song; url: string }> {
+function qualityScore(item: { quality?: string; bitrate?: number }) {
+  const label = String(item?.quality || '').toLowerCase();
+  if (/(lossless|flac|alac|wav)/.test(label)) return 1_000_000;
+  return Number(label.match(/\d+/)?.[0] || item?.bitrate || 0);
+}
+
+function qualityCeiling(quality: StreamQuality) {
+  switch (quality) {
+    case 'data-saver': return 96;
+    case 'normal': return 160;
+    case 'high': return 320;
+    case 'maximum': return Number.POSITIVE_INFINITY;
+    default: return Number.POSITIVE_INFINITY;
+  }
+}
+
+function pickAudioCandidate(
+  candidates: Array<{ quality?: string; url: string; bitrate?: number }>,
+  quality: StreamQuality
+) {
+  const available = [...candidates].filter((item) => item?.url);
+  if (!available.length) return null;
+
+  const ceiling = qualityCeiling(quality);
+  const ranked = available.sort((a, b) => qualityScore(b) - qualityScore(a));
+  if (!Number.isFinite(ceiling)) return ranked[0];
+
+  return ranked.find((item) => qualityScore(item) <= ceiling) || ranked[ranked.length - 1];
+}
+
+export async function resolvePlayableSong(
+  song: Song,
+  quality: StreamQuality = 'automatic'
+): Promise<{ song: Song; url: string }> {
   const stable = normalizeSong(song as any);
   const source = String(stable.source || stable.provider || '').toLowerCase();
   const youtubeId = String(stable.videoId || stable.youtubeId || (source.includes('youtube') ? stable.id : ''));
@@ -145,16 +212,15 @@ export async function resolvePlayableSong(song: Song): Promise<{ song: Song; url
 
   const details = stable.id ? await fetchSongs([stable.id]).catch(() => []) : [];
   const playable = details[0] || stable;
-  const candidates = Array.isArray(playable.downloadUrl)
-    ? [...playable.downloadUrl].filter((item) => item?.url).sort((a, b) => qualityScore(b) - qualityScore(a))
-    : [];
+  const candidate = Array.isArray(playable.downloadUrl)
+    ? pickAudioCandidate(playable.downloadUrl, quality)
+    : null;
 
-  const url = candidates[0]?.url;
-  if (!url) {
+  if (!candidate?.url) {
     throw new ApiError('This track is currently unavailable');
   }
 
-  return { song: playable, url };
+  return { song: playable, url: candidate.url };
 }
 
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
