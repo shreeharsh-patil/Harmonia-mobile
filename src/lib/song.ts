@@ -37,8 +37,8 @@ export function artistNames(song?: Song | null) {
     if (names.length) return names.join(', ');
   }
 
-  if (artists && Array.isArray(artists.primary)) {
-    const names = artists.primary.map((artist) => artist?.name).filter(Boolean);
+  if (artists && !Array.isArray(artists) && Array.isArray(artists.primary)) {
+    const names = artists.primary.map((artist: HarmoniaArtist) => artist?.name).filter(Boolean);
     if (names.length) return names.join(', ');
   }
 
