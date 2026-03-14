@@ -138,7 +138,7 @@ export default function PlayerScreen() {
           source={{ uri: cover }}
           blurRadius={42}
           resizeMode="cover"
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           imageStyle={styles.backdropImage}
         />
       )}
@@ -353,8 +353,8 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
   backdropImage: { opacity: 0.34, transform: [{ scale: 1.16 }] },
-  backdropTint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5,5,5,0.70)' },
-  backdropFade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.18)' },
+  backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5,5,5,0.70)' },
+  backdropFade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
   safe: { flex: 1, paddingHorizontal: 20 },
   scroll: { paddingBottom: 20 },
   header: { height: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
