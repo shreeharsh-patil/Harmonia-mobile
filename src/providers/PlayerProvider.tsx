@@ -26,6 +26,7 @@ import {
   persistenceSafeSong,
 } from '@/src/lib/song';
 import type { Song } from '@/src/types';
+import { useOffline } from '@/src/providers/OfflineProvider';
 
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 
@@ -68,6 +69,7 @@ type PlayerContextValue = {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
+  const { getOfflineUri } = useOffline();
   const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Song[]>([]);
@@ -157,7 +159,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     try {
       player.pause();
-      const resolved = await resolvePlayableSong(stable, qualityRef.current);
+      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+      const offlineUri = getOfflineUri(stable.id);
+      const resolved = localUri || offlineUri
+        ? { song: stable, url: localUri || offlineUri! }
+        : await resolvePlayableSong(stable, qualityRef.current);
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
       queueRef.current = nextQueue;
@@ -177,7 +183,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     } finally {
       setIsLoadingTrack(false);
     }
-  }, [player, setLockScreenMetadata]);
+  }, [getOfflineUri, player, setLockScreenMetadata]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
