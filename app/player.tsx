@@ -58,6 +58,8 @@ export default function PlayerScreen() {
     streamQuality,
     sleepTimer,
     sleepRemaining,
+    repeatMode,
+    shuffleEnabled,
     togglePlayback,
     previous,
     next,
@@ -66,6 +68,8 @@ export default function PlayerScreen() {
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
+    toggleRepeat,
+    toggleShuffle,
   } = usePlayer();
 
   const [progressWidth, setProgressWidth] = useState(1);
@@ -201,6 +205,9 @@ export default function PlayerScreen() {
           {!!error && <Text style={styles.error}>{error}</Text>}
 
           <View style={styles.controls}>
+            <Pressable onPress={toggleShuffle} style={styles.modeControl}>
+              <Text style={[styles.modeText, shuffleEnabled && styles.modeTextActive]}>⇄</Text>
+            </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip}>
               <Text style={styles.skipText}>|‹</Text>
             </Pressable>
@@ -211,6 +218,11 @@ export default function PlayerScreen() {
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip}>
               <Text style={styles.skipText}>›|</Text>
+            </Pressable>
+            <Pressable onPress={toggleRepeat} style={styles.modeControl}>
+              <Text style={[styles.modeText, repeatMode !== 'off' && styles.modeTextActive]}>
+                {repeatMode === 'one' ? '↻1' : '↻'}
+              </Text>
             </Pressable>
           </View>
 
@@ -424,7 +436,10 @@ const styles = StyleSheet.create({
   time: { color: '#8A8A8A', fontSize: 11, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 34, paddingVertical: 24 },
-  skip: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center' },
+  modeControl: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
+  modeText: { color: '#686868', fontSize: 20, fontWeight: '800' },
+  modeTextActive: { color: '#FFF' },
+  skip: { width: 52, height: 58, alignItems: 'center', justifyContent: 'center' },
   skipText: { color: '#FFF', fontSize: 31, fontWeight: '700', letterSpacing: -5 },
   play: { width: 74, height: 74, borderRadius: 37, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
   playText: { color: '#080808', fontSize: 28, fontWeight: '900' },
