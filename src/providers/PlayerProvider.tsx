@@ -76,6 +76,11 @@ type PlayerContextValue = {
   clearHistory: () => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
+  playNext: (song: Song) => void;
+  addToQueue: (song: Song) => void;
+  removeQueueItem: (index: number) => void;
+  moveQueueItem: (from: number, to: number) => void;
+  clearUpcoming: () => void;
   togglePlayback: () => Promise<void>;
   next: () => Promise<void>;
   previous: () => Promise<void>;
@@ -341,6 +346,58 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     await loadIndex(playbackIndex, true, 0);
   }, [loadIndex]);
 
+  const commitQueue = useCallback((nextQueue: Song[], nextIndex: number) => {
+    queueRef.current = nextQueue;
+    indexRef.current = nextIndex;
+    unshuffledQueueRef.current = nextQueue;
+    setQueue(nextQueue);
+    setCurrentIndex(nextIndex);
+  }, []);
+
+  const playNext = useCallback((song: Song) => {
+    const stable = persistenceSafeSong(normalizeSong(song as any));
+    if (!stable.id) return;
+
+    const list = [...queueRef.current];
+    const existingIndex = list.findIndex(
+      (item, index) => index !== indexRef.current && item.id === stable.id
+    );
+    if (existingIndex >= 0) list.splice(existingIndex, 1);
+    list.splice(Math.min(Math.max(0, indexRef.current + 1), list.length), 0, stable);
+    commitQueue(list, indexRef.current);
+  }, [commitQueue]);
+
+  const addToQueue = useCallback((song: Song) => {
+    const stable = persistenceSafeSong(normalizeSong(song as any));
+    if (!stable.id) return;
+    commitQueue([...queueRef.current, stable], indexRef.current);
+  }, [commitQueue]);
+
+  const removeQueueItem = useCallback((index: number) => {
+    // The active item owns the native source, so queue edits never remove it.
+    if (index < 0 || index >= queueRef.current.length || index === indexRef.current) return;
+    const list = [...queueRef.current];
+    list.splice(index, 1);
+    commitQueue(list, index < indexRef.current ? indexRef.current - 1 : indexRef.current);
+  }, [commitQueue]);
+
+  const moveQueueItem = useCallback((from: number, to: number) => {
+    const list = [...queueRef.current];
+    if (
+      from < 0 || from >= list.length || to < 0 || to >= list.length ||
+      from === to || from === indexRef.current || to === indexRef.current
+    ) return;
+
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    commitQueue(list, indexRef.current);
+  }, [commitQueue]);
+
+  const clearUpcoming = useCallback(() => {
+    const current = queueRef.current[indexRef.current];
+    if (current) commitQueue([current], 0);
+  }, [commitQueue]);
+
   const next = useCallback(async () => {
     const list = queueRef.current;
     if (!list.length) return;
@@ -580,6 +637,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     clearHistory,
     playSong,
     playAt,
+    playNext,
+    addToQueue,
+    removeQueueItem,
+    moveQueueItem,
+    clearUpcoming,
     togglePlayback,
     next,
     previous,
@@ -611,6 +673,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     clearHistory,
     playSong,
     playAt,
+    playNext,
+    addToQueue,
+    removeQueueItem,
+    moveQueueItem,
+    clearUpcoming,
     togglePlayback,
     next,
     previous,
