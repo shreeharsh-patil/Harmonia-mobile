@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +10,7 @@ import {
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 
 export const MINI_PLAYER_HEIGHT = 64;
 
@@ -49,10 +51,10 @@ export function MiniPlayer() {
         >
           {isBuffering || isLoadingTrack
             ? <ActivityIndicator size="small" color="#FFF" />
-            : <Text style={styles.controlText}>{isPlaying ? 'Ⅱ' : '▶'}</Text>}
+            : <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color={colors.textStrong} />}
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Next" onPress={() => void next()} style={styles.control}>
-          <Text style={styles.nextText}>›|</Text>
+          <Ionicons name="play-skip-forward" size={21} color={colors.textStrong} />
         </Pressable>
       </View>
     </View>
@@ -62,11 +64,11 @@ export function MiniPlayer() {
 const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
-    backgroundColor: 'rgba(20,20,20,0.97)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(10,10,10,0.98)',
+    borderRadius: 18,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: colors.borderStrong,
     shadowColor: '#000',
     shadowOpacity: 0.22,
     shadowRadius: 16,
@@ -74,13 +76,11 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   progressTrack: { height: 2, backgroundColor: 'rgba(255,255,255,0.08)' },
-  progress: { height: 2, backgroundColor: '#F2F2F2' },
+  progress: { height: 2, backgroundColor: colors.accent },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   copy: { flex: 1, marginLeft: 10, minWidth: 0 },
-  title: { color: '#F5F5F5', fontWeight: '700', fontSize: 14 },
-  artist: { color: '#8D8D8D', fontSize: 12, marginTop: 2 },
+  title: { color: colors.text, fontWeight: '700', fontSize: 14 },
+  artist: { color: colors.muted, fontSize: 12, marginTop: 2 },
   control: { width: 42, height: 44, alignItems: 'center', justifyContent: 'center' },
-  controlText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  nextText: { color: '#FFF', fontSize: 20, fontWeight: '800', letterSpacing: -3 },
 });
