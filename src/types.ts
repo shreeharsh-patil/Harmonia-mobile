@@ -14,7 +14,29 @@ export type HarmoniaAlbum = {
   id?: string;
   name?: string;
   title?: string;
-  image?: HarmoniaImage[];
+  image?: HarmoniaImage[] | string;
+  artists?: { primary?: HarmoniaArtist[] } | HarmoniaArtist[];
+  primaryArtists?: string;
+  year?: string | number;
+  releaseDate?: string;
+  songCount?: number;
+  songs?: Song[];
+  type?: string;
+  [key: string]: unknown;
+};
+
+export type HarmoniaArtistEntity = HarmoniaArtist & {
+  title?: string;
+  image?: HarmoniaImage[] | string;
+  followerCount?: number | string;
+  isVerified?: boolean;
+  dominantLanguage?: string;
+  dominantType?: string;
+  topSongs?: Song[];
+  songs?: Song[];
+  albums?: HarmoniaAlbum[];
+  type?: string;
+  [key: string]: unknown;
 };
 
 export type DownloadSource = {
@@ -88,10 +110,10 @@ export type SearchCategory<T> = {
 };
 
 export type SearchPayload = {
-  topQuery: SearchCategory<Song | Playlist>;
+  topQuery: SearchCategory<Song | Playlist | HarmoniaAlbum | HarmoniaArtistEntity>;
   songs: SearchCategory<Song>;
-  albums: SearchCategory<Record<string, unknown>>;
-  artists: SearchCategory<Record<string, unknown>>;
+  albums: SearchCategory<HarmoniaAlbum>;
+  artists: SearchCategory<HarmoniaArtistEntity>;
   playlists: SearchCategory<Playlist>;
 };
 
