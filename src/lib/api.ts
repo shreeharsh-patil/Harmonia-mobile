@@ -1,6 +1,8 @@
 import { HARMONIA_API_URL } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import type {
+  HarmoniaAlbum,
+  HarmoniaArtistEntity,
   HarmoniaUser,
   LibraryPayload,
   MusicSection,
@@ -119,9 +121,10 @@ export async function fetchHomeSections(): Promise<MusicSection[]> {
   return feed.data?.sections || [];
 }
 
-export async function searchMusic(query: string, limit = 30): Promise<SearchPayload> {
+export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {
   const payload = await requestJson<{ success: true; data: SearchPayload }>(
-    `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`
+    `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
+    { signal }
   );
   return {
     ...payload.data,
@@ -130,6 +133,89 @@ export async function searchMusic(query: string, limit = 30): Promise<SearchPayl
       results: (payload.data.songs?.results || []).map((song) => normalizeSong(song as any)),
     },
   };
+}
+
+export async function fetchAlbum(id: string): Promise<HarmoniaAlbum> {
+  const payload = await requestJson<{ success: true; data: HarmoniaAlbum }>(
+    `/api/albums?id=${encodeURIComponent(id)}`
+  );
+  return payload.data;
+}
+
+export async function fetchArtist(id: string): Promise<HarmoniaArtistEntity> {
+  const payload = await requestJson<{ success: true; data: HarmoniaArtistEntity }>(
+    `/api/artists?id=${encodeURIComponent(id)}`
+  );
+  return payload.data;
+}
+
+export async function fetchArtistSongs(id: string, limit = 40): Promise<Song[]> {
+  const payload = await requestJson<{ success: true; data: any }>(
+    `/api/artists/${encodeURIComponent(id)}/songs?page=0&limit=${limit}`
+  );
+  const raw = Array.isArray(payload.data)
+    ? payload.data
+    : Array.isArray(payload.data?.songs)
+      ? payload.data.songs
+      : Array.isArray(payload.data?.results)
+        ? payload.data.results
+        : [];
+  return raw.map((song: any) => normalizeSong(song));
+}
+
+export async function fetchArtistAlbums(id: string, limit = 30): Promise<HarmoniaAlbum[]> {
+  const payload = await requestJson<{ success: true; data: any }>(
+    `/api/artists/${encodeURIComponent(id)}/albums?page=0&limit=${limit}`
+  );
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.data?.albums)) return payload.data.albums;
+  if (Array.isArray(payload.data?.results)) return payload.data.results;
+  return [];
+}
+
+export async function fetchPlaylistDetails(id: string, token?: string | null): Promise<Playlist> {
+  if (token) {
+    try {
+      const owned = await requestJson<{ success: true; data: Playlist }>(
+        `/api/mobile/playlists/${encodeURIComponent(id)}`,
+        { token }
+      );
+      return owned.data;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) throw error;
+    }
+  }
+
+  const payload = await requestJson<{ success: true; data: Playlist }>(
+    `/api/playlists/${encodeURIComponent(id)}`
+  );
+  return payload.data;
+}
+
+export async function updatePlaylist(
+  token: string,
+  playlistId: string,
+  update: { name?: string; description?: string; image?: string; isPublic?: boolean }
+) {
+  const payload = await requestJson<{ success: true; data: Playlist }>(
+    `/api/mobile/playlists/${encodeURIComponent(playlistId)}`,
+    { method: 'PATCH', token, body: JSON.stringify(update) }
+  );
+  return payload.data;
+}
+
+export async function deletePlaylist(token: string, playlistId: string) {
+  return requestJson<{ success: true }>(
+    `/api/mobile/playlists/${encodeURIComponent(playlistId)}`,
+    { method: 'DELETE', token }
+  );
+}
+
+export async function removeSongFromPlaylist(token: string, playlistId: string, songId: string) {
+  return requestJson<{ success: true; data?: Playlist }>(
+    `/api/mobile/playlists/${encodeURIComponent(playlistId)}/songs`,
+    { method: 'DELETE', token, body: JSON.stringify({ songId }) }
+  );
 }
 
 export async function fetchSongs(ids: string[]): Promise<Song[]> {
