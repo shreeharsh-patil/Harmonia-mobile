@@ -121,4 +121,15 @@ export type LibraryPayload = {
   playlists: Playlist[];
   likedSongs: Song[];
   likedPlaylists: Playlist[];
+  likedAlbums: HarmoniaAlbum[];
+  likedArtists: HarmoniaArtistEntity[];
+};
+
+export type RecommendedMix = Playlist & {
+  _mixId?: string;
+  mixIndex?: number;
+  sourceType?: string;
+  sourceId?: string | null;
+  generatedAt?: string;
+  expiresAt?: string;
 };
