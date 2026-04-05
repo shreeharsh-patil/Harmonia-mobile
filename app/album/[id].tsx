@@ -16,12 +16,16 @@ import { SongRow } from '@/src/components/SongRow';
 import { fetchAlbum } from '@/src/lib/api';
 import { albumTitle, imageUrl } from '@/src/lib/entities';
 import { artistNames, normalizeSong } from '@/src/lib/song';
+import { useAuth } from '@/src/providers/AuthProvider';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, Song } from '@/src/types';
 
 export default function AlbumScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const { token } = useAuth();
+  const { isAlbumLiked, toggleAlbumLike } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [album, setAlbum] = useState<HarmoniaAlbum | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +107,22 @@ export default function AlbumScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View>
-            <View style={styles.top}><BackButton /></View>
+            <View style={styles.top}>
+              <BackButton />
+              <Pressable
+                onPress={() => {
+                  if (!token) {
+                    router.push('/login');
+                    return;
+                  }
+                  void toggleAlbumLike(album);
+                }}
+                style={styles.headerAction}
+                accessibilityLabel={isAlbumLiked(String(album.id || id || '')) ? 'Remove album from library' : 'Save album'}
+              >
+                <Ionicons name={isAlbumLiked(String(album.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
+              </Pressable>
+            </View>
             <View style={styles.hero}>
               {cover ? (
                 <Image source={{ uri: cover }} style={styles.cover} contentFit="cover" cachePolicy="memory-disk" />
@@ -160,8 +179,9 @@ function BackButton() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
   list: { paddingHorizontal: 18, paddingBottom: 150 },
-  top: { height: 54, justifyContent: 'center' },
+  top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
   cover: { width: 224, height: 224, borderRadius: 18, backgroundColor: '#111' },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
