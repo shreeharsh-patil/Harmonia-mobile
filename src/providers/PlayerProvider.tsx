@@ -36,6 +36,11 @@ const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
 const LISTENING_STATS_KEY = 'harmonia.mobile.listening-stats.v1';
 
+function localDayKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 type PlaybackSnapshot = {
   queue: Song[];
   index: number;
@@ -63,6 +68,7 @@ export type ListeningStats = {
   totalSeconds: number;
   playCount: number;
   trackCounts: Record<string, number>;
+  dailySeconds: Record<string, number>;
 };
 
 export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
@@ -130,6 +136,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     totalSeconds: 0,
     playCount: 0,
     trackCounts: {},
+    dailySeconds: {},
   });
 
   const loadedTrackId = useRef<string | null>(null);
@@ -573,6 +580,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
               ? parsedStats.trackCounts
               : {},
+            dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+              ? parsedStats.dailySeconds
+              : {},
           });
         }
 
@@ -691,6 +701,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const interval = setInterval(() => {
       setListeningStats((current) => {
         const id = String(currentSong.id);
+        const day = localDayKey();
+        const dailySeconds = {
+          ...(current.dailySeconds || {}),
+          [day]: ((current.dailySeconds || {})[day] || 0) + 10,
+        };
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 35);
+        const cutoffKey = localDayKey(cutoff);
+        for (const key of Object.keys(dailySeconds)) {
+          if (key < cutoffKey) delete dailySeconds[key];
+        }
+
         const next: ListeningStats = {
           totalSeconds: current.totalSeconds + 10,
           playCount: current.playCount,
@@ -698,6 +720,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             ...current.trackCounts,
             [id]: (current.trackCounts[id] || 0) + 10,
           },
+          dailySeconds,
         };
         AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
         return next;
