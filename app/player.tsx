@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ImageBackground,
@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
@@ -23,7 +23,7 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
 
-const RATE_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
+const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
   { value: 'automatic', label: 'Auto' },
   { value: 'data-saver', label: 'Saver' },
@@ -56,9 +56,17 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function PlayerScreen() {
+  const params = useLocalSearchParams<{ panel?: string }>();
   const { token } = useAuth();
   const { isLiked, toggleLike } = useLibrary();
-  const { isDownloaded, downloading, downloadSong, removeDownload } = useOffline();
+  const {
+    isDownloaded,
+    downloading,
+    downloadFailures,
+    downloadSong,
+    removeDownload,
+    clearDownloadFailure,
+  } = useOffline();
   const {
     currentSong,
     queue,
@@ -96,10 +104,29 @@ export default function PlayerScreen() {
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
+  const lyricsScrollRef = useRef<ScrollView>(null);
 
   const cover = artworkUrl(currentSong);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
   const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
+
+  useEffect(() => {
+    const requested = Array.isArray(params.panel) ? params.panel[0] : params.panel;
+    if (requested === 'lyrics' || requested === 'queue' || requested === 'tools') {
+      setPanel(requested);
+    }
+  }, [params.panel]);
+
+  useEffect(() => {
+    if (panel !== 'lyrics' || activeLine < 0 || !syncedLines.length) return;
+    const timeout = setTimeout(() => {
+      lyricsScrollRef.current?.scrollTo({
+        y: Math.max(0, activeLine * 48 - 96),
+        animated: true,
+      });
+    }, 50);
+    return () => clearTimeout(timeout);
+  }, [activeLine, panel, syncedLines.length]);
 
   useEffect(() => {
     let active = true;
@@ -268,17 +295,26 @@ export default function PlayerScreen() {
               {lyricsLoading ? (
                 <View style={styles.panelLoading}><ActivityIndicator color="#FFF" /></View>
               ) : syncedLines.length ? (
-                <View style={styles.lyrics}>
-                  {syncedLines.slice(Math.max(0, activeLine - 2), activeLine + 5).map((line, index) => {
-                    const actualIndex = Math.max(0, activeLine - 2) + index;
-                    const active = actualIndex === activeLine;
+                <ScrollView
+                  ref={lyricsScrollRef}
+                  style={styles.lyricsScroll}
+                  contentContainerStyle={styles.lyrics}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  {syncedLines.map((line, index) => {
+                    const active = index === activeLine;
                     return (
-                      <Pressable key={`${line.time}-${actualIndex}`} onPress={() => void seek(line.time)}>
+                      <Pressable
+                        key={`${line.time}-${index}`}
+                        onPress={() => void seek(line.time)}
+                        style={styles.lyricTap}
+                      >
                         <Text style={[styles.lyricLine, active && styles.lyricActive]}>{line.text}</Text>
                       </Pressable>
                     );
                   })}
-                </View>
+                </ScrollView>
               ) : lyrics?.plainLyrics ? (
                 <Text style={styles.plainLyrics}>{lyrics.plainLyrics}</Text>
               ) : (
@@ -355,15 +391,23 @@ export default function PlayerScreen() {
                 <Pressable
                   disabled={downloading[currentSong.id] != null}
                   onPress={() => {
-                    if (isDownloaded(currentSong.id)) void removeDownload(currentSong.id);
-                    else void downloadSong(currentSong, streamQuality);
+                    if (isDownloaded(currentSong.id)) {
+                      void removeDownload(currentSong.id);
+                    } else {
+                      clearDownloadFailure(currentSong.id);
+                      void downloadSong(currentSong, streamQuality);
+                    }
                   }}
                   style={[styles.downloadButton, isDownloaded(currentSong.id) && styles.downloadButtonSaved]}
                 >
                   {downloading[currentSong.id] != null
                     ? <ActivityIndicator size="small" color="#080808" />
                     : <Text style={[styles.downloadButtonText, isDownloaded(currentSong.id) && styles.downloadButtonTextSaved]}>
-                        {isDownloaded(currentSong.id) ? 'Remove' : 'Download'}
+                        {isDownloaded(currentSong.id)
+                          ? 'Remove'
+                          : downloadFailures[currentSong.id]
+                            ? 'Retry'
+                            : 'Download'}
                       </Text>}
                 </Pressable>
               </View>
@@ -371,6 +415,9 @@ export default function PlayerScreen() {
                 <View style={styles.downloadProgressTrack}>
                   <View style={[styles.downloadProgress, { width: `${Math.max(3, downloading[currentSong.id] * 100)}%` }]} />
                 </View>
+              )}
+              {!!downloadFailures[currentSong.id] && (
+                <Text style={styles.downloadError}>{downloadFailures[currentSong.id]}</Text>
               )}
               <Text style={styles.toolLabel}>PLAYBACK SPEED</Text>
               <View style={styles.optionRow}>
@@ -561,7 +608,9 @@ const styles = StyleSheet.create({
   panelMeta: { color: '#707070', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   panelLoading: { height: 120, justifyContent: 'center' },
   panelEmpty: { color: '#777', fontSize: 14, paddingVertical: 38, textAlign: 'center' },
-  lyrics: { gap: 10 },
+  lyricsScroll: { maxHeight: 310 },
+  lyrics: { gap: 10, paddingBottom: 18 },
+  lyricTap: { minHeight: 38, justifyContent: 'center' },
   lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },
   lyricActive: { color: '#FFF', fontSize: 24, lineHeight: 29, fontWeight: '800' },
   plainLyrics: { color: '#CFCFCF', fontSize: 17, lineHeight: 25 },
@@ -589,6 +638,7 @@ const styles = StyleSheet.create({
   downloadButtonTextSaved: { color: '#D0D0D0' },
   downloadProgressTrack: { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 16 },
   downloadProgress: { height: 3, borderRadius: 2, backgroundColor: '#EEE' },
+  downloadError: { color: '#DE8585', fontSize: 11, lineHeight: 16, marginBottom: 14 },
   toolLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   toolLabel: { color: '#666', fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginTop: 2, marginBottom: 9 },
   timerState: { color: '#A8A8A8', fontSize: 11, fontVariant: ['tabular-nums'] },

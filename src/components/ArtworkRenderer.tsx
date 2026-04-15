@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { AccessibilityInfo, AppState, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { fetchCanvasMedia, spotifyTrackId } from '@/src/lib/canvas';
@@ -38,6 +38,7 @@ function MotionCanvas({ url, active }: { url: string; active: boolean }) {
 export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, style }: Props) {
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const [reduceMotion, setReduceMotion] = useState(false);
   const trackId = spotifyTrackId(song);
   const canvasLookupKey = [song.source, song.provider, song.songId, song.id, song.name, trackId].join(':');
 
@@ -47,22 +48,37 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((value) => {
+        if (mounted) setReduceMotion(value);
+      })
+      .catch(() => {});
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     setCanvasUrl(null);
 
-    if (enableMotion) {
+    if (enableMotion && !reduceMotion && foreground) {
       fetchCanvasMedia(song, controller.signal)
         .then((media) => setCanvasUrl(media?.url || null))
         .catch(() => setCanvasUrl(null));
     }
 
     return () => controller.abort();
-  }, [canvasLookupKey, enableMotion, song]);
+  }, [canvasLookupKey, enableMotion, foreground, reduceMotion, song]);
 
   return (
     <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
       <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
-      {!!canvasUrl && foreground && <MotionCanvas url={canvasUrl} active={foreground} />}
+      {!!canvasUrl && foreground && !reduceMotion && <MotionCanvas url={canvasUrl} active={foreground} />}
     </View>
   );
 }
