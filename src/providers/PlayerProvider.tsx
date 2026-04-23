@@ -17,7 +17,11 @@ import {
   useState,
 } from 'react';
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
-import { resolvePlayableSong, type StreamQuality } from '@/src/lib/api';
+import {
+  resolvePlayableSong,
+  type ResolvedStreamDiagnostics,
+  type StreamQuality,
+} from '@/src/lib/api';
 import {
   albumName,
   artistNames,
@@ -31,6 +35,11 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
 const LISTENING_STATS_KEY = 'harmonia.mobile.listening-stats.v1';
+
+function localDayKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
 
 type PlaybackSnapshot = {
   queue: Song[];
@@ -59,6 +68,11 @@ export type ListeningStats = {
   totalSeconds: number;
   playCount: number;
   trackCounts: Record<string, number>;
+  dailySeconds: Record<string, number>;
+};
+
+export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
+  source: ResolvedStreamDiagnostics['source'] | 'offline' | 'local';
 };
 
 type PlayerContextValue = {
@@ -79,6 +93,7 @@ type PlayerContextValue = {
   shuffleEnabled: boolean;
   history: PlaybackHistoryEntry[];
   listeningStats: ListeningStats;
+  playbackDiagnostics: PlaybackDiagnostics | null;
   clearHistory: () => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
@@ -116,10 +131,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
   const [shuffleEnabled, setShuffleEnabledState] = useState(false);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
+  const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
   const [listeningStats, setListeningStats] = useState<ListeningStats>({
     totalSeconds: 0,
     playCount: 0,
     trackCounts: {},
+    dailySeconds: {},
   });
 
   const loadedTrackId = useRef<string | null>(null);
@@ -139,6 +156,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
   const recoveryInFlightRef = useRef(false);
+  const qualityReloadRef = useRef<() => Promise<void>>(async () => {});
   const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
     trackId: null,
     attempts: 0,
@@ -159,7 +177,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           playedAt: Date.now(),
         },
         ...current,
-      ].slice(0, 200);
+      ].slice(0, 500);
       AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -201,9 +219,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [persistSettings, player]);
 
   const setStreamQuality = useCallback((quality: StreamQuality) => {
+    if (quality === qualityRef.current) return;
     qualityRef.current = quality;
     setStreamQualityState(quality);
     persistSettings(rateRef.current, quality);
+    void qualityReloadRef.current();
   }, [persistSettings]);
 
   const toggleRepeat = useCallback(() => {
@@ -299,6 +319,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackIntentRef.current = autoplay;
     setIsLoadingTrack(true);
     setError(null);
+    setPlaybackDiagnostics(null);
 
     if (!options.recovery) {
       recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
@@ -309,7 +330,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
       const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
       const resolved = localUri || offlineUri
-        ? { song: stable, url: localUri || offlineUri! }
+        ? { song: stable, url: localUri || offlineUri!, diagnostics: null }
         : await resolvePlayableSong(stable, qualityRef.current);
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
@@ -318,6 +339,27 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       player.replace(resolved.url);
       player.setPlaybackRate(rateRef.current);
+      setPlaybackDiagnostics(
+        localUri
+          ? {
+              provider: 'Device',
+              source: 'local',
+              codec: null,
+              bitrate: null,
+              quality: null,
+              streamHost: 'device',
+            }
+          : offlineUri
+            ? {
+                provider: String(stable.provider || stable.source || 'Harmonia'),
+                source: 'offline',
+                codec: null,
+                bitrate: null,
+                quality: null,
+                streamHost: 'device',
+              }
+            : resolved.diagnostics
+      );
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
       lastKnownPositionRef.current = Math.max(0, startPosition);
@@ -335,6 +377,26 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setIsLoadingTrack(false);
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
+
+  useEffect(() => {
+    qualityReloadRef.current = async () => {
+      const index = indexRef.current;
+      const target = queueRef.current[index];
+      if (!target) return;
+
+      const stable = normalizeSong(target as any);
+      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+      const offlineUri = getOfflineUri(stable.id);
+      if (localUri || offlineUri) return;
+
+      const resumeAt = Math.max(
+        0,
+        Number(status.currentTime || lastKnownPositionRef.current || 0)
+      );
+      const shouldResume = Boolean(status.playing || playbackIntentRef.current);
+      await loadIndex(index, shouldResume, resumeAt, { recordHistory: false });
+    };
+  }, [getOfflineUri, loadIndex, status.currentTime, status.playing]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
@@ -507,7 +569,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
         if (historyRaw) {
           const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 200));
+          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 500));
         }
 
         if (statsRaw) {
@@ -517,6 +579,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
             trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
               ? parsedStats.trackCounts
+              : {},
+            dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+              ? parsedStats.dailySeconds
               : {},
           });
         }
@@ -636,6 +701,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const interval = setInterval(() => {
       setListeningStats((current) => {
         const id = String(currentSong.id);
+        const day = localDayKey();
+        const dailySeconds = {
+          ...(current.dailySeconds || {}),
+          [day]: ((current.dailySeconds || {})[day] || 0) + 10,
+        };
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 35);
+        const cutoffKey = localDayKey(cutoff);
+        for (const key of Object.keys(dailySeconds)) {
+          if (key < cutoffKey) delete dailySeconds[key];
+        }
+
         const next: ListeningStats = {
           totalSeconds: current.totalSeconds + 10,
           playCount: current.playCount,
@@ -643,6 +720,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             ...current.trackCounts,
             [id]: (current.trackCounts[id] || 0) + 10,
           },
+          dailySeconds,
         };
         AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
         return next;
@@ -750,6 +828,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     shuffleEnabled,
     history,
     listeningStats,
+    playbackDiagnostics,
     clearHistory,
     playSong,
     playAt,
@@ -786,6 +865,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     shuffleEnabled,
     history,
     listeningStats,
+    playbackDiagnostics,
     clearHistory,
     playSong,
     playAt,
