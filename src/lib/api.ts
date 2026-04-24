@@ -66,6 +66,35 @@ export async function loginWithPassword(email: string, password: string) {
   );
 }
 
+
+export async function registerAccount(name: string, email: string, password: string) {
+  return requestJson<{ message: string; requiresVerification?: boolean }>(
+    '/api/auth/register',
+    { method: 'POST', body: JSON.stringify({ name, email, password }) }
+  );
+}
+
+export async function verifyEmailAddress(email: string, otp: string) {
+  return requestJson<{ message: string }>(
+    '/api/auth/verify-email',
+    { method: 'POST', body: JSON.stringify({ email, otp }) }
+  );
+}
+
+export async function requestPasswordReset(email: string) {
+  return requestJson<{ message: string }>(
+    '/api/auth/forgot-password',
+    { method: 'POST', body: JSON.stringify({ email }) }
+  );
+}
+
+export async function resetPassword(token: string, password: string) {
+  return requestJson<{ message: string }>(
+    '/api/auth/reset-password',
+    { method: 'POST', body: JSON.stringify({ token, password }) }
+  );
+}
+
 export async function exchangeMobileTicket(ticket: string) {
   return requestJson<{ success: true; accessToken: string; user: HarmoniaUser }>(
     '/api/mobile/auth/exchange',
@@ -75,6 +104,18 @@ export async function exchangeMobileTicket(ticket: string) {
 
 export async function fetchMe(token: string) {
   return requestJson<{ success: true; user: HarmoniaUser }>('/api/mobile/me', { token });
+}
+
+
+export async function updateProfile(
+  token: string,
+  update: { name?: string; image?: string | null }
+) {
+  const payload = await requestJson<{ success: true; user: HarmoniaUser }>(
+    '/api/mobile/me',
+    { method: 'PATCH', token, body: JSON.stringify(update) }
+  );
+  return payload.user;
 }
 
 export async function fetchLibrary(token: string): Promise<LibraryPayload> {
@@ -225,6 +266,20 @@ export async function createPlaylist(token: string, name: string) {
   return payload.data;
 }
 
+
+export async function importSpotifyPlaylist(token: string, url: string) {
+  return requestJson<{
+    success: true;
+    data: Playlist;
+    matched: number;
+    total: number;
+    message: string;
+  }>(
+    '/api/mobile/playlists/import',
+    { method: 'POST', token, body: JSON.stringify({ url }) }
+  );
+}
+
 export async function addSongToPlaylist(token: string, playlistId: string, songId: string) {
   return requestJson<{ success: true }>(
     `/api/mobile/playlists/${encodeURIComponent(playlistId)}/songs`,
@@ -344,6 +399,16 @@ export async function fetchSongs(ids: string[]): Promise<Song[]> {
   if (!clean.length) return [];
   const payload = await requestJson<{ success: true; data: Song[] }>(
     `/api/songs?ids=${encodeURIComponent(clean.join(','))}`,
+    { cache: 'no-store' }
+  );
+  return (payload.data || []).map((song) => normalizeSong(song as any));
+}
+
+
+export async function fetchSongSuggestions(songId: string, limit = 20): Promise<Song[]> {
+  if (!songId) return [];
+  const payload = await requestJson<{ success: true; data: Song[] }>(
+    `/api/songs/${encodeURIComponent(songId)}/suggestions?limit=${limit}`,
     { cache: 'no-store' }
   );
   return (payload.data || []).map((song) => normalizeSong(song as any));
