@@ -49,10 +49,12 @@ export default function SettingsScreen() {
     playbackRate,
     streamQuality,
     sleepTimer,
+    radioEnabled,
     history,
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
+    toggleRadio,
     clearHistory,
   } = usePlayer();
 
@@ -133,6 +135,13 @@ export default function SettingsScreen() {
               <Choice key={rate} label={`${rate}×`} active={playbackRate === rate} onPress={() => setPlaybackRate(rate)} />
             ))}
           </ChoiceRow>
+          <ToggleRow
+            icon="radio-outline"
+            title="Harmonia Radio"
+            detail="Continue with related songs when the queue ends"
+            enabled={radioEnabled}
+            onPress={toggleRadio}
+          />
         </Section>
 
         <Section title="PLAYER">
@@ -246,6 +255,33 @@ function Choice({ label, active, onPress }: { label: string; active: boolean; on
   );
 }
 
+function ToggleRow({
+  icon,
+  title,
+  detail,
+  enabled,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  detail: string;
+  enabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      <View style={styles.icon}><Ionicons name={icon} size={19} color="#A6A6A6" /></View>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowDetail}>{detail}</Text>
+      </View>
+      <View style={[styles.toggleTrack, enabled && styles.toggleTrackOn]}>
+        <View style={[styles.toggleThumb, enabled && styles.toggleThumbOn]} />
+      </View>
+    </Pressable>
+  );
+}
+
 function StaticRow({ icon, title, detail }: { icon: keyof typeof Ionicons.glyphMap; title: string; detail: string }) {
   return (
     <View style={styles.row}>
@@ -306,6 +342,10 @@ const styles = StyleSheet.create({
   rowTitle: { color: '#E7E7E7', fontSize: 14, fontWeight: '700' },
   rowDetail: { color: '#666', fontSize: 11, lineHeight: 16, marginTop: 3 },
   destructive: { color: '#E28B8B' },
+  toggleTrack: { width: 42, height: 24, borderRadius: 12, backgroundColor: '#292929', padding: 3, justifyContent: 'center' },
+  toggleTrackOn: { backgroundColor: '#EDEDED' },
+  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#777' },
+  toggleThumbOn: { backgroundColor: '#080808', alignSelf: 'flex-end' },
   pressed: { opacity: 0.62 },
   disabled: { opacity: 0.42 },
   settingLabel: { paddingHorizontal: 14, paddingTop: 14 },
