@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   setAudioModeAsync,
   requestNotificationPermissionsAsync,
+  preload,
+  clearPreloadedSource,
   useAudioPlayer,
   useAudioPlayerStatus,
 } from 'expo-audio';
@@ -162,6 +164,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastKnownPositionRef = useRef(0);
   const recoveryInFlightRef = useRef(false);
   const qualityReloadRef = useRef<() => Promise<void>>(async () => {});
+  const preloadedSourceRef = useRef<string | null>(null);
   const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
     trackId: null,
     attempts: 0,
@@ -695,6 +698,45 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     lastKnownPositionRef.current = target;
     player.seekTo(target).catch(() => {});
   }, [player, status.isLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const warmNextTrack = async () => {
+      const upcoming = queueRef.current[indexRef.current + 1];
+      if (!upcoming?.id) return;
+
+      const stable = normalizeSong(upcoming as any);
+      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+      const offlineUri = getOfflineUri(stable.id);
+      let source = localUri || offlineUri || null;
+
+      if (!source) {
+        try {
+          const resolved = await resolvePlayableSong(stable, qualityRef.current);
+          source = resolved.url;
+        } catch {
+          return;
+        }
+      }
+
+      if (cancelled || !source || source === preloadedSourceRef.current) return;
+
+      const previous = preloadedSourceRef.current;
+      preloadedSourceRef.current = source;
+      if (previous) {
+        clearPreloadedSource(previous).catch(() => {});
+      }
+      preload(source, { preferredForwardBufferDuration: 12 }).catch(() => {
+        if (preloadedSourceRef.current === source) preloadedSourceRef.current = null;
+      });
+    };
+
+    void warmNextTrack();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentIndex, getOfflineUri, queue, streamQuality]);
 
   useEffect(() => {
     if (status.didJustFinish && !finishing.current) {
