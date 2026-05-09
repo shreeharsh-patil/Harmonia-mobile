@@ -85,6 +85,9 @@ export default function ProfileScreen() {
             <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
             <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
           </View>
+          <Pressable onPress={() => router.push('/edit-profile')} style={styles.editButton} accessibilityLabel="Edit profile">
+            <Ionicons name="pencil-outline" size={17} color="#DADADA" />
+          </Pressable>
         </View>
 
         <View style={styles.stats}>
@@ -162,6 +165,7 @@ const styles = StyleSheet.create({
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECECEC' },
   initial: { color: '#080808', fontSize: 30, fontWeight: '900' },
   identityCopy: { flex: 1, minWidth: 0, marginLeft: 16 },
+  editButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
   name: { color: '#F4F4F4', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
   email: { color: '#777', fontSize: 13, marginTop: 5 },
   stats: { height: 90, flexDirection: 'row', alignItems: 'center', backgroundColor: '#101010', borderRadius: 19, marginTop: 26, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424' },
