@@ -83,7 +83,7 @@ export async function verifyEmailAddress(email: string, otp: string) {
 
 export async function requestPasswordReset(email: string) {
   return requestJson<{ message: string }>(
-    '/api/auth/forgot-password',
+    '/api/mobile/auth/forgot-password',
     { method: 'POST', body: JSON.stringify({ email }) }
   );
 }
