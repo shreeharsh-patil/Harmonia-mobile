@@ -16,6 +16,7 @@ import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchArtist, fetchArtistAlbums, fetchArtistSongs } from '@/src/lib/api';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import { shareArtist } from '@/src/lib/share';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -114,19 +115,24 @@ export default function ArtistScreen() {
           <View>
             <View style={styles.top}>
               <BackButton />
-              <Pressable
-                onPress={() => {
-                  if (!token) {
-                    router.push('/login');
-                    return;
-                  }
-                  void toggleArtistLike(artist);
-                }}
-                style={styles.headerAction}
-                accessibilityLabel={isArtistLiked(String(artist.id || id || '')) ? 'Unfollow artist' : 'Follow artist'}
-              >
-                <Ionicons name={isArtistLiked(String(artist.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable onPress={() => void shareArtist(artist)} style={styles.headerAction} accessibilityLabel="Share artist">
+                  <Ionicons name="share-outline" size={20} color="#E8E8E8" />
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!token) {
+                      router.push('/login');
+                      return;
+                    }
+                    void toggleArtistLike(artist);
+                  }}
+                  style={styles.headerAction}
+                  accessibilityLabel={isArtistLiked(String(artist.id || id || '')) ? 'Unfollow artist' : 'Follow artist'}
+                >
+                  <Ionicons name={isArtistLiked(String(artist.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
+                </Pressable>
+              </View>
             </View>
             <View style={styles.hero}>
               {cover ? (
@@ -214,6 +220,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 18, paddingBottom: 150 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', gap: 8 },
   headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
   avatar: { width: 208, height: 208, borderRadius: 104, backgroundColor: '#111' },

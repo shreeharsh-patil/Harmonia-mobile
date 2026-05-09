@@ -15,6 +15,7 @@ import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchAlbum } from '@/src/lib/api';
 import { albumTitle, imageUrl } from '@/src/lib/entities';
+import { shareAlbum } from '@/src/lib/share';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -109,19 +110,24 @@ export default function AlbumScreen() {
           <View>
             <View style={styles.top}>
               <BackButton />
-              <Pressable
-                onPress={() => {
-                  if (!token) {
-                    router.push('/login');
-                    return;
-                  }
-                  void toggleAlbumLike(album);
-                }}
-                style={styles.headerAction}
-                accessibilityLabel={isAlbumLiked(String(album.id || id || '')) ? 'Remove album from library' : 'Save album'}
-              >
-                <Ionicons name={isAlbumLiked(String(album.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable onPress={() => void shareAlbum(album)} style={styles.headerAction} accessibilityLabel="Share album">
+                  <Ionicons name="share-outline" size={20} color="#E8E8E8" />
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    if (!token) {
+                      router.push('/login');
+                      return;
+                    }
+                    void toggleAlbumLike(album);
+                  }}
+                  style={styles.headerAction}
+                  accessibilityLabel={isAlbumLiked(String(album.id || id || '')) ? 'Remove album from library' : 'Save album'}
+                >
+                  <Ionicons name={isAlbumLiked(String(album.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
+                </Pressable>
+              </View>
             </View>
             <View style={styles.hero}>
               {cover ? (
@@ -181,6 +187,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 18, paddingBottom: 150 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', gap: 8 },
   headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
   cover: { width: 224, height: 224, borderRadius: 18, backgroundColor: '#111' },
