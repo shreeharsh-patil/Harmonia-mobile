@@ -6,10 +6,12 @@ import { LibraryProvider } from '@/src/providers/LibraryProvider';
 import { PlayerProvider } from '@/src/providers/PlayerProvider';
 import { OfflineProvider } from '@/src/providers/OfflineProvider';
 import { LocalMusicProvider } from '@/src/providers/LocalMusicProvider';
+import { PreferencesProvider } from '@/src/providers/PreferencesProvider';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <PreferencesProvider>
       <AuthProvider>
         <LibraryProvider>
           <OfflineProvider>
@@ -33,6 +35,7 @@ export default function RootLayout() {
           </OfflineProvider>
         </LibraryProvider>
       </AuthProvider>
+      </PreferencesProvider>
     </SafeAreaProvider>
   );
 }
