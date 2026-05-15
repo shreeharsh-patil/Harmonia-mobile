@@ -28,10 +28,17 @@ type PreferencesContextValue = {
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
-const DEFAULTS = {
+type StoredPreferences = {
+  networkAwareQuality: boolean;
+  wifiQuality: StreamQuality;
+  cellularQuality: StreamQuality;
+  batterySaver: boolean;
+};
+
+const DEFAULTS: StoredPreferences = {
   networkAwareQuality: true,
-  wifiQuality: 'maximum' as StreamQuality,
-  cellularQuality: 'normal' as StreamQuality,
+  wifiQuality: 'maximum',
+  cellularQuality: 'normal',
   batterySaver: false,
 };
 
@@ -56,7 +63,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       .catch(() => {});
   }, []);
 
-  const persist = useCallback((next: Partial<typeof DEFAULTS>) => {
+  const persist = useCallback((next: Partial<StoredPreferences>) => {
     const snapshot = {
       networkAwareQuality,
       wifiQuality,
