@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
@@ -9,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,10 +19,12 @@ import {
   RECENT_SEARCHES_KEY,
 } from '@/src/config';
 import type { StreamQuality } from '@/src/lib/api';
+import { checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
   { value: 'automatic', label: 'Automatic' },
@@ -42,6 +46,18 @@ const TIMER_OPTIONS: Array<{ value: SleepTimerMode; label: string }> = [
 
 export default function SettingsScreen() {
   const { user, token, signOut } = useAuth();
+  const {
+    networkAwareQuality,
+    wifiQuality,
+    cellularQuality,
+    batterySaver,
+    networkType,
+    setNetworkAwareQuality,
+    setWifiQuality,
+    setCellularQuality,
+    setBatterySaver,
+  } = usePreferences();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const { downloads, totalBytes, clearDownloads } = useOffline();
   const { songs: localSongs, loading: localLoading, scan: scanLocalMusic } = useLocalMusic();
   const {
@@ -85,6 +101,44 @@ export default function SettingsScreen() {
         { text: 'Clear', style: 'destructive', onPress: () => void clearHistory() },
       ]
     );
+  };
+
+  const clearArtworkCache = async () => {
+    try {
+      await Promise.all([
+        Image.clearMemoryCache(),
+        Image.clearDiskCache(),
+      ]);
+      Alert.alert('Artwork cache cleared', 'Cached artwork was removed. Images will reload as needed.');
+    } catch {
+      Alert.alert('Could not clear cache', 'Harmonia could not clear the image cache on this device.');
+    }
+  };
+
+  const checkUpdates = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      const result = await checkForAppUpdate();
+      if (result.updateAvailable && result.latestVersion) {
+        Alert.alert(
+          'Update available',
+          `Harmonia ${result.latestVersion} is available. You are using ${result.currentVersion}.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Open release', onPress: () => void Linking.openURL(result.releaseUrl) },
+          ]
+        );
+      } else if (result.latestVersion) {
+        Alert.alert('Harmonia is up to date', `Version ${result.currentVersion} is the latest release.`);
+      } else {
+        Alert.alert('No published release yet', 'No GitHub release is available to compare with this build.');
+      }
+    } catch {
+      Alert.alert('Update check failed', 'Check your connection and try again.');
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   const signOutNow = async () => {
@@ -141,6 +195,45 @@ export default function SettingsScreen() {
             detail="Continue with related songs when the queue ends"
             enabled={radioEnabled}
             onPress={toggleRadio}
+          />
+        </Section>
+
+        <Section title="NETWORK & POWER">
+          <ToggleRow
+            icon="wifi-outline"
+            title="Network-aware quality"
+            detail={`Use separate quality profiles · current: ${String(networkType || 'unknown').toLowerCase()}`}
+            enabled={networkAwareQuality}
+            onPress={() => setNetworkAwareQuality(!networkAwareQuality)}
+          />
+          <SettingLabel title="Wi-Fi quality" detail="Used on Wi-Fi and Ethernet connections." />
+          <ChoiceRow>
+            {QUALITY_OPTIONS.map((item) => (
+              <Choice
+                key={`wifi-${item.value}`}
+                label={item.label}
+                active={wifiQuality === item.value}
+                onPress={() => setWifiQuality(item.value)}
+              />
+            ))}
+          </ChoiceRow>
+          <SettingLabel title="Mobile data quality" detail="Keeps cellular streaming under control." />
+          <ChoiceRow>
+            {QUALITY_OPTIONS.map((item) => (
+              <Choice
+                key={`cell-${item.value}`}
+                label={item.label}
+                active={cellularQuality === item.value}
+                onPress={() => setCellularQuality(item.value)}
+              />
+            ))}
+          </ChoiceRow>
+          <ToggleRow
+            icon="leaf-outline"
+            title="Battery saver"
+            detail="Caps streams to Data Saver, disables Canvas and skips next-track preloading"
+            enabled={batterySaver}
+            onPress={() => setBatterySaver(!batterySaver)}
           />
         </Section>
 
@@ -207,10 +300,23 @@ export default function SettingsScreen() {
             detail="Removes searches stored on this phone"
             onPress={() => void clearRecentSearches()}
           />
+          <ActionRow
+            icon="images-outline"
+            title="Clear artwork cache"
+            detail="Free cached image storage without touching downloads"
+            onPress={() => void clearArtworkCache()}
+          />
         </Section>
 
         <Section title="ABOUT">
           <StaticRow icon="information-circle-outline" title="Harmonia Mobile" detail={`Version ${APP_VERSION} · Android build ${ANDROID_BUILD_VERSION}`} />
+          <ActionRow
+            icon="cloud-download-outline"
+            title="Check for updates"
+            detail={checkingUpdate ? 'Checking GitHub Releases…' : 'Compare this build with the latest published release'}
+            disabled={checkingUpdate}
+            onPress={() => void checkUpdates()}
+          />
           <ActionRow
             icon="logo-github"
             title="GitHub"
