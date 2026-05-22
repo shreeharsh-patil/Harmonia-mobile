@@ -66,11 +66,14 @@ export default function SettingsScreen() {
     streamQuality,
     sleepTimer,
     radioEnabled,
+    adaptivePipelineEnabled,
+    adaptivePipelineStatus,
     history,
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
     toggleRadio,
+    toggleAdaptivePipeline,
     clearHistory,
   } = usePlayer();
 
@@ -195,6 +198,15 @@ export default function SettingsScreen() {
             detail="Continue with related songs when the queue ends"
             enabled={radioEnabled}
             onPress={toggleRadio}
+          />
+          <ToggleRow
+            icon="flash-outline"
+            title="Instant stream upgrade"
+            detail={adaptivePipelineEnabled
+              ? `Fast start → background quality promotion · ${adaptivePipelineStatus}`
+              : 'Resolve only the final selected quality'}
+            enabled={adaptivePipelineEnabled}
+            onPress={toggleAdaptivePipeline}
           />
         </Section>
 
