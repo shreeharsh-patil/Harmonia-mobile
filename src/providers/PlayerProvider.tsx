@@ -824,7 +824,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       playbackIntentRef.current = true;
       recoveryStateRef.current = { trackId: song.id, attempts: 0 };
       const resumeAt = Math.max(restoredPosition.current, lastKnownPositionRef.current);
-      await loadIndex(indexRef.current, true, resumeAt);
+      const forceFresh = Boolean(status.error);
+      if (forceFresh) invalidateResolvedStream(song.id);
+      await loadIndex(indexRef.current, true, resumeAt, {
+        recordHistory: false,
+        forceFresh,
+        skipAdaptive: forceFresh,
+      });
       return;
     }
 
@@ -926,6 +932,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         lastKnownPositionRef.current = restoredPosition.current;
         setQueue(restoredQueue);
         setCurrentIndex(restoredIndex);
+        setPlaybackState('READY');
       } catch {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
       }
