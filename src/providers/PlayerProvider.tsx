@@ -1112,8 +1112,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [currentIndex, queue, status.currentTime, status.playing]);
 
   useEffect(() => {
+    if (awaitingNetworkRecoveryRef.current) {
+      setPlaybackState('RECOVERING');
+      return;
+    }
     if (error) {
-      if (!awaitingNetworkRecoveryRef.current) setPlaybackState('ERROR');
+      setPlaybackState('ERROR');
       return;
     }
     if (isLoadingTrack) return;
@@ -1141,7 +1145,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   ]);
 
   useEffect(() => {
-    if (!status.error || !currentSong?.id || recoveryInFlightRef.current) return;
+    const hasResolutionFailure = Boolean(error && playbackErrorType);
+    const hasNativeFailure = Boolean(status.error);
+    if (
+      (!hasResolutionFailure && !hasNativeFailure) ||
+      !currentSong?.id ||
+      recoveryInFlightRef.current
+    ) return;
 
     const trackId = currentSong.id;
     if (recoveryStateRef.current.trackId !== trackId) {
@@ -1161,7 +1171,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setPlaybackState('RECOVERING');
 
       let failure = networkConnected
-        ? classifyPlaybackError(status.error)
+        ? (lastPlaybackErrorRef.current || classifyPlaybackError(status.error))
         : new PlaybackPipelineError(
             PlaybackErrorType.NETWORK_ERROR,
             'Device is offline.'
@@ -1261,8 +1271,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     };
   }, [
     currentSong?.id,
+    error,
     loadIndex,
     networkConnected,
+    playbackErrorType,
     status.currentTime,
     status.error,
   ]);
