@@ -9,14 +9,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchPlaylistSongs, searchMusic } from '@/src/lib/api';
+import { useAuth } from '@/src/providers/AuthProvider';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { Playlist, SearchPayload, Song } from '@/src/types';
 
 export default function SearchScreen() {
+  const { token } = useAuth();
+  const { isLiked, toggleLike } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchPayload | null>(null);
@@ -34,22 +39,22 @@ export default function SearchScreen() {
       return;
     }
 
-    const controller = { active: true };
+    let active = true;
     const timer = setTimeout(async () => {
       setLoading(true);
       setError(null);
       try {
         const value = await searchMusic(trimmed);
-        if (controller.active) setResults(value);
+        if (active) setResults(value);
       } catch (cause: any) {
-        if (controller.active) setError(cause?.message || 'Search failed');
+        if (active) setError(cause?.message || 'Search failed');
       } finally {
-        if (controller.active) setLoading(false);
+        if (active) setLoading(false);
       }
     }, 350);
 
     return () => {
-      controller.active = false;
+      active = false;
       clearTimeout(timer);
     };
   }, [trimmed]);
@@ -70,6 +75,14 @@ export default function SearchScreen() {
     } finally {
       setPlaylistLoading(null);
     }
+  };
+
+  const like = (song: Song) => {
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    void toggleLike(song);
   };
 
   const header = (
@@ -110,11 +123,7 @@ export default function SearchScreen() {
             returnKeyType="search"
             style={styles.input}
           />
-          {!!query && (
-            <Pressable onPress={() => setQuery('')} style={styles.clear}>
-              <Text style={styles.clearText}>×</Text>
-            </Pressable>
-          )}
+          {!!query && <Pressable onPress={() => setQuery('')} style={styles.clear}><Text style={styles.clearText}>×</Text></Pressable>}
         </View>
       </View>
 
@@ -127,18 +136,14 @@ export default function SearchScreen() {
           <Text style={styles.discoverBody}>Songs, playlists, artists and albums from the same catalog as the web player.</Text>
         </View>
       ) : error && !songs.length ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
+        <View style={styles.center}><Text style={styles.error}>{error}</Text></View>
       ) : (
         <FlatList<Song>
           data={songs}
           keyExtractor={(item, index) => item.id || String(index)}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
-          ListEmptyComponent={
-            !loading ? <Text style={styles.empty}>No songs found for “{trimmed}”.</Text> : null
-          }
+          ListEmptyComponent={!loading ? <Text style={styles.empty}>No songs found for “{trimmed}”.</Text> : null}
           renderItem={({ item }) => (
             <SongRow
               song={item}
@@ -147,6 +152,11 @@ export default function SearchScreen() {
                 Keyboard.dismiss();
                 void playSong(item, songs);
               }}
+              trailing={
+                <Pressable onPress={() => like(item)} style={styles.heart}>
+                  <Text style={[styles.heartText, isLiked(item.id) && styles.heartLiked]}>{isLiked(item.id) ? '♥' : '♡'}</Text>
+                </Pressable>
+              }
             />
           )}
           contentContainerStyle={styles.results}
@@ -180,4 +190,7 @@ const styles = StyleSheet.create({
   error: { color: '#EB8888', textAlign: 'center' },
   empty: { color: '#777', textAlign: 'center', paddingVertical: 60 },
   inlineLoading: { position: 'absolute', top: 95, right: 32 },
+  heart: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  heartText: { color: '#8A8A8A', fontSize: 22 },
+  heartLiked: { color: '#FFF' },
 });
