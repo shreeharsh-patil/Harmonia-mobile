@@ -1,0 +1,396 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import {
+  StreamResolver,
+  createHarmoniaProviders,
+  getAudioCandidates,
+  getImmediateLocalSource,
+  isValidAudioUrl,
+} from '../../src/lib/playback/streamResolver';
+import {
+  ResolvedStreamMemoryCache,
+  getStreamExpiresAt,
+} from '../../src/lib/playback/streamCache';
+import { ProviderHealthManager } from '../../src/lib/playback/providerHealth';
+import {
+  captureRecoveryPosition,
+  getPlaybackRecoveryPolicy,
+  MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
+} from '../../src/lib/playback/recoveryPolicy';
+import { PlaybackErrorType } from '../../src/lib/playback/playbackErrors';
+import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
+import { persistenceSafeSong } from '../../src/lib/song';
+import type { Song } from '../../src/types';
+
+function song(overrides: Record<string, any> = {}): Song {
+  return {
+    id: 'song-1',
+    songId: 'song-1',
+    name: 'Test Song',
+    title: 'Test Song',
+    artist: 'Test Artist',
+    ...overrides,
+  } as Song;
+}
+
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+test('1 embedded audio is selected without a network request', async () => {
+  let requests = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://catalog.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async () => {
+      requests += 1;
+      throw new Error('network must not be called');
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+  const result = await resolver.resolve(song({
+    source: 'jiosaavn',
+    downloadUrl: [{ url: 'https://cdn.test/audio.m4a', quality: '160kbps', bitrate: 160 }],
+  }), { quality: 'normal' });
+
+  assert.equal(result.source, 'embedded');
+  assert.equal(result.url, 'https://cdn.test/audio.m4a');
+  assert.equal(requests, 0);
+});
+
+test('2 quality selection honors saver/normal/high/maximum ceilings', () => {
+  const track = song({
+    downloadUrl: [
+      { url: 'https://cdn.test/96.m4a', quality: '96kbps', bitrate: 96 },
+      { url: 'https://cdn.test/160.m4a', quality: '160kbps', bitrate: 160 },
+      { url: 'https://cdn.test/320.m4a', quality: '320kbps', bitrate: 320 },
+      { url: 'https://cdn.test/lossless.flac', quality: 'lossless', codec: 'FLAC' },
+    ],
+  });
+
+  assert.match(getAudioCandidates(track, 'data-saver')[0].url, /96/);
+  assert.match(getAudioCandidates(track, 'normal')[0].url, /160/);
+  assert.match(getAudioCandidates(track, 'high')[0].url, /320/);
+  assert.match(getAudioCandidates(track, 'maximum')[0].url, /lossless/);
+});
+
+test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () => {
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://harmonia.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async () => { throw new Error('unexpected fetch'); },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+  const result = await resolver.resolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+  }));
+
+  assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
+  assert.equal(result.provider, 'youtube');
+});
+
+test('4 JioSaavn refresh resolves the best requested downloadUrl', async () => {
+  const calls: string[] = [];
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://catalog.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async (input) => {
+      calls.push(String(input));
+      return json({
+        success: true,
+        data: [{
+          id: 'jio-1',
+          name: 'Fresh',
+          artist: 'Artist',
+          source: 'jiosaavn',
+          downloadUrl: [
+            { url: 'https://saavncdn.com/160.m4a', quality: '160kbps', bitrate: 160 },
+            { url: 'https://saavncdn.com/320.m4a', quality: '320kbps', bitrate: 320 },
+          ],
+        }],
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({ id: 'jio-1', source: 'jiosaavn' }), {
+    quality: 'high',
+  });
+
+  assert.match(result.url, /320/);
+  assert.equal(result.source, 'jiosaavn');
+  assert.equal(calls.length, 1);
+});
+
+test('5 JioSaavn failure falls through to backend-search', async () => {
+  const calls: string[] = [];
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://catalog.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes('/api/songs')) return json({ error: 'provider down' }, 500);
+      if (url.includes('/api/stream-track')) {
+        return json({
+          streamUrl: 'https://piped.test/audio.webm?token=secret',
+          mimeType: 'audio/webm',
+          supportsStreaming: true,
+        });
+      }
+      return json({}, 404);
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({ id: 'jio-fail', source: 'jiosaavn' }));
+
+  assert.equal(result.source, 'backend-search');
+  assert.equal(result.provider, 'backend-search');
+  assert.ok(calls.some((value) => value.includes('/api/stream-track')));
+});
+
+test('6 metadata-only Spotify tracks use backend search, never protected Spotify audio', async () => {
+  let streamCalls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://catalog.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      assert.match(url, /stream-track/);
+      streamCalls += 1;
+      return json({
+        streamUrl: 'https://media.test/playable.opus',
+        mimeType: 'audio/ogg',
+        supportsStreaming: true,
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+  const result = await resolver.resolve(song({ id: 'spotify-1', source: 'spotify' }));
+
+  assert.equal(result.source, 'backend-search');
+  assert.equal(streamCalls, 1);
+});
+
+test('7 expired resolved-stream cache entries are rejected', () => {
+  let now = 1_000_000;
+  const cache = new ResolvedStreamMemoryCache<any>(300, () => now);
+  cache.set('a', 'high', {
+    trackId: 'a',
+    url: 'https://cdn.test/a.m4a',
+    expiresAt: now + 40_000,
+  });
+  assert.equal(cache.get('a', 'high'), null);
+});
+
+test('8 fresh resolved-stream cache entries are reused', async () => {
+  let resolves = 0;
+  const resolver = new StreamResolver([
+    {
+      id: 'embedded',
+      canResolve: () => true,
+      resolve: async (track) => {
+        resolves += 1;
+        return { url: 'https://cdn.test/cache.m4a', track, provider: 'direct' };
+      },
+    },
+  ], {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const first = await resolver.resolve(song(), { quality: 'normal' });
+  const second = await resolver.resolve(song(), { quality: 'normal' });
+  assert.equal(first.cache, 'miss');
+  assert.equal(second.cache, 'hit');
+  assert.equal(resolves, 1);
+});
+
+test('9 persistence strips every temporary stream capability', () => {
+  const stable = persistenceSafeSong(song({
+    downloadUrl: [{ url: 'https://saavncdn.com/a.m4a' }],
+    streamUrl: 'https://googlevideo.com/a?expire=999&sig=x',
+    stream_url: 'https://x.test/a',
+    audioUrl: 'https://x.test/b',
+    audio_url: 'https://x.test/c',
+    mediaUrl: 'https://x.test/d',
+    media_url: 'https://x.test/e',
+    playbackUrl: 'https://x.test/f',
+    resolvedUrl: 'https://x.test/g',
+    signedUrl: 'https://x.test/h',
+    url: 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ',
+  })) as any;
+
+  for (const key of [
+    'downloadUrl', 'streamUrl', 'stream_url', 'audioUrl', 'audio_url',
+    'mediaUrl', 'media_url', 'playbackUrl', 'resolvedUrl', 'signedUrl', 'url',
+  ]) {
+    assert.equal(key in stable, false, key);
+  }
+  assert.equal(stable.id, 'song-1');
+});
+
+test('10 restored stable metadata re-resolves instead of reusing an old signed URL', async () => {
+  const restored = persistenceSafeSong(song({
+    id: 'restore-1',
+    source: 'jiosaavn',
+    streamUrl: 'https://saavncdn.com/old.m4a?token=expired',
+  }));
+  let calls = 0;
+  const resolver = new StreamResolver([
+    {
+      id: 'jiosaavn',
+      canResolve: () => true,
+      resolve: async (track) => {
+        calls += 1;
+        return { url: 'https://saavncdn.com/fresh.m4a', track, provider: 'jiosaavn' };
+      },
+    },
+  ], { healthManager: new ProviderHealthManager() });
+
+  const result = await resolver.resolve(restored);
+  assert.equal(calls, 1);
+  assert.match(result.url, /fresh/);
+});
+
+test('11 playback source has a generation/abort guard against stale async results', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /loadGenerationRef\.current/);
+  assert.match(source, /activeResolutionAbortRef\.current\?\.abort\(\)/);
+  assert.match(source, /generation !== loadGenerationRef\.current/);
+  assert.match(source, /controller\.signal\.aborted/);
+});
+
+test('12 recovery position keeps the furthest known playback point', () => {
+  assert.equal(captureRecoveryPosition(132, 134, 130), 134);
+  assert.equal(captureRecoveryPosition(undefined, -1, 0), 0);
+});
+
+test('13 provider fallback policy is bounded', () => {
+  assert.equal(MAX_AUTOMATIC_RECOVERY_ATTEMPTS, 3);
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 3).action,
+    'fail'
+  );
+});
+
+test('14 network retry count cannot become infinite', () => {
+  const actions = [0, 1, 2, 3, 4].map((attempt) =>
+    getPlaybackRecoveryPolicy(PlaybackErrorType.NETWORK_ERROR, attempt).action
+  );
+  assert.deepEqual(actions.slice(0, 3), [
+    'refresh-stream',
+    'refresh-stream',
+    'refresh-stream',
+  ]);
+  assert.equal(actions[3], 'fail');
+  assert.equal(actions[4], 'fail');
+});
+
+test('15 local songs resolve immediately without a network provider', () => {
+  const immediate = getImmediateLocalSource(song({
+    localUri: 'file:///music/local.mp3',
+  }), null);
+  assert.deepEqual(immediate, {
+    url: 'file:///music/local.mp3',
+    source: 'local',
+  });
+});
+
+test('16 downloaded songs resolve immediately without a network provider', () => {
+  const immediate = getImmediateLocalSource(song(), 'file:///downloads/song.m4a');
+  assert.deepEqual(immediate, {
+    url: 'file:///downloads/song.m4a',
+    source: 'offline',
+  });
+});
+
+test('17 next-track preloading stays bounded to one likely track and 12s buffer', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /queueRef\.current\[indexRef\.current \+ 1\]/);
+  assert.match(source, /preferredForwardBufferDuration: 12/);
+  assert.match(source, /clearPreloadedSource/);
+});
+
+test('18 quality switching preserves current position and forces fresh resolution', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /const resumeAt = Math\.max\(/);
+  assert.match(source, /invalidateResolvedStream\(stable\.id\)/);
+  assert.match(source, /forceFresh: true/);
+  assert.match(source, /skipAdaptive: true/);
+});
+
+test('19 failed playback automatically refreshes the current stream', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /invalidateResolvedStream\(trackId\)/);
+  assert.match(source, /recoveryAttempt: attempt/);
+  assert.match(source, /excludeProviders:/);
+});
+
+test('20 background audio and lock-screen integration remain enabled', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /shouldPlayInBackground: true/);
+  assert.match(source, /playsInSilentMode: true/);
+  assert.match(source, /interruptionMode: 'doNotMix'/);
+  assert.match(source, /setActiveForLockScreen/);
+  assert.match(source, /showSeekBackward: true/);
+  assert.match(source, /showSeekForward: true/);
+});
+
+test('21 obvious webpage URLs are rejected as audio candidates', () => {
+  assert.equal(isValidAudioUrl('https://open.spotify.com/track/abc'), false);
+  assert.equal(isValidAudioUrl('https://youtube.com/watch?v=dQw4w9WgXcQ'), false);
+  assert.equal(isValidAudioUrl('https://www.jiosaavn.com/song/foo/bar'), false);
+  assert.equal(isValidAudioUrl('https://cdn.test/song.m4a'), true);
+});
+
+test('22 provider health enters cooldown after repeated failures and later recovers', () => {
+  let now = 1000;
+  const health = new ProviderHealthManager({
+    failureThreshold: 3,
+    cooldownMs: 1000,
+    now: () => now,
+  });
+  health.recordFailure('youtube');
+  health.recordFailure('youtube');
+  assert.equal(health.isAvailable('youtube'), true);
+  health.recordFailure('youtube');
+  assert.equal(health.isAvailable('youtube'), false);
+  now += 1001;
+  assert.equal(health.isAvailable('youtube'), true);
+  health.recordSuccess('youtube', 120);
+  assert.equal(health.get('youtube').consecutiveFailures, 0);
+});
+
+test('23 stream expiry honors provider expiry and safety-aware cache freshness', () => {
+  const now = 1_000_000;
+  const providerExpirySeconds = Math.floor((now + 90_000) / 1000);
+  const expiry = getStreamExpiresAt(
+    `https://googlevideo.com/a?expire=${providerExpirySeconds}`,
+    now
+  );
+  assert.ok(expiry <= now + 90_000);
+});
+
+test('24 diagnostics never expose signed query parameters', () => {
+  assert.equal(
+    maskStreamUrl('https://rr1---sn.test.googlevideo.com/videoplayback?expire=1&sig=secret&token=x'),
+    'https://rr1---sn.test.googlevideo.com/videoplayback'
+  );
+});

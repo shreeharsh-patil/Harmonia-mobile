@@ -1,5 +1,8 @@
 import { HARMONIA_API_URL } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
+import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
+import type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
+export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 import type {
   HarmoniaAlbum,
   HarmoniaArtistEntity,
@@ -11,17 +14,6 @@ import type {
   SearchPayload,
   Song,
 } from '@/src/types';
-
-export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
-
-export type ResolvedStreamDiagnostics = {
-  provider: string;
-  source: 'proxy' | 'catalog';
-  codec: string | null;
-  bitrate: number | null;
-  quality: string | null;
-  streamHost: string;
-};
 
 export type LyricsResult = {
   syncedLyrics?: string | null;
@@ -446,99 +438,15 @@ export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
   }
 }
 
-function qualityScore(item: { quality?: string; bitrate?: number }) {
-  const label = String(item?.quality || '').toLowerCase();
-  if (/(lossless|flac|alac|wav)/.test(label)) return 1_000_000;
-  return Number(label.match(/\d+/)?.[0] || item?.bitrate || 0);
-}
-
-function qualityCeiling(quality: StreamQuality) {
-  switch (quality) {
-    case 'data-saver': return 96;
-    case 'normal': return 160;
-    case 'high': return 320;
-    case 'maximum': return Number.POSITIVE_INFINITY;
-    default: return Number.POSITIVE_INFINITY;
-  }
-}
-
-function pickAudioCandidate(
-  candidates: Array<{
-    quality?: string;
-    url: string;
-    bitrate?: number;
-    codec?: string;
-    mimeType?: string;
-  }>,
-  quality: StreamQuality
-) {
-  const available = [...candidates].filter((item) => item?.url);
-  if (!available.length) return null;
-
-  const ceiling = qualityCeiling(quality);
-  const ranked = available.sort((a, b) => qualityScore(b) - qualityScore(a));
-  if (!Number.isFinite(ceiling)) return ranked[0];
-
-  return ranked.find((item) => qualityScore(item) <= ceiling) || ranked[ranked.length - 1];
-}
-
-function streamHost(url: string) {
-  try {
-    return new URL(url, HARMONIA_API_URL).host || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
 export async function resolvePlayableSong(
   song: Song,
   quality: StreamQuality = 'automatic'
 ): Promise<{ song: Song; url: string; diagnostics: ResolvedStreamDiagnostics }> {
-  const stable = normalizeSong(song as any);
-  const source = String(stable.source || stable.provider || '').toLowerCase();
-  const youtubeId = String(stable.videoId || stable.youtubeId || (source.includes('youtube') ? stable.id : ''));
-
-  if (/^[A-Za-z0-9_-]{11}$/.test(youtubeId) && source.includes('youtube')) {
-    const url = `${HARMONIA_API_URL}/api/yt-stream?id=${encodeURIComponent(youtubeId)}`;
-    return {
-      song: stable,
-      url,
-      diagnostics: {
-        provider: String(stable.provider || stable.source || 'YouTube'),
-        source: 'proxy',
-        codec: null,
-        bitrate: null,
-        quality: quality === 'automatic' ? 'adaptive' : quality,
-        streamHost: streamHost(url),
-      },
-    };
-  }
-
-  const details = stable.id ? await fetchSongs([stable.id]).catch(() => []) : [];
-  const playable = details[0] || stable;
-  const candidate = Array.isArray(playable.downloadUrl)
-    ? pickAudioCandidate(playable.downloadUrl, quality)
-    : null;
-
-  if (!candidate?.url) {
-    throw new ApiError('This track is currently unavailable');
-  }
-
-  const codec = String(candidate.codec || candidate.mimeType?.split('/').pop() || '').trim() || null;
-  const bitrate = Number(candidate.bitrate || 0) || null;
-  const resolvedQuality = String(candidate.quality || '').trim() || null;
-
+  const resolved = await resolveTrackStream(song, { quality });
   return {
-    song: playable,
-    url: candidate.url,
-    diagnostics: {
-      provider: String(playable.provider || playable.source || stable.provider || stable.source || 'Harmonia'),
-      source: 'catalog',
-      codec,
-      bitrate,
-      quality: resolvedQuality,
-      streamHost: streamHost(candidate.url),
-    },
+    song: resolved.track,
+    url: resolved.url,
+    diagnostics: resolved.diagnostics,
   };
 }
 
