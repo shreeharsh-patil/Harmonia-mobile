@@ -1,9 +1,9 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { ColorValue, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/src/components/MiniPlayer';
 
-function TabGlyph({ value, color }: { value: string; color: string }) {
+function TabGlyph({ value, color }: { value: string; color: ColorValue }) {
   return <Text style={[styles.glyph, { color }]}>{value}</Text>;
 }
 

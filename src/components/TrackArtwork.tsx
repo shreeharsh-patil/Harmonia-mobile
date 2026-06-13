@@ -1,5 +1,11 @@
 import { Image } from 'expo-image';
-import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import {
+  ImageStyle,
+  StyleProp,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { artworkUrl } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 
@@ -7,7 +13,7 @@ type Props = {
   song?: Song | null;
   size: number;
   radius?: number;
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ImageStyle>;
 };
 
 export function TrackArtwork({ song, size, radius = 12, style }: Props) {
