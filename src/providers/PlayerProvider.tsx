@@ -17,7 +17,7 @@ import {
   useState,
 } from 'react';
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
-import { resolvePlayableSong } from '@/src/lib/api';
+import { resolvePlayableSong, type StreamQuality } from '@/src/lib/api';
 import {
   albumName,
   artistNames,
@@ -27,6 +27,8 @@ import {
 } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 
+const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
+
 type PlaybackSnapshot = {
   queue: Song[];
   index: number;
@@ -34,6 +36,8 @@ type PlaybackSnapshot = {
   wasPlaying: boolean;
   savedAt: number;
 };
+
+export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
 
 type PlayerContextValue = {
   currentSong: Song | null;
@@ -45,24 +49,35 @@ type PlayerContextValue = {
   position: number;
   duration: number;
   error: string | null;
+  playbackRate: number;
+  streamQuality: StreamQuality;
+  sleepTimer: SleepTimerMode;
+  sleepRemaining: number;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
   togglePlayback: () => Promise<void>;
   next: () => Promise<void>;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
+  setPlaybackRate: (rate: number) => void;
+  setStreamQuality: (quality: StreamQuality) => void;
+  setSleepTimer: (mode: SleepTimerMode) => void;
   clearError: () => void;
 };
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
-  const player = useAudioPlayer(null, { updateInterval: 500 });
+  const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playbackRate, setPlaybackRateState] = useState(1);
+  const [streamQuality, setStreamQualityState] = useState<StreamQuality>('automatic');
+  const [sleepTimer, setSleepTimerState] = useState<SleepTimerMode>('off');
+  const [sleepRemaining, setSleepRemaining] = useState(0);
 
   const loadedTrackId = useRef<string | null>(null);
   const restoredPosition = useRef(0);
@@ -71,11 +86,48 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const finishing = useRef(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
+  const qualityRef = useRef<StreamQuality>('automatic');
+  const rateRef = useRef(1);
+  const sleepTimerRef = useRef<SleepTimerMode>('off');
+  const sleepDeadlineRef = useRef<number | null>(null);
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
+
+  const persistSettings = useCallback((nextRate: number, nextQuality: StreamQuality) => {
+    AsyncStorage.setItem(
+      PLAYER_SETTINGS_KEY,
+      JSON.stringify({ playbackRate: nextRate, streamQuality: nextQuality })
+    ).catch(() => {});
+  }, []);
+
+  const setPlaybackRate = useCallback((rate: number) => {
+    const normalized = Math.max(0.5, Math.min(2, rate));
+    rateRef.current = normalized;
+    setPlaybackRateState(normalized);
+    player.setPlaybackRate(normalized);
+    persistSettings(normalized, qualityRef.current);
+  }, [persistSettings, player]);
+
+  const setStreamQuality = useCallback((quality: StreamQuality) => {
+    qualityRef.current = quality;
+    setStreamQualityState(quality);
+    persistSettings(rateRef.current, quality);
+  }, [persistSettings]);
+
+  const setSleepTimer = useCallback((mode: SleepTimerMode) => {
+    sleepTimerRef.current = mode;
+    setSleepTimerState(mode);
+    if (typeof mode === 'number') {
+      sleepDeadlineRef.current = Date.now() + mode * 60_000;
+      setSleepRemaining(mode * 60);
+    } else {
+      sleepDeadlineRef.current = null;
+      setSleepRemaining(0);
+    }
+  }, []);
 
   const setLockScreenMetadata = useCallback((song: Song) => {
     player.setActiveForLockScreen(
@@ -105,13 +157,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     try {
       player.pause();
-      const resolved = await resolvePlayableSong(stable);
+      const resolved = await resolvePlayableSong(stable, qualityRef.current);
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
       queueRef.current = nextQueue;
       setQueue(nextQueue);
 
       player.replace(resolved.url);
+      player.setPlaybackRate(rateRef.current);
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
       pendingSeek.current = startPosition > 0 ? startPosition : null;
@@ -202,9 +255,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(PLAYBACK_SNAPSHOT_KEY);
-        if (!raw) return;
-        const snapshot = JSON.parse(raw) as PlaybackSnapshot;
+        const [snapshotRaw, settingsRaw] = await Promise.all([
+          AsyncStorage.getItem(PLAYBACK_SNAPSHOT_KEY),
+          AsyncStorage.getItem(PLAYER_SETTINGS_KEY),
+        ]);
+
+        if (settingsRaw) {
+          const settings = JSON.parse(settingsRaw);
+          const nextRate = Math.max(0.5, Math.min(2, Number(settings.playbackRate || 1)));
+          const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
+          const nextQuality = validQualities.includes(settings.streamQuality) ? settings.streamQuality : 'automatic';
+          rateRef.current = nextRate;
+          qualityRef.current = nextQuality;
+          setPlaybackRateState(nextRate);
+          setStreamQualityState(nextQuality);
+          player.setPlaybackRate(nextRate);
+        }
+
+        if (!snapshotRaw) return;
+        const snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
         const restoredQueue = Array.isArray(snapshot.queue)
           ? snapshot.queue.map((song) => persistenceSafeSong(normalizeSong(song as any))).filter((song) => song.id)
           : [];
@@ -223,7 +292,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
       }
     })();
-  }, []);
+  }, [player]);
 
   useEffect(() => {
     if (!status.isLoaded || pendingSeek.current == null) return;
@@ -235,6 +304,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (status.didJustFinish && !finishing.current) {
       finishing.current = true;
+      if (sleepTimerRef.current === 'track') {
+        player.pause();
+        setSleepTimer('off');
+        player.seekTo(0).catch(() => {});
+        finishing.current = false;
+        return;
+      }
       void next().finally(() => {
         setTimeout(() => {
           finishing.current = false;
@@ -242,7 +318,24 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       });
     }
     if (!status.didJustFinish) finishing.current = false;
-  }, [next, status.didJustFinish]);
+  }, [next, player, setSleepTimer, status.didJustFinish]);
+
+  useEffect(() => {
+    if (typeof sleepTimer !== 'number') return;
+    const tick = () => {
+      const deadline = sleepDeadlineRef.current;
+      if (!deadline) return;
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSleepRemaining(remaining);
+      if (remaining <= 0) {
+        player.pause();
+        setSleepTimer('off');
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [player, setSleepTimer, sleepTimer]);
 
   useEffect(() => {
     if (!queue.length || currentIndex < 0) return;
@@ -274,12 +367,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     position: status.currentTime || restoredPosition.current || 0,
     duration: status.duration || currentSong?.duration || 0,
     error,
+    playbackRate,
+    streamQuality,
+    sleepTimer,
+    sleepRemaining,
     playSong,
     playAt,
     togglePlayback,
     next,
     previous,
     seek,
+    setPlaybackRate,
+    setStreamQuality,
+    setSleepTimer,
     clearError: () => setError(null),
   }), [
     currentSong,
@@ -291,12 +391,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     status.duration,
     isLoadingTrack,
     error,
+    playbackRate,
+    streamQuality,
+    sleepTimer,
+    sleepRemaining,
     playSong,
     playAt,
     togglePlayback,
     next,
     previous,
     seek,
+    setPlaybackRate,
+    setStreamQuality,
+    setSleepTimer,
   ]);
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
