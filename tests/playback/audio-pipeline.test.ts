@@ -394,3 +394,174 @@ test('24 diagnostics never expose signed query parameters', () => {
     'https://rr1---sn.test.googlevideo.com/videoplayback'
   );
 });
+
+
+test('25 data saver selects 96 kbps when available', () => {
+  const candidates = getAudioCandidates(song({
+    downloadUrl: [
+      { url: 'https://saavncdn.com/320.m4a', quality: '320kbps' },
+      { url: 'https://saavncdn.com/96.m4a', quality: '96kbps' },
+      { url: 'https://saavncdn.com/160.m4a', quality: '160kbps' },
+    ],
+  }), 'data-saver');
+  assert.match(candidates[0].url, /96/);
+});
+
+test('26 normal selects 160 kbps when available', () => {
+  const candidates = getAudioCandidates(song({
+    downloadUrl: [
+      { url: 'https://saavncdn.com/96.m4a', quality: '96kbps' },
+      { url: 'https://saavncdn.com/320.m4a', quality: '320kbps' },
+      { url: 'https://saavncdn.com/160.m4a', quality: '160kbps' },
+    ],
+  }), 'normal');
+  assert.match(candidates[0].url, /160/);
+});
+
+test('27 high selects 320 kbps when available', () => {
+  const candidates = getAudioCandidates(song({
+    downloadUrl: [
+      { url: 'https://saavncdn.com/96.m4a', quality: '96kbps' },
+      { url: 'https://saavncdn.com/160.m4a', quality: '160kbps' },
+      { url: 'https://saavncdn.com/320.m4a', quality: '320kbps' },
+    ],
+  }), 'high');
+  assert.match(candidates[0].url, /320/);
+});
+
+test('28 duplicate embedded URLs are removed', () => {
+  const candidates = getAudioCandidates(song({
+    downloadUrl: [
+      { url: 'https://saavncdn.com/same.m4a', quality: '160kbps' },
+      { url: 'https://saavncdn.com/same.m4a', quality: '160kbps' },
+    ],
+    streamUrl: 'https://saavncdn.com/same.m4a',
+  }), 'normal');
+  assert.equal(candidates.length, 1);
+});
+
+test('29 JioSaavn webpages are rejected while Saavn CDN audio is accepted', () => {
+  assert.equal(isValidAudioUrl('https://www.jiosaavn.com/song/example/abc'), false);
+  assert.equal(isValidAudioUrl('https://www.jiosaavn.com/album/example/abc'), false);
+  assert.equal(isValidAudioUrl('https://www.jiosaavn.com/artist/example/abc'), false);
+  assert.equal(isValidAudioUrl('https://aac.saavncdn.com/001/example_160.mp4'), true);
+});
+
+test('30 JioSaavn catalog resolution stays ahead of YouTube fallback', async () => {
+  let youtubeCalls = 0;
+  let jioCalls = 0;
+
+  const resolver = new StreamResolver([
+    {
+      id: 'embedded',
+      canResolve: () => false,
+      resolve: async () => { throw new Error('not used'); },
+    },
+    {
+      id: 'youtube',
+      canResolve: () => true,
+      resolve: async (track) => {
+        youtubeCalls += 1;
+        return {
+          url: 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ',
+          track,
+          provider: 'youtube',
+        };
+      },
+    },
+    {
+      id: 'jiosaavn',
+      canResolve: () => true,
+      resolve: async (track) => {
+        jioCalls += 1;
+        return {
+          url: 'https://saavncdn.com/preferred_160.m4a',
+          track,
+          provider: 'jiosaavn',
+          quality: '160kbps',
+          bitrate: 160000,
+        };
+      },
+    },
+    {
+      id: 'backend-search',
+      canResolve: () => true,
+      resolve: async () => { throw new Error('fallback should not run'); },
+    },
+  ], { healthManager: new ProviderHealthManager() });
+
+  const result = await resolver.resolve(song({
+    id: 'saavn-1',
+    source: 'jiosaavn',
+    youtubeId: 'dQw4w9WgXcQ',
+  }), { quality: 'normal' });
+
+  assert.equal(result.source, 'jiosaavn');
+  assert.equal(jioCalls, 1);
+  assert.equal(youtubeCalls, 0);
+});
+
+test('31 forceFresh JioSaavn resolution bypasses stale metadata cache', async () => {
+  let calls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://catalog.test',
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (!url.includes('/api/songs')) throw new Error('unexpected fallback');
+      calls += 1;
+      return json({
+        success: true,
+        data: [{
+          id: 'fresh-jio',
+          name: 'Fresh Jio',
+          artist: 'Artist',
+          source: 'jiosaavn',
+          downloadUrl: [{
+            url: `https://saavncdn.com/fresh-${calls}_160.m4a`,
+            quality: '160kbps',
+          }],
+        }],
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+  const target = song({ id: 'fresh-jio', source: 'jiosaavn' });
+
+  const first = await resolver.resolve(target, {
+    quality: 'normal',
+    skipEmbedded: true,
+  });
+  const second = await resolver.resolve(target, {
+    quality: 'normal',
+    forceFresh: true,
+    skipEmbedded: true,
+  });
+
+  assert.equal(calls, 2);
+  assert.match(first.url, /fresh-1/);
+  assert.match(second.url, /fresh-2/);
+});
+
+test('32 recovery retries fresh JioSaavn twice before excluding it for final fallback', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /skipEmbedded: true/);
+  assert.match(source, /attempt >= 3 && failedProvider/);
+});
+
+test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 0).delayMs,
+    0
+  );
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 1).delayMs,
+    500
+  );
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 2).delayMs,
+    1500
+  );
+});
