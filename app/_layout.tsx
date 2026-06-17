@@ -4,13 +4,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '@/src/providers/AuthProvider';
 import { LibraryProvider } from '@/src/providers/LibraryProvider';
 import { PlayerProvider } from '@/src/providers/PlayerProvider';
+import { OfflineProvider } from '@/src/providers/OfflineProvider';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <LibraryProvider>
-          <PlayerProvider>
+          <OfflineProvider>
+            <PlayerProvider>
             <StatusBar style="light" />
             <Stack
               screenOptions={{
@@ -25,6 +27,7 @@ export default function RootLayout() {
               <Stack.Screen name="player" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             </Stack>
           </PlayerProvider>
+          </OfflineProvider>
         </LibraryProvider>
       </AuthProvider>
     </SafeAreaProvider>

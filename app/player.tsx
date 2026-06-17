@@ -19,6 +19,7 @@ import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/son
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { useOffline } from '@/src/providers/OfflineProvider';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
 
@@ -42,6 +43,7 @@ const TIMER_OPTIONS: Array<{ value: SleepTimerMode; label: string }> = [
 export default function PlayerScreen() {
   const { token } = useAuth();
   const { isLiked, toggleLike } = useLibrary();
+  const { isDownloaded, downloading, downloadSong, removeDownload } = useOffline();
   const {
     currentSong,
     queue,
@@ -282,6 +284,33 @@ export default function PlayerScreen() {
 
           {panel === 'tools' && (
             <View style={styles.panel}>
+              <View style={styles.downloadRow}>
+                <View style={styles.downloadCopy}>
+                  <Text style={styles.toolLabel}>OFFLINE</Text>
+                  <Text style={styles.downloadTitle}>
+                    {isDownloaded(currentSong.id) ? 'Downloaded to this phone' : 'Save this track for offline playback'}
+                  </Text>
+                </View>
+                <Pressable
+                  disabled={downloading[currentSong.id] != null}
+                  onPress={() => {
+                    if (isDownloaded(currentSong.id)) void removeDownload(currentSong.id);
+                    else void downloadSong(currentSong, streamQuality);
+                  }}
+                  style={[styles.downloadButton, isDownloaded(currentSong.id) && styles.downloadButtonSaved]}
+                >
+                  {downloading[currentSong.id] != null
+                    ? <ActivityIndicator size="small" color="#080808" />
+                    : <Text style={[styles.downloadButtonText, isDownloaded(currentSong.id) && styles.downloadButtonTextSaved]}>
+                        {isDownloaded(currentSong.id) ? 'Remove' : 'Download'}
+                      </Text>}
+                </Pressable>
+              </View>
+              {downloading[currentSong.id] != null && (
+                <View style={styles.downloadProgressTrack}>
+                  <View style={[styles.downloadProgress, { width: `${Math.max(3, downloading[currentSong.id] * 100)}%` }]} />
+                </View>
+              )}
               <Text style={styles.toolLabel}>PLAYBACK SPEED</Text>
               <View style={styles.optionRow}>
                 {RATE_OPTIONS.map((rate) => (
@@ -439,6 +468,15 @@ const styles = StyleSheet.create({
   queueTitle: { color: '#D8D8D8', fontSize: 14, fontWeight: '700' },
   queueTitleActive: { color: '#FFF' },
   queueArtist: { color: '#6F6F6F', fontSize: 11, marginTop: 2 },
+  downloadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 8 },
+  downloadCopy: { flex: 1, minWidth: 0 },
+  downloadTitle: { color: '#D7D7D7', fontSize: 13, lineHeight: 18, marginTop: -4 },
+  downloadButton: { height: 38, borderRadius: 12, backgroundColor: '#EFEFEF', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  downloadButtonSaved: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  downloadButtonText: { color: '#080808', fontSize: 11, fontWeight: '800' },
+  downloadButtonTextSaved: { color: '#D0D0D0' },
+  downloadProgressTrack: { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 16 },
+  downloadProgress: { height: 3, borderRadius: 2, backgroundColor: '#EEE' },
   toolLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   toolLabel: { color: '#666', fontSize: 9, fontWeight: '800', letterSpacing: 1.2, marginTop: 2, marginBottom: 9 },
   timerState: { color: '#A8A8A8', fontSize: 11, fontVariant: ['tabular-nums'] },
