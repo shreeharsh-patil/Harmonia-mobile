@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -33,32 +33,42 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async (refresh = false) => {
+    const generation = ++loadGenerationRef.current;
     refresh ? setRefreshing(true) : setLoading(true);
     setError(null);
 
-    try {
-      const publicSections = await fetchHomeSections();
-      setSections(publicSections);
+    const publicRequest = fetchHomeSections();
+    const recentRequest = token
+      ? fetchRecentlyPlayedPlaylists(token)
+      : Promise.resolve<Playlist[]>([]);
+    const mixesRequest = token
+      ? fetchRecommendedMixes(token)
+      : Promise.resolve<RecommendedMix[]>([]);
 
-      if (token) {
-        const [recentResult, mixResult] = await Promise.allSettled([
-          fetchRecentlyPlayedPlaylists(token),
-          fetchRecommendedMixes(token),
-        ]);
-        if (recentResult.status === 'fulfilled') setRecentPlaylists(recentResult.value);
-        if (mixResult.status === 'fulfilled') setMixes(mixResult.value);
-      } else {
-        setRecentPlaylists([]);
-        setMixes([]);
-      }
-    } catch (cause: any) {
-      setError(cause?.message || 'Unable to load music');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const [publicResult, recentResult, mixResult] = await Promise.allSettled([
+      publicRequest,
+      recentRequest,
+      mixesRequest,
+    ]);
+
+    if (generation !== loadGenerationRef.current) return;
+
+    if (publicResult.status === 'fulfilled') {
+      setSections(publicResult.value);
+    } else {
+      setError(publicResult.reason?.message || 'Unable to load music');
     }
+
+    setRecentPlaylists(
+      recentResult.status === 'fulfilled' ? recentResult.value : []
+    );
+    setMixes(mixResult.status === 'fulfilled' ? mixResult.value : []);
+
+    setLoading(false);
+    setRefreshing(false);
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);

@@ -30,25 +30,74 @@ export class ApiError extends Error {
   }
 }
 
-type RequestOptions = RequestInit & { token?: string | null };
+export const DEFAULT_API_TIMEOUT_MS = 15_000;
+
+type RequestOptions = RequestInit & {
+  token?: string | null;
+  timeoutMs?: number;
+};
 
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { token, headers, ...init } = options;
-  const response = await fetch(`${HARMONIA_API_URL}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(headers || {}),
-    },
-  });
+  const {
+    token,
+    headers,
+    timeoutMs = DEFAULT_API_TIMEOUT_MS,
+    signal: parentSignal,
+    ...init
+  } = options;
 
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.success === false) {
-    throw new ApiError(payload?.error || `Request failed (${response.status})`, response.status);
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromParent = () => controller.abort();
+
+  if (parentSignal?.aborted) controller.abort();
+  else parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, Math.max(1_000, timeoutMs));
+
+  try {
+    const response = await fetch(`${HARMONIA_API_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(headers || {}),
+      },
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.success === false) {
+      throw new ApiError(
+        payload?.error || payload?.message || `Request failed (${response.status})`,
+        response.status
+      );
+    }
+
+    return payload as T;
+  } catch (cause: any) {
+    if (timedOut) {
+      throw new ApiError('Request timed out. Check your connection and try again.', 408);
+    }
+
+    if (parentSignal?.aborted || cause?.name === 'AbortError') {
+      throw cause;
+    }
+
+    if (cause instanceof ApiError) throw cause;
+
+    throw new ApiError(
+      cause?.message || 'Unable to reach Harmonia. Check your connection and try again.',
+      0
+    );
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', abortFromParent);
   }
-  return payload as T;
 }
 
 export async function loginWithPassword(email: string, password: string) {
@@ -105,7 +154,7 @@ export async function updateProfile(
 ) {
   const payload = await requestJson<{ success: true; user: HarmoniaUser }>(
     '/api/mobile/me',
-    { method: 'PATCH', token, body: JSON.stringify(update) }
+    { method: 'PATCH', token, body: JSON.stringify(update), timeoutMs: 30_000 }
   );
   return payload.user;
 }
@@ -268,7 +317,7 @@ export async function importSpotifyPlaylist(token: string, url: string) {
     message: string;
   }>(
     '/api/mobile/playlists/import',
-    { method: 'POST', token, body: JSON.stringify({ url }) }
+    { method: 'POST', token, body: JSON.stringify({ url }), timeoutMs: 60_000 }
   );
 }
 
