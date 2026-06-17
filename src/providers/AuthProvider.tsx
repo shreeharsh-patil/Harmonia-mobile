@@ -11,14 +11,18 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { HARMONIA_API_URL } from '@/src/config';
 import {
+  ApiError,
   exchangeMobileTicket,
   fetchMe,
   loginWithPassword,
 } from '@/src/lib/api';
 import {
   clearAccessToken,
+  clearCachedUser,
   readAccessToken,
+  readCachedUser,
   writeAccessToken,
+  writeCachedUser,
 } from '@/src/lib/session';
 import type { HarmoniaUser } from '@/src/types';
 
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const adoptSession = useCallback(async (accessToken: string, nextUser: HarmoniaUser) => {
     await writeAccessToken(accessToken);
+    await writeCachedUser(nextUser).catch(() => {});
     setToken(accessToken);
     setUser(nextUser);
     setError(null);
@@ -88,14 +93,44 @@ export function AuthProvider({ children }: PropsWithChildren) {
           await processDeepLink(initialUrl);
         }
 
-        const saved = await readAccessToken();
+        const [saved, cachedUser] = await Promise.all([
+          readAccessToken(),
+          readCachedUser(),
+        ]);
+
         if (!saved || !active) return;
-        const result = await fetchMe(saved);
-        if (!active) return;
+
+        // Restore a usable session immediately. A slow or unavailable network
+        // must not sign a valid user out of the app.
         setToken(saved);
-        setUser(result.user);
+        if (cachedUser) setUser(cachedUser);
+
+        try {
+          const result = await fetchMe(saved);
+          if (!active) return;
+          setUser(result.user);
+          await writeCachedUser(result.user).catch(() => {});
+          setError(null);
+        } catch (cause) {
+          const rejected =
+            cause instanceof ApiError &&
+            (cause.status === 401 || cause.status === 403);
+
+          if (rejected) {
+            await Promise.all([
+              clearAccessToken().catch(() => {}),
+              clearCachedUser().catch(() => {}),
+            ]);
+            if (active) {
+              setToken(null);
+              setUser(null);
+            }
+          } else if (active && !cachedUser) {
+            setError('Could not refresh your account. Check your connection and try again.');
+          }
+        }
       } catch {
-        await clearAccessToken().catch(() => {});
+        // Secure storage itself failed. Do not pretend a session was restored.
         if (active) {
           setToken(null);
           setUser(null);
@@ -135,12 +170,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
       );
     } catch (cause: any) {
       setError(cause?.message || 'Unable to open sign-in');
+    } finally {
+      // A user may simply close the Custom Tab. Never leave auth controls
+      // permanently disabled when no deep-link callback arrives.
       setAuthenticating(false);
     }
   }, []);
 
   const signOut = useCallback(async () => {
-    await clearAccessToken().catch(() => {});
+    await Promise.all([
+      clearAccessToken().catch(() => {}),
+      clearCachedUser().catch(() => {}),
+    ]);
     setToken(null);
     setUser(null);
     setError(null);
@@ -148,8 +189,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const refreshUser = useCallback(async () => {
     if (!token) return;
-    const result = await fetchMe(token);
-    setUser(result.user);
+    try {
+      const result = await fetchMe(token);
+      setUser(result.user);
+      await writeCachedUser(result.user).catch(() => {});
+    } catch (cause) {
+      if (
+        cause instanceof ApiError &&
+        (cause.status === 401 || cause.status === 403)
+      ) {
+        await Promise.all([
+          clearAccessToken().catch(() => {}),
+          clearCachedUser().catch(() => {}),
+        ]);
+        setToken(null);
+        setUser(null);
+      }
+      throw cause;
+    }
   }, [token]);
 
   const value = useMemo<AuthContextValue>(() => ({

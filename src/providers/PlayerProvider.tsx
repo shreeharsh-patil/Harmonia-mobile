@@ -507,7 +507,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
 
       const nextQueue = [...queueRef.current];
-      nextQueue[index] = persistenceSafeSong(resolved.song);
+      // Runtime queue keeps embedded candidates for fast replay/next/previous.
+      // AsyncStorage snapshots are sanitized separately below.
+      nextQueue[index] = normalizeSong(resolved.song as any);
       queueRef.current = nextQueue;
       setQueue(nextQueue);
 
@@ -592,7 +594,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             lastKnownPositionRef.current = resumeAt;
 
             const upgradedQueue = [...queueRef.current];
-            upgradedQueue[indexRef.current] = persistenceSafeSong(candidate.song);
+            upgradedQueue[indexRef.current] = normalizeSong(candidate.song as any);
             queueRef.current = upgradedQueue;
             setQueue(upgradedQueue);
             setPlaybackDiagnostics(candidate.diagnostics);
@@ -682,12 +684,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const playSong = useCallback(async (song: Song, contextQueue?: Song[]) => {
     const normalized = normalizeSong(song as any);
     const normalizedQueue = (contextQueue?.length ? contextQueue : [normalized])
-      .map((item) => persistenceSafeSong(normalizeSong(item as any)))
+      .map((item) => normalizeSong(item as any))
       .filter((item) => Boolean(item.id));
 
     let index = normalizedQueue.findIndex((item) => item.id === normalized.id);
     if (index < 0) {
-      normalizedQueue.unshift(persistenceSafeSong(normalized));
+      normalizedQueue.unshift(normalized);
       index = 0;
     }
 
@@ -722,7 +724,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const playNext = useCallback((song: Song) => {
-    const stable = persistenceSafeSong(normalizeSong(song as any));
+    const stable = normalizeSong(song as any);
     if (!stable.id) return;
 
     const list = [...queueRef.current];
@@ -735,7 +737,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [commitQueue]);
 
   const addToQueue = useCallback((song: Song) => {
-    const stable = persistenceSafeSong(normalizeSong(song as any));
+    const stable = normalizeSong(song as any);
     if (!stable.id) return;
     commitQueue([...queueRef.current, stable], indexRef.current);
   }, [commitQueue]);
@@ -781,7 +783,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const suggestions = await fetchSongSuggestions(seed.id, 20);
           const existingIds = new Set(list.map((song) => String(song.id)));
           const additions = suggestions
-            .map((song) => persistenceSafeSong(normalizeSong(song as any)))
+            .map((song) => normalizeSong(song as any))
             .filter((song) => song.id && !existingIds.has(String(song.id)))
             .slice(0, 12);
 
@@ -875,7 +877,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
         if (historyRaw) {
           const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 500));
+          if (Array.isArray(parsedHistory)) {
+            const sanitizedHistory = parsedHistory
+              .filter((entry: any) => entry?.song?.id)
+              .slice(0, 500)
+              .map((entry: any) => ({
+                entryId: String(entry.entryId || `${entry.playedAt || Date.now()}-${entry.song.id}`),
+                playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
+                song: persistenceSafeSong(normalizeSong(entry.song as any)),
+              }));
+            setHistory(sanitizedHistory);
+            AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(sanitizedHistory)).catch(() => {});
+          }
         }
 
         if (statsRaw) {
