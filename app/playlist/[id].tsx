@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +57,7 @@ export default function PlaylistScreen() {
   const [saving, setSaving] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
+  const loadGenerationRef = useRef(0);
 
   const owned = useMemo(
     () => Boolean(id && ownedPlaylists.some((item) => getId(item) === id)),
@@ -64,23 +65,45 @@ export default function PlaylistScreen() {
   );
 
   const load = async () => {
-    if (!id) return;
+    const generation = ++loadGenerationRef.current;
+    if (!id) {
+      setPlaylist(null);
+      setSongs([]);
+      setLoading(false);
+      setError('Playlist ID is missing');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const detail = await fetchPlaylistDetails(id, token);
+      const nextSongs = await fetchPlaylistSongs(detail);
+      if (generation !== loadGenerationRef.current) return;
+
       setPlaylist(detail);
       setDraftName(playlistTitle(detail));
       setDraftDescription(String(detail.description || ''));
-      setSongs(await fetchPlaylistSongs(detail));
+      setSongs(nextSongs);
     } catch (cause: any) {
-      setError(cause?.message || 'Unable to load this playlist');
+      if (generation === loadGenerationRef.current) {
+        setError(cause?.message || 'Unable to load this playlist');
+      }
     } finally {
-      setLoading(false);
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [id, token]);
+  useEffect(() => {
+    setPlaylist(null);
+    setSongs([]);
+    setActionSong(null);
+    setEditing(false);
+    void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
+  }, [id, token]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;
