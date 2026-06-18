@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -35,9 +35,19 @@ export default function ArtistScreen() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const load = async () => {
-    if (!id) return;
+    const generation = ++loadGenerationRef.current;
+    if (!id) {
+      setArtist(null);
+      setSongs([]);
+      setAlbums([]);
+      setLoading(false);
+      setError('Artist ID is missing');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     const [artistResult, songsResult, albumsResult] = await Promise.allSettled([
@@ -45,6 +55,8 @@ export default function ArtistScreen() {
       fetchArtistSongs(id),
       fetchArtistAlbums(id),
     ]);
+
+    if (generation !== loadGenerationRef.current) return;
 
     if (artistResult.status === 'fulfilled') setArtist(artistResult.value);
     if (songsResult.status === 'fulfilled') setSongs(songsResult.value);
@@ -56,7 +68,16 @@ export default function ArtistScreen() {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    setArtist(null);
+    setSongs([]);
+    setAlbums([]);
+    setActionSong(null);
+    void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
+  }, [id]);
 
   const visibleSongs = useMemo(() => {
     if (songs.length) return songs;
