@@ -1,4 +1,4 @@
-import { HARMONIA_API_URL } from '@/src/config';
+import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
 import type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
@@ -38,6 +38,13 @@ type RequestOptions = RequestInit & {
 };
 
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!HAS_HARMONIA_API) {
+    throw new ApiError(
+      'This feature needs your Harmonia backend. Configure EXPO_PUBLIC_HARMONIA_API_URL for account/catalog sync.',
+      503
+    );
+  }
+
   const {
     token,
     headers,
