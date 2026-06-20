@@ -41,6 +41,7 @@ type PlaybackSnapshot = {
 };
 
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
+export type RepeatMode = 'off' | 'all' | 'one';
 
 export type PlaybackHistoryEntry = {
   entryId: string;
@@ -68,6 +69,8 @@ type PlayerContextValue = {
   streamQuality: StreamQuality;
   sleepTimer: SleepTimerMode;
   sleepRemaining: number;
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
   history: PlaybackHistoryEntry[];
   listeningStats: ListeningStats;
   clearHistory: () => Promise<void>;
@@ -80,6 +83,8 @@ type PlayerContextValue = {
   setPlaybackRate: (rate: number) => void;
   setStreamQuality: (quality: StreamQuality) => void;
   setSleepTimer: (mode: SleepTimerMode) => void;
+  toggleRepeat: () => void;
+  toggleShuffle: () => void;
   clearError: () => void;
 };
 
@@ -97,6 +102,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [streamQuality, setStreamQualityState] = useState<StreamQuality>('automatic');
   const [sleepTimer, setSleepTimerState] = useState<SleepTimerMode>('off');
   const [sleepRemaining, setSleepRemaining] = useState(0);
+  const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
+  const [shuffleEnabled, setShuffleEnabledState] = useState(false);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [listeningStats, setListeningStats] = useState<ListeningStats>({
     totalSeconds: 0,
@@ -115,6 +122,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const rateRef = useRef(1);
   const sleepTimerRef = useRef<SleepTimerMode>('off');
   const sleepDeadlineRef = useRef<number | null>(null);
+  const repeatModeRef = useRef<RepeatMode>('off');
+  const shuffleRef = useRef(false);
+  const unshuffledQueueRef = useRef<Song[]>([]);
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -147,10 +157,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     await AsyncStorage.removeItem(HISTORY_KEY);
   }, []);
 
-  const persistSettings = useCallback((nextRate: number, nextQuality: StreamQuality) => {
+  const persistSettings = useCallback((
+    nextRate: number,
+    nextQuality: StreamQuality,
+    nextRepeat: RepeatMode = repeatModeRef.current,
+    nextShuffle: boolean = shuffleRef.current
+  ) => {
     AsyncStorage.setItem(
       PLAYER_SETTINGS_KEY,
-      JSON.stringify({ playbackRate: nextRate, streamQuality: nextQuality })
+      JSON.stringify({
+        playbackRate: nextRate,
+        streamQuality: nextQuality,
+        repeatMode: nextRepeat,
+        shuffleEnabled: nextShuffle,
+      })
     ).catch(() => {});
   }, []);
 
@@ -166,6 +186,53 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     qualityRef.current = quality;
     setStreamQualityState(quality);
     persistSettings(rateRef.current, quality);
+  }, [persistSettings]);
+
+  const toggleRepeat = useCallback(() => {
+    const modes: RepeatMode[] = ['off', 'all', 'one'];
+    const next = modes[(modes.indexOf(repeatModeRef.current) + 1) % modes.length];
+    repeatModeRef.current = next;
+    setRepeatModeState(next);
+    persistSettings(rateRef.current, qualityRef.current, next, shuffleRef.current);
+  }, [persistSettings]);
+
+  const toggleShuffle = useCallback(() => {
+    const nextEnabled = !shuffleRef.current;
+    shuffleRef.current = nextEnabled;
+    setShuffleEnabledState(nextEnabled);
+
+    const current = queueRef.current[indexRef.current];
+    if (!current) {
+      persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+      return;
+    }
+
+    if (nextEnabled) {
+      const base = unshuffledQueueRef.current.length
+        ? [...unshuffledQueueRef.current]
+        : [...queueRef.current];
+      const rest = base.filter((song) => song.id !== current.id);
+      for (let i = rest.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      const shuffled = [current, ...rest];
+      queueRef.current = shuffled;
+      indexRef.current = 0;
+      setQueue(shuffled);
+      setCurrentIndex(0);
+    } else {
+      const restored = unshuffledQueueRef.current.length
+        ? [...unshuffledQueueRef.current]
+        : [...queueRef.current];
+      const restoredIndex = Math.max(0, restored.findIndex((song) => song.id === current.id));
+      queueRef.current = restored;
+      indexRef.current = restoredIndex;
+      setQueue(restored);
+      setCurrentIndex(restoredIndex);
+    }
+
+    persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
   }, [persistSettings]);
 
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
@@ -252,11 +319,26 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       index = 0;
     }
 
-    queueRef.current = normalizedQueue;
-    indexRef.current = index;
-    setQueue(normalizedQueue);
-    setCurrentIndex(index);
-    await loadIndex(index, true, 0);
+    unshuffledQueueRef.current = normalizedQueue;
+    let playbackQueue = normalizedQueue;
+    let playbackIndex = index;
+
+    if (shuffleRef.current && normalizedQueue.length > 1) {
+      const selected = normalizedQueue[index];
+      const rest = normalizedQueue.filter((_, itemIndex) => itemIndex !== index);
+      for (let i = rest.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+      }
+      playbackQueue = [selected, ...rest];
+      playbackIndex = 0;
+    }
+
+    queueRef.current = playbackQueue;
+    indexRef.current = playbackIndex;
+    setQueue(playbackQueue);
+    setCurrentIndex(playbackIndex);
+    await loadIndex(playbackIndex, true, 0);
   }, [loadIndex]);
 
   const next = useCallback(async () => {
@@ -264,6 +346,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!list.length) return;
     const nextIndex = indexRef.current + 1;
     if (nextIndex >= list.length) {
+      if (repeatModeRef.current === 'all' && list.length > 0) {
+        await loadIndex(0, true, 0);
+        return;
+      }
       player.pause();
       await player.seekTo(0).catch(() => {});
       return;
@@ -276,8 +362,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       await player.seekTo(0);
       return;
     }
-    const previousIndex = Math.max(0, indexRef.current - 1);
-    await loadIndex(previousIndex, true, 0);
+    const previousIndex = indexRef.current - 1;
+    if (previousIndex < 0 && repeatModeRef.current === 'all' && queueRef.current.length) {
+      await loadIndex(queueRef.current.length - 1, true, 0);
+      return;
+    }
+    await loadIndex(Math.max(0, previousIndex), true, 0);
   }, [loadIndex, player, status.currentTime]);
 
   const togglePlayback = useCallback(async () => {
@@ -339,10 +429,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const nextRate = Math.max(0.5, Math.min(2, Number(settings.playbackRate || 1)));
           const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
           const nextQuality = validQualities.includes(settings.streamQuality) ? settings.streamQuality : 'automatic';
+          const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
+          const nextRepeat = validRepeatModes.includes(settings.repeatMode) ? settings.repeatMode : 'off';
+          const nextShuffle = Boolean(settings.shuffleEnabled);
           rateRef.current = nextRate;
           qualityRef.current = nextQuality;
+          repeatModeRef.current = nextRepeat;
+          shuffleRef.current = nextShuffle;
           setPlaybackRateState(nextRate);
           setStreamQualityState(nextQuality);
+          setRepeatModeState(nextRepeat);
+          setShuffleEnabledState(nextShuffle);
           player.setPlaybackRate(nextRate);
         }
 
@@ -357,6 +454,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           Math.max(Number(snapshot.index || 0), 0),
           restoredQueue.length - 1
         );
+        unshuffledQueueRef.current = restoredQueue;
         queueRef.current = restoredQueue;
         indexRef.current = restoredIndex;
         restoredPosition.current = Math.max(0, Number(snapshot.position || 0));
@@ -385,6 +483,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         finishing.current = false;
         return;
       }
+      if (repeatModeRef.current === 'one') {
+        void loadIndex(indexRef.current, true, 0).finally(() => {
+          setTimeout(() => {
+            finishing.current = false;
+          }, 350);
+        });
+        return;
+      }
       void next().finally(() => {
         setTimeout(() => {
           finishing.current = false;
@@ -392,7 +498,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       });
     }
     if (!status.didJustFinish) finishing.current = false;
-  }, [next, player, setSleepTimer, status.didJustFinish]);
+  }, [loadIndex, next, player, setSleepTimer, status.didJustFinish]);
 
   useEffect(() => {
     if (typeof sleepTimer !== 'number') return;
@@ -467,6 +573,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     streamQuality,
     sleepTimer,
     sleepRemaining,
+    repeatMode,
+    shuffleEnabled,
     history,
     listeningStats,
     clearHistory,
@@ -479,6 +587,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
+    toggleRepeat,
+    toggleShuffle,
     clearError: () => setError(null),
   }), [
     currentSong,
@@ -494,6 +604,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     streamQuality,
     sleepTimer,
     sleepRemaining,
+    repeatMode,
+    shuffleEnabled,
     history,
     listeningStats,
     clearHistory,
@@ -506,6 +618,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
+    toggleRepeat,
+    toggleShuffle,
   ]);
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
