@@ -1,6 +1,7 @@
 import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
+import { searchDirectJioSaavn } from '@/src/lib/playback/jiosaavnDirect';
 import type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 import type {
@@ -336,6 +337,8 @@ export async function addSongToPlaylist(token: string, playlistId: string, songI
 }
 
 export async function fetchHomeSections(): Promise<MusicSection[]> {
+  if (!HAS_HARMONIA_API) return [];
+
   try {
     const curated = await requestJson<{ success: true; data: MusicSection[] }>('/api/curated-music');
     if (Array.isArray(curated.data) && curated.data.length) return curated.data;
@@ -346,6 +349,40 @@ export async function fetchHomeSections(): Promise<MusicSection[]> {
 }
 
 export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {
+  if (!HAS_HARMONIA_API) {
+    const direct = await searchDirectJioSaavn(query, { limit, signal });
+    const songs = direct.map((track) => normalizeSong({
+      id: track.id,
+      songId: track.id,
+      name: track.title,
+      title: track.title,
+      artist: track.artists.join(', '),
+      primaryArtists: track.artists.join(', '),
+      album: track.album || undefined,
+      duration: track.duration || undefined,
+      image: track.image ? [{ quality: '500x500', url: track.image }] : [],
+      source: 'jiosaavn',
+      provider: 'jiosaavn',
+    } as any));
+
+    const empty = { total: 0, start: 0, results: [] };
+    return {
+      topQuery: {
+        total: songs.length ? 1 : 0,
+        start: 0,
+        results: songs.length ? [songs[0]] : [],
+      },
+      songs: {
+        total: songs.length,
+        start: 0,
+        results: songs,
+      },
+      albums: empty,
+      artists: empty,
+      playlists: empty,
+    } as SearchPayload;
+  }
+
   const payload = await requestJson<{ success: true; data: SearchPayload }>(
     `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
     { signal }

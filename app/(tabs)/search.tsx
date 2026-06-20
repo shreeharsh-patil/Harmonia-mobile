@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
-import { RECENT_SEARCHES_KEY } from '@/src/config';
+import { HAS_HARMONIA_API, RECENT_SEARCHES_KEY } from '@/src/config';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
@@ -195,7 +195,7 @@ export default function SearchScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Songs, artists, albums, playlists"
+            placeholder={HAS_HARMONIA_API ? 'Songs, artists, albums, playlists' : 'Search songs'}
             placeholderTextColor="#656565"
             autoCapitalize="none"
             autoCorrect={false}
@@ -236,8 +236,14 @@ export default function SearchScreen() {
           ) : (
             <View style={styles.discover}>
               <Text style={styles.discoverKicker}>FIND YOUR NEXT TRACK</Text>
-              <Text style={styles.discoverTitle}>Search the Harmonia catalog.</Text>
-              <Text style={styles.discoverBody}>Songs, playlists, artists and albums from the same catalog as the web player.</Text>
+              <Text style={styles.discoverTitle}>
+                {HAS_HARMONIA_API ? 'Search the Harmonia catalog.' : 'Search music directly.'}
+              </Text>
+              <Text style={styles.discoverBody}>
+                {HAS_HARMONIA_API
+                  ? 'Songs, playlists, artists and albums from the same catalog as the web player.'
+                  : 'Song discovery and playback work directly from your phone. Account sync can be connected later.'}
+              </Text>
             </View>
           )}
         </ScrollView>
