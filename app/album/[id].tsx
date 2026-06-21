@@ -51,6 +51,7 @@ export default function AlbumScreen() {
 
     setLoading(true);
     setError(null);
+    setAlbum(null);
     try {
       const nextAlbum = await fetchAlbum(id);
       if (generation !== loadGenerationRef.current) return;

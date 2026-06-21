@@ -50,6 +50,9 @@ export default function ArtistScreen() {
 
     setLoading(true);
     setError(null);
+    setArtist(null);
+    setSongs([]);
+    setAlbums([]);
     const [artistResult, songsResult, albumsResult] = await Promise.allSettled([
       fetchArtist(id),
       fetchArtistSongs(id),
