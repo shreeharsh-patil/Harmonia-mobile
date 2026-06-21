@@ -9,25 +9,24 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchPlaylistSongs, searchMusic } from '@/src/lib/api';
-import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { Playlist, SearchPayload, Song } from '@/src/types';
 
 export default function SearchScreen() {
-  const { token } = useAuth();
-  const { isLiked, toggleLike } = useLibrary();
+  const { isLiked } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [playlistLoading, setPlaylistLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionSong, setActionSong] = useState<Song | null>(null);
 
   const trimmed = query.trim();
 
@@ -75,14 +74,6 @@ export default function SearchScreen() {
     } finally {
       setPlaylistLoading(null);
     }
-  };
-
-  const like = (song: Song) => {
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    void toggleLike(song);
   };
 
   const header = (
@@ -148,15 +139,12 @@ export default function SearchScreen() {
             <SongRow
               song={item}
               active={currentSong?.id === item.id}
+              onMorePress={() => setActionSong(item)}
               onPress={() => {
                 Keyboard.dismiss();
                 void playSong(item, songs);
               }}
-              trailing={
-                <Pressable onPress={() => like(item)} style={styles.heart}>
-                  <Text style={[styles.heartText, isLiked(item.id) && styles.heartLiked]}>{isLiked(item.id) ? '♥' : '♡'}</Text>
-                </Pressable>
-              }
+              trailing={isLiked(item.id) ? <Text style={styles.likedIndicator}>♥</Text> : null}
             />
           )}
           contentContainerStyle={styles.results}
@@ -165,6 +153,7 @@ export default function SearchScreen() {
       )}
 
       {loading && results && <View style={styles.inlineLoading}><ActivityIndicator color="#999" size="small" /></View>}
+      <SongActionsSheet song={actionSong} visible={actionSong != null} onClose={() => setActionSong(null)} />
     </SafeAreaView>
   );
 }
@@ -190,7 +179,5 @@ const styles = StyleSheet.create({
   error: { color: '#EB8888', textAlign: 'center' },
   empty: { color: '#777', textAlign: 'center', paddingVertical: 60 },
   inlineLoading: { position: 'absolute', top: 95, right: 32 },
-  heart: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  heartText: { color: '#8A8A8A', fontSize: 22 },
-  heartLiked: { color: '#FFF' },
+  likedIndicator: { color: '#FFF', fontSize: 17, marginLeft: 8 },
 });
