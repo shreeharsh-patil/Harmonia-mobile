@@ -60,9 +60,13 @@ export default function SearchScreen() {
 
     const controller = new AbortController();
     let active = true;
+
+    // Never show results from the previous query under a new search term.
+    setResults(null);
+    setError(null);
+
     const timer = setTimeout(async () => {
       setLoading(true);
-      setError(null);
       try {
         const value = await searchMusic(trimmed, 30, controller.signal);
         if (active) setResults(value);

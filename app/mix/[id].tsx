@@ -43,6 +43,8 @@ export default function MixScreen() {
 
     setLoading(true);
     setError(null);
+    setMix(null);
+    setSongs([]);
     try {
       const mixes = await fetchRecommendedMixes(token);
       const found = mixes.find((item) => String(item._mixId || item.id || '') === id) || null;
