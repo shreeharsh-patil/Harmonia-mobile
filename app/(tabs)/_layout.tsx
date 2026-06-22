@@ -1,10 +1,14 @@
 import { Tabs } from 'expo-router';
-import { ColorValue, Platform, StyleSheet, Text, View } from 'react-native';
+import { ColorValue, Platform, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/src/components/MiniPlayer';
+import { colors } from '@/src/theme';
 
-function TabGlyph({ value, color }: { value: string; color: ColorValue }) {
-  return <Text style={[styles.glyph, { color }]}>{value}</Text>;
+type TabIconName = 'home' | 'search' | 'library' | 'person';
+
+function TabIcon({ name, color, focused }: { name: TabIconName; color: ColorValue; focused: boolean }) {
+  return <Ionicons name={focused ? name : `${name}-outline`} size={23} color={color} />;
 }
 
 export default function TabsLayout() {
@@ -17,9 +21,9 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          sceneStyle: { backgroundColor: '#070707' },
-          tabBarActiveTintColor: '#F4F4F4',
-          tabBarInactiveTintColor: '#686868',
+          sceneStyle: { backgroundColor: colors.background },
+          tabBarActiveTintColor: colors.textStrong,
+          tabBarInactiveTintColor: colors.muted,
           tabBarStyle: {
             position: 'absolute',
             left: 12,
@@ -30,9 +34,9 @@ export default function TabsLayout() {
             paddingBottom: 6,
             borderTopWidth: StyleSheet.hairlineWidth,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: '#292929',
-            borderRadius: 24,
-            backgroundColor: Platform.OS === 'android' ? 'rgba(16,16,16,0.97)' : 'rgba(16,16,16,0.92)',
+            borderColor: colors.borderStrong,
+            borderRadius: 20,
+            backgroundColor: Platform.OS === 'android' ? 'rgba(10,10,10,0.98)' : 'rgba(10,10,10,0.94)',
             overflow: 'hidden',
           },
           tabBarLabelStyle: {
@@ -42,10 +46,10 @@ export default function TabsLayout() {
           },
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <TabGlyph value="⌂" color={color} /> }} />
-        <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color }) => <TabGlyph value="⌕" color={color} /> }} />
-        <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: ({ color }) => <TabGlyph value="♫" color={color} /> }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color }) => <TabGlyph value="●" color={color} /> }} />
+        <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color, focused }) => <TabIcon name="home" color={color} focused={focused} /> }} />
+        <Tabs.Screen name="search" options={{ title: 'Search', tabBarIcon: ({ color, focused }) => <TabIcon name="search" color={color} focused={focused} /> }} />
+        <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: ({ color, focused }) => <TabIcon name="library" color={color} focused={focused} /> }} />
+        <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color, focused }) => <TabIcon name="person" color={color} focused={focused} /> }} />
       </Tabs>
 
       <View pointerEvents="box-none" style={[styles.miniWrap, { bottom: bottom + barHeight + 8 }]}>
@@ -56,7 +60,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#070707' },
-  glyph: { fontSize: 22, fontWeight: '700', lineHeight: 23 },
+  root: { flex: 1, backgroundColor: colors.background },
   miniWrap: { position: 'absolute', left: 12, right: 12 },
 });
