@@ -119,3 +119,18 @@ test('player hydration and radio continuation are generation guarded', async () 
   assert.match(source, /endGeneration !== loadGenerationRef\.current/);
 });
 
+
+
+test('radio suggestions fall back to local catalog and direct JioSaavn when backend is absent', async () => {
+  const source = await readFile('src/lib/api.ts', 'utf8');
+  assert.match(source, /if \(HAS_HARMONIA_API\) \{[\s\S]*?Radio should survive account\/catalog backend outages/);
+  assert.match(source, /searchStaticCatalog\(query, candidateLimit\)/);
+  assert.match(source, /searchDirectJioSaavn\(query, \{ limit: candidateLimit \}\)/);
+  assert.match(source, /diversifySuggestions\(seed, candidates/);
+});
+
+test('search UI no longer downgrades backend-free discovery to song-only copy', async () => {
+  const source = await readFile('app/(tabs)/search.tsx', 'utf8');
+  assert.match(source, /placeholder="Songs, artists, albums, playlists"/);
+  assert.match(source, /Bundled Harmonia discovery plus direct JioSaavn/);
+});
