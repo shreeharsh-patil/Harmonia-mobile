@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import * as Network from 'expo-network';
 import {
   createContext,
   PropsWithChildren,
@@ -15,6 +16,7 @@ import { resolvePlayableSong, type StreamQuality } from '@/src/lib/api';
 import { inferDownloadExtension } from '@/src/lib/downloads';
 import { persistenceSafeSong } from '@/src/lib/song';
 import type { Song } from '@/src/types';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 const DOWNLOADS_KEY = 'harmonia.mobile.downloads.v1';
 const DOWNLOAD_DIR = new Directory(Paths.document, 'harmonia-downloads');
@@ -46,6 +48,7 @@ function safeName(value: string) {
 }
 
 export function OfflineProvider({ children }: PropsWithChildren) {
+  const { wifiOnlyDownloads, networkType, networkConnected } = usePreferences();
   const [downloads, setDownloads] = useState<DownloadedTrack[]>([]);
   const [downloading, setDownloading] = useState<Record<string, number>>({});
   const [downloadFailures, setDownloadFailures] = useState<Record<string, string>>({});
@@ -126,6 +129,17 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     let destination: File | null = null;
 
     try {
+      if (!networkConnected) {
+        throw new Error('Connect to the internet before downloading this track.');
+      }
+      if (
+        wifiOnlyDownloads &&
+        networkType !== Network.NetworkStateType.WIFI &&
+        networkType !== Network.NetworkStateType.ETHERNET
+      ) {
+        throw new Error('Wi-Fi-only downloads are enabled. Connect to Wi-Fi and try again.');
+      }
+
       if (!DOWNLOAD_DIR.exists) DOWNLOAD_DIR.create();
 
       const resolved = await resolvePlayableSong(song, quality);
@@ -194,7 +208,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
         return next;
       });
     }
-  }, [byId, persist]);
+  }, [byId, networkConnected, networkType, persist, wifiOnlyDownloads]);
 
   const removeDownload = useCallback(async (songId: string) => {
     const id = String(songId);
