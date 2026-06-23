@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
 export const MINI_PLAYER_HEIGHT = 64;
@@ -22,9 +22,8 @@ export function MiniPlayer() {
     isLoadingTrack,
     togglePlayback,
     next,
-    position,
-    duration,
   } = usePlayer();
+  const { position, duration } = usePlaybackProgress();
 
   if (!currentSong) return null;
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
