@@ -155,6 +155,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       if (destination.exists) destination.delete();
 
       const task = File.createDownloadTask(resolved.url, destination, {
+        ...(resolved.headers ? { headers: resolved.headers } : {}),
         onProgress: ({ bytesWritten, totalBytes }) => {
           if (cancelledDownloadsRef.current.has(id)) return;
           const progress = totalBytes > 0 ? bytesWritten / totalBytes : 0;

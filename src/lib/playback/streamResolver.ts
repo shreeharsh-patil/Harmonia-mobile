@@ -16,12 +16,21 @@ import {
   fetchDirectJioSaavnTrack,
   findDirectJioSaavnTrack,
 } from '@/src/lib/playback/jiosaavnDirect';
+import {
+  findDirectYouTubeMusicTrack,
+  resolveDirectYouTubeMusicTrack,
+} from '@/src/lib/playback/youtubeMusicDirect';
 
 export { isResolvedStreamFresh } from '@/src/lib/playback/streamCache';
 import { streamHostname } from '@/src/lib/playback/streamDiagnostics';
 
 export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
-export type StreamResolverProviderId = 'embedded' | 'youtube' | 'jiosaavn' | 'backend-search';
+export type StreamResolverProviderId =
+  | 'embedded'
+  | 'jiosaavn'
+  | 'youtube'
+  | 'youtube-server'
+  | 'backend-search';
 
 export type ResolvedStreamDiagnostics = {
   provider: string;
@@ -51,6 +60,7 @@ export type ResolvedStream = {
   track: Song;
   cache: 'hit' | 'miss';
   resolutionTimeMs: number;
+  headers: Record<string, string> | null;
   diagnostics: ResolvedStreamDiagnostics;
 };
 
@@ -81,6 +91,7 @@ type ProviderResult = {
   bitrate?: number | null;
   quality?: string | null;
   mimeType?: string | null;
+  headers?: Record<string, string> | null;
 };
 
 export type StreamProvider = {
@@ -121,7 +132,8 @@ export function isValidAudioUrl(value: unknown) {
 
 export function inferStreamProvider(url: string, track?: Song) {
   const value = String(url || '').toLowerCase();
-  if (value.includes('/api/yt-stream') || value.includes('googlevideo.com')) return 'youtube';
+  if (value.includes('/api/yt-stream')) return 'youtube-server';
+  if (value.includes('googlevideo.com')) return 'youtube';
   if (value.includes('saavncdn.com') || value.includes('/api/songs/')) return 'jiosaavn';
   if (
     value.includes('/api/stream-track') ||
@@ -303,9 +315,16 @@ function jioSaavnIdOf(track: Song) {
 
 function canResolveWithDirectJioSaavn(track: Song) {
   const source = String((track as any).source || (track as any).provider || '').toLowerCase();
-  if (source.includes('youtube') || source.includes('podcast')) return false;
+  if (source.includes('podcast') || (track as any).isVideo === true) return false;
   if (jioSaavnIdOf(track)) return true;
 
+  const title = String(track.name || track.title || '').trim();
+  const artists = artistNames(track).trim();
+  return Boolean(title && artists && artists !== 'Unknown artist');
+}
+
+function canResolveWithDirectYouTube(track: Song) {
+  if (youtubeIdOf(track)) return true;
   const title = String(track.name || track.title || '').trim();
   const artists = artistNames(track).trim();
   return Boolean(title && artists && artists !== 'Unknown artist');
@@ -405,6 +424,89 @@ export function createHarmoniaProviders({
     {
       id: 'youtube',
       canResolve(track) {
+        return canResolveWithDirectYouTube(track);
+      },
+      async resolve(track, options) {
+        const explicitId = youtubeIdOf(track);
+        const title = String(track.name || track.title || '').trim();
+        const artists = artistNames(track).trim();
+
+        const match = explicitId
+          ? {
+              id: explicitId,
+              title,
+              artists: artists ? [artists] : [],
+              album: null,
+              duration: Number(track.duration || 0) || null,
+              image: null,
+            }
+          : await findDirectYouTubeMusicTrack(
+              {
+                title,
+                artist: artists,
+                duration: Number(track.duration || 0) || null,
+              },
+              {
+                fetchImpl,
+                signal: options.signal,
+              }
+            );
+
+        if (!match?.id) {
+          throw new PlaybackPipelineError(
+            PlaybackErrorType.TRACK_UNAVAILABLE,
+            'YouTube Music could not match this recording directly.',
+            { provider: 'youtube' }
+          );
+        }
+
+        const direct = await resolveDirectYouTubeMusicTrack(match.id, {
+          fetchImpl,
+          signal: options.signal,
+          quality: options.quality || 'automatic',
+        });
+
+        if (!direct?.url) {
+          throw new PlaybackPipelineError(
+            PlaybackErrorType.TRACK_UNAVAILABLE,
+            'YouTube Music did not return a directly playable public audio stream.',
+            { provider: 'youtube' }
+          );
+        }
+
+        // Preserve Harmonia/Spotify identity used by the catalog and Canvas.
+        // The YouTube id is playback metadata, not a replacement canonical id.
+        const detailed = normalizeSong({
+          ...track,
+          videoId: match.id,
+          youtubeId: match.id,
+          name: track.name || track.title || direct.title || match.title,
+          title: track.title || track.name || direct.title || match.title,
+          artist: (track as any).artist || artistNames(track) || direct.artists.join(', '),
+          duration: track.duration || direct.duration || match.duration || undefined,
+          image: track.image?.length
+            ? track.image
+            : direct.image
+              ? [{ quality: 'high', url: direct.image }]
+              : track.image,
+          provider: 'youtube',
+        } as any);
+
+        return {
+          url: direct.url,
+          track: detailed,
+          provider: 'youtube',
+          codec: direct.codec,
+          bitrate: direct.bitrate,
+          quality: direct.quality,
+          mimeType: direct.mimeType,
+          headers: direct.headers,
+        };
+      },
+    },
+    {
+      id: 'youtube-server',
+      canResolve(track) {
         return Boolean(apiBase && youtubeIdOf(track));
       },
       async resolve(track) {
@@ -413,18 +515,19 @@ export function createHarmoniaProviders({
           throw new PlaybackPipelineError(
             PlaybackErrorType.TRACK_UNAVAILABLE,
             'Track does not contain a valid YouTube video id.',
-            { provider: 'youtube' }
+            { provider: 'youtube-server' }
           );
         }
 
         return {
           url: `${apiBase}/api/yt-stream?id=${encodeURIComponent(videoId)}`,
           track,
-          provider: 'youtube',
+          provider: 'youtube-server',
           quality: 'server-selected',
           mimeType: null,
           codec: null,
           bitrate: null,
+          headers: null,
         };
       },
     },
@@ -548,12 +651,11 @@ function sourceOrderForTrack(track: Song, providers: StreamProvider[]) {
   const map = new Map(providers.map((provider) => [provider.id, provider]));
   const order: StreamResolverProviderId[] = ['embedded'];
 
-  // Resolve on-device with JioSaavn before any optional server fallback.
-  // This also lets metadata-only imports (for example Spotify playlist rows)
-  // match a playable JioSaavn recording without a Harmonia deployment.
+  // Resolve on-device with JioSaavn first. If it cannot serve the recording,
+  // use direct YouTube Music/Innertube before any Harmonia server fallback.
   if (canResolveWithDirectJioSaavn(track)) order.push('jiosaavn');
-
-  if (youtubeIdOf(track)) order.push('youtube');
+  if (canResolveWithDirectYouTube(track)) order.push('youtube');
+  if (youtubeIdOf(track)) order.push('youtube-server');
 
   order.push('backend-search');
 
@@ -669,6 +771,7 @@ export class StreamResolver {
           codec: value.codec || null,
           bitrate: value.bitrate || null,
           quality: value.quality || null,
+          headers: value.headers || null,
           resolvedAt,
           expiresAt,
           track: resolvedTrack,
