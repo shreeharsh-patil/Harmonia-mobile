@@ -153,3 +153,27 @@ test('Wi-Fi-only downloads are persisted and enforced before stream resolution',
   assert.match(settings, /title="Wi-Fi-only downloads"/);
   assert.match(settings, /setWifiOnlyDownloads\(!wifiOnlyDownloads\)/);
 });
+
+
+test('direct provider headers reach native playback and offline downloads', async () => {
+  const player = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const offline = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+
+  assert.match(player, /nativeAudioSource\(resolved\.url, resolved\.headers\)/);
+  assert.match(player, /nativeAudioSource\(candidate\.url, candidate\.headers\)/);
+  assert.match(player, /headers = resolved\.headers/);
+
+  assert.match(offline, /resolved\.headers \? \{ headers: resolved\.headers \}/);
+});
+
+test('YouTube direct fallback keeps canonical Harmonia identity', async () => {
+  const source = await readFile('src/lib/playback/streamResolver.ts', 'utf8');
+
+  assert.match(source, /Preserve Harmonia\/Spotify identity/);
+  assert.match(source, /videoId: match\.id/);
+  assert.match(source, /youtubeId: match\.id/);
+  assert.doesNotMatch(
+    source.match(/const detailed = normalizeSong\(\{[\s\S]*?\} as any\);/)?.[0] || '',
+    /id: match\.id/
+  );
+});
