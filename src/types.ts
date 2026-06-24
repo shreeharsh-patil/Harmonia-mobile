@@ -42,6 +42,8 @@ export type Song = {
   provider?: string;
   videoId?: string;
   youtubeId?: string;
+  spotifyId?: string;
+  spotifyUri?: string;
   language?: string;
   playCount?: number;
   releaseDate?: string;
