@@ -29,6 +29,8 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="login" options={{ animation: 'slide_from_bottom' }} />
               <Stack.Screen name="player" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="explore" options={{ animation: 'slide_from_right' }} />
+              <Stack.Screen name="replay" options={{ animation: 'slide_from_right' }} />
             </Stack>
           </PlayerProvider>
             </LocalMusicProvider>
