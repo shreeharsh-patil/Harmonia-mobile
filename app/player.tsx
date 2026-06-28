@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
-import { activeLyricIndex, parseLrc } from '@/src/lib/lyrics';
+import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyrics';
 import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -128,7 +128,7 @@ export default function PlayerScreen() {
 
   const cover = artworkUrl(currentSong);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
-  const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
+  const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);\n  const activeWord = useMemo(\n    () => activeLyricWordIndex(syncedLines[activeLine], position),\n    [activeLine, position, syncedLines]\n  );
 
   useEffect(() => {
     const requested = Array.isArray(params.panel) ? params.panel[0] : params.panel;
@@ -330,7 +330,21 @@ export default function PlayerScreen() {
                         onPress={() => void seek(line.time)}
                         style={styles.lyricTap}
                       >
-                        <Text style={[styles.lyricLine, active && styles.lyricActive]}>{line.text}</Text>
+                        <Text style={[styles.lyricLine, active && styles.lyricActive]}>
+                          {line.words?.length
+                            ? line.words.map((word, wordIndex) => (
+                                <Text
+                                  key={`${word.time}-${wordIndex}`}
+                                  style={[
+                                    styles.lyricWord,
+                                    active && wordIndex <= activeWord && styles.lyricWordActive,
+                                  ]}
+                                >
+                                  {word.text}
+                                </Text>
+                              ))
+                            : line.text}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -657,7 +671,7 @@ const styles = StyleSheet.create({
   lyricsScroll: { maxHeight: 310 },
   lyrics: { gap: 10, paddingBottom: 18 },
   lyricTap: { minHeight: 38, justifyContent: 'center' },
-  lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },
+  lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },\n  lyricWord: { color: '#777' },\n  lyricWordActive: { color: '#FFF' },
   lyricActive: { color: '#FFF', fontSize: 24, lineHeight: 29, fontWeight: '800' },
   plainLyrics: { color: '#CFCFCF', fontSize: 17, lineHeight: 25 },
   queueList: { gap: 4 },
