@@ -128,7 +128,11 @@ export default function PlayerScreen() {
 
   const cover = artworkUrl(currentSong);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
-  const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);\n  const activeWord = useMemo(\n    () => activeLyricWordIndex(syncedLines[activeLine], position),\n    [activeLine, position, syncedLines]\n  );
+  const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
+  const activeWord = useMemo(
+    () => activeLyricWordIndex(syncedLines[activeLine], position),
+    [activeLine, position, syncedLines]
+  );
 
   useEffect(() => {
     const requested = Array.isArray(params.panel) ? params.panel[0] : params.panel;
@@ -671,7 +675,9 @@ const styles = StyleSheet.create({
   lyricsScroll: { maxHeight: 310 },
   lyrics: { gap: 10, paddingBottom: 18 },
   lyricTap: { minHeight: 38, justifyContent: 'center' },
-  lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },\n  lyricWord: { color: '#777' },\n  lyricWordActive: { color: '#FFF' },
+  lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },
+  lyricWord: { color: '#777' },
+  lyricWordActive: { color: '#FFF' },
   lyricActive: { color: '#FFF', fontSize: 24, lineHeight: 29, fontWeight: '800' },
   plainLyrics: { color: '#CFCFCF', fontSize: 17, lineHeight: 25 },
   queueList: { gap: 4 },
