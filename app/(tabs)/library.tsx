@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -37,6 +38,7 @@ function formatBytes(bytes: number) {
 }
 
 export default function LibraryScreen() {
+  const { width } = useWindowDimensions();
   const { token } = useAuth();
   const {
     playlists,
@@ -67,9 +69,25 @@ export default function LibraryScreen() {
   } = usePlayer();
 
   const [tab, setTab] = useState<LibraryTab>('playlists');
+  const [viewMode, setViewMode] = useState<LibraryViewMode>('list');
   const [newPlaylist, setNewPlaylist] = useState('');
   const [creating, setCreating] = useState(false);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const gridArtworkSize = Math.max(132, Math.floor((width - 48) / 2));
+
+  useEffect(() => {
+    AsyncStorage.getItem(LIBRARY_VIEW_KEY)
+      .then((value) => {
+        if (value === 'list' || value === 'grid') setViewMode(value);
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleViewMode = () => {
+    const next: LibraryViewMode = viewMode === 'list' ? 'grid' : 'list';
+    setViewMode(next);
+    AsyncStorage.setItem(LIBRARY_VIEW_KEY, next).catch(() => {});
+  };
 
   const submitPlaylist = async () => {
     if (!token) {
@@ -457,6 +475,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: { paddingHorizontal: 18, paddingTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   refresh: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
   tabsScroller: { flexGrow: 0, marginTop: 14, marginBottom: 5 },
   tabs: { gap: 8, paddingHorizontal: 18, paddingVertical: 4 },
