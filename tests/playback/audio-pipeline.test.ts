@@ -968,3 +968,66 @@ test('42 YouTube-identified songs still prefer a JioSaavn metadata match', async
   assert.equal(result.source, 'jiosaavn');
   assert.equal(youtubeCalls, 0);
 });
+
+
+test('39 JioSaavn playback matching preserves Harmonia catalog identity', async () => {
+  const providers = createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (!url.includes('search.getResults')) throw new Error('unexpected request');
+
+      return json({
+        results: [{
+          id: 'saavn-match-1',
+          title: 'Canonical Song',
+          image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+          more_info: {
+            album: 'Provider Album',
+            duration: '200',
+            encrypted_media_url: encryptedSaavnUrl(
+              'https://aac.saavncdn.com/001/provider_96.mp4?Expires=9999999999'
+            ),
+            '320kbps': 'true',
+            artistMap: {
+              primary_artists: [{ id: 'artist-1', name: 'Canonical Artist' }],
+            },
+          },
+        }],
+      });
+    },
+  });
+
+  const jio = providers.find((provider) => provider.id === 'jiosaavn');
+  assert.ok(jio);
+
+  const original = song({
+    id: 'harmonia-catalog-id',
+    songId: 'harmonia-catalog-id',
+    name: 'Canonical Song',
+    title: 'Canonical Song',
+    artist: 'Canonical Artist',
+    source: 'harmonia',
+    provider: 'harmonia',
+    spotifyId: '0123456789ABCDEFGHIJKL',
+    image: [{ quality: '500x500', url: 'https://harmonia.test/canonical.jpg' }],
+    duration: 200,
+  });
+
+  const resolved = await jio!.resolve(original, {
+    quality: 'normal',
+  });
+
+  assert.equal(resolved.track.id, 'harmonia-catalog-id');
+  assert.equal(resolved.track.songId, 'harmonia-catalog-id');
+  assert.equal((resolved.track as any).saavnId, 'saavn-match-1');
+  assert.equal((resolved.track as any).jiosaavnId, 'saavn-match-1');
+  assert.equal((resolved.track as any).playbackProvider, 'jiosaavn');
+  assert.equal(resolved.track.source, 'harmonia');
+  assert.equal(resolved.track.provider, 'harmonia');
+  assert.equal(resolved.track.spotifyId, '0123456789ABCDEFGHIJKL');
+  assert.deepEqual(resolved.track.image, original.image);
+  assert.equal(resolved.provider, 'jiosaavn');
+  assert.match(resolved.url, /provider_160/);
+});
