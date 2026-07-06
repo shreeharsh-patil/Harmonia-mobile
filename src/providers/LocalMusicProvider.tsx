@@ -53,33 +53,44 @@ export function LocalMusicProvider({ children }: PropsWithChildren) {
         .limit(200)
         .exe();
 
-      const mapped = await Promise.all(
-        assets.map(async (asset): Promise<Song | null> => {
-          try {
-            const [filename, uri, durationMs] = await Promise.all([
-              asset.getFilename(),
-              asset.getUri(),
-              asset.getDuration(),
-            ]);
+      // Media-library metadata calls can be surprisingly expensive on Android.
+      // Process a small batch at a time instead of opening ~200 native requests
+      // concurrently, which previously caused visible CPU/I/O spikes and heat.
+      const mapped: Array<Song | null> = [];
+      const batchSize = 12;
 
-            return {
-              id: `local:${asset.id}`,
-              songId: `local:${asset.id}`,
-              name: titleFromFilename(filename),
-              title: titleFromFilename(filename),
-              primaryArtists: 'On device',
-              artists: { primary: [{ name: 'On device' }] },
-              album: { name: 'Local Music' },
-              duration: durationMs ? Math.round(durationMs / 1000) : 0,
-              image: [],
-              source: 'local',
-              localUri: uri,
-            } as Song;
-          } catch {
-            return null;
-          }
-        })
-      );
+      for (let start = 0; start < assets.length; start += batchSize) {
+        const batch = assets.slice(start, start + batchSize);
+        const resolved = await Promise.all(
+          batch.map(async (asset): Promise<Song | null> => {
+            try {
+              const [filename, uri, durationMs] = await Promise.all([
+                asset.getFilename(),
+                asset.getUri(),
+                asset.getDuration(),
+              ]);
+              const title = titleFromFilename(filename);
+
+              return {
+                id: `local:${asset.id}`,
+                songId: `local:${asset.id}`,
+                name: title,
+                title,
+                primaryArtists: 'On device',
+                artists: { primary: [{ name: 'On device' }] },
+                album: { name: 'Local Music' },
+                duration: durationMs ? Math.round(durationMs / 1000) : 0,
+                image: [],
+                source: 'local',
+                localUri: uri,
+              } as Song;
+            } catch {
+              return null;
+            }
+          })
+        );
+        mapped.push(...resolved);
+      }
 
       setSongs(mapped.filter((song): song is Song => Boolean(song?.id)));
     } catch {
