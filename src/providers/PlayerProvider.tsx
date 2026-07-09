@@ -39,6 +39,7 @@ import {
   getPlaybackRecoveryPolicy,
   MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
 } from '@/src/lib/playback/recoveryPolicy';
+import { createQueueWindow } from '@/src/lib/playback/playbackSnapshot';
 import {
   albumName,
   artistNames,
@@ -82,6 +83,7 @@ function localDayKey(date = new Date()) {
 
 type PlaybackSnapshot = {
   queue: Song[];
+  baseQueue?: Song[];
   index: number;
   position: number;
   wasPlaying: boolean;
@@ -223,6 +225,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const restoredPosition = useRef(0);
   const pendingSeek = useRef<number | null>(null);
   const lastPersistedSecond = useRef(-1);
+  const lastPersistedQueueSignature = useRef('');
   const finishing = useRef(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
@@ -343,7 +346,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const base = unshuffledQueueRef.current.length
         ? [...unshuffledQueueRef.current]
         : [...queueRef.current];
-      const rest = base.filter((song) => song.id !== current.id);
+      // Remove only the selected occurrence. Filtering by id removed every
+      // duplicate of the same recording from playlists that intentionally
+      // contained it more than once.
+      let selectedBaseIndex = base.findIndex((song) => song === current);
+      if (selectedBaseIndex < 0) {
+        selectedBaseIndex = base.findIndex((song) => song.id === current.id);
+      }
+      const rest = base.filter((_, index) => index !== selectedBaseIndex);
       for (let i = rest.length - 1; i > 0; i -= 1) {
         const j = Math.floor(Math.random() * (i + 1));
         [rest[i], rest[j]] = [rest[j], rest[i]];
@@ -781,9 +791,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       from === to || from === indexRef.current || to === indexRef.current
     ) return;
 
+    const activeIndex = indexRef.current;
     const [moved] = list.splice(from, 1);
     list.splice(to, 0, moved);
-    commitQueue(list, indexRef.current);
+
+    let nextActiveIndex = activeIndex;
+    if (from < activeIndex && to > activeIndex) nextActiveIndex -= 1;
+    else if (from > activeIndex && to < activeIndex) nextActiveIndex += 1;
+
+    commitQueue(list, nextActiveIndex);
   }, [commitQueue]);
 
   const clearUpcoming = useCallback(() => {
@@ -983,11 +999,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           : [];
         if (!restoredQueue.length) return;
 
+        const restoredBaseQueue = Array.isArray(snapshot.baseQueue)
+          ? snapshot.baseQueue
+              .map((song) => persistenceSafeSong(normalizeSong(song as any)))
+              .filter((song) => song.id)
+          : [];
         const restoredIndex = Math.min(
           Math.max(Number(snapshot.index || 0), 0),
           restoredQueue.length - 1
         );
-        unshuffledQueueRef.current = restoredQueue;
+        unshuffledQueueRef.current = restoredBaseQueue.length
+          ? restoredBaseQueue
+          : restoredQueue;
         queueRef.current = restoredQueue;
         indexRef.current = restoredIndex;
         restoredPosition.current = Math.max(0, Number(snapshot.position || 0));
@@ -1174,18 +1197,58 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!queue.length || currentIndex < 0) return;
-    const wholeSecond = Math.floor(status.currentTime || restoredPosition.current || 0);
-    if (Math.abs(wholeSecond - lastPersistedSecond.current) < 3 && status.playing) return;
+
+    const wholeSecond = Math.floor(
+      status.currentTime || restoredPosition.current || 0
+    );
+    const queueSignature = `${currentIndex}:${queue
+      .map((song) => String(song.id || ''))
+      .join('\u001f')}`;
+    const queueChanged =
+      queueSignature !== lastPersistedQueueSignature.current;
+
+    // Queue/index edits are persisted immediately. Position-only updates are
+    // throttled so playback does not rewrite a large JSON snapshot every few
+    // seconds while the app is running.
+    if (
+      !queueChanged &&
+      status.playing &&
+      Math.abs(wholeSecond - lastPersistedSecond.current) < 10
+    ) {
+      return;
+    }
+
+    const currentWindow = createQueueWindow(queue, currentIndex, 100);
+    if (!currentWindow.items.length || currentWindow.index < 0) return;
+
+    const currentId = String(queue[currentIndex]?.id || '');
+    const baseQueue = unshuffledQueueRef.current.length
+      ? unshuffledQueueRef.current
+      : queue;
+    let baseIndex = baseQueue.findIndex(
+      (song) => String(song.id || '') === currentId
+    );
+    if (baseIndex < 0) baseIndex = Math.min(currentIndex, baseQueue.length - 1);
+    const baseWindow = createQueueWindow(baseQueue, baseIndex, 100);
+
     lastPersistedSecond.current = wholeSecond;
+    lastPersistedQueueSignature.current = queueSignature;
 
     const snapshot: PlaybackSnapshot = {
-      queue: queue.slice(0, 100).map(persistenceSafeSong),
-      index: currentIndex,
-      position: Math.max(0, status.currentTime || restoredPosition.current || 0),
+      queue: currentWindow.items.map(persistenceSafeSong),
+      baseQueue: baseWindow.items.map(persistenceSafeSong),
+      index: currentWindow.index,
+      position: Math.max(
+        0,
+        status.currentTime || restoredPosition.current || 0
+      ),
       wasPlaying: status.playing,
       savedAt: Date.now(),
     };
-    AsyncStorage.setItem(PLAYBACK_SNAPSHOT_KEY, JSON.stringify(snapshot)).catch(() => {});
+    AsyncStorage.setItem(
+      PLAYBACK_SNAPSHOT_KEY,
+      JSON.stringify(snapshot)
+    ).catch(() => {});
   }, [currentIndex, queue, status.currentTime, status.playing]);
 
   useEffect(() => {
