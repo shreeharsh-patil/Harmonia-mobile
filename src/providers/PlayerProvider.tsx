@@ -346,7 +346,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const base = unshuffledQueueRef.current.length
         ? [...unshuffledQueueRef.current]
         : [...queueRef.current];
-      const rest = base.filter((song) => song.id !== current.id);
+      // Remove only the selected occurrence. Filtering by id removed every
+      // duplicate of the same recording from playlists that intentionally
+      // contained it more than once.
+      let selectedBaseIndex = base.findIndex((song) => song === current);
+      if (selectedBaseIndex < 0) {
+        selectedBaseIndex = base.findIndex((song) => song.id === current.id);
+      }
+      const rest = base.filter((_, index) => index !== selectedBaseIndex);
       for (let i = rest.length - 1; i > 0; i -= 1) {
         const j = Math.floor(Math.random() * (i + 1));
         [rest[i], rest[j]] = [rest[j], rest[i]];
@@ -784,9 +791,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       from === to || from === indexRef.current || to === indexRef.current
     ) return;
 
+    const activeIndex = indexRef.current;
     const [moved] = list.splice(from, 1);
     list.splice(to, 0, moved);
-    commitQueue(list, indexRef.current);
+
+    let nextActiveIndex = activeIndex;
+    if (from < activeIndex && to > activeIndex) nextActiveIndex -= 1;
+    else if (from > activeIndex && to < activeIndex) nextActiveIndex += 1;
+
+    commitQueue(list, nextActiveIndex);
   }, [commitQueue]);
 
   const clearUpcoming = useCallback(() => {
