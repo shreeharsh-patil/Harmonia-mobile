@@ -548,19 +548,26 @@ export function createHarmoniaProviders({
         const title = String(track.name || track.title || '').trim();
         const artists = artistNames(track).trim();
 
-        const direct = directId
+        let direct = directId
           ? await fetchDirectJioSaavnTrack(directId, {
               fetchImpl,
               signal: options.signal,
             })
-          : await findDirectJioSaavnTrack({
-              title,
-              artist: artists,
-              duration: Number(track.duration || 0) || null,
-            }, {
-              fetchImpl,
-              signal: options.signal,
-            });
+          : null;
+
+        // Catalog/source ids can become stale or can represent Harmonia's own
+        // canonical id rather than a JioSaavn pid. Fall back to recording
+        // matching before abandoning the provider.
+        if (!direct) {
+          direct = await findDirectJioSaavnTrack({
+            title,
+            artist: artists,
+            duration: Number(track.duration || 0) || null,
+          }, {
+            fetchImpl,
+            signal: options.signal,
+          });
+        }
 
         if (!direct) {
           throw new PlaybackPipelineError(
