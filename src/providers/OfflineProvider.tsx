@@ -73,8 +73,11 @@ export function OfflineProvider({ children }: PropsWithChildren) {
         const raw = await AsyncStorage.getItem(DOWNLOADS_KEY);
         if (!raw) return;
 
-        const parsed = JSON.parse(raw) as DownloadedTrack[];
-        const valid = (Array.isArray(parsed) ? parsed : []).filter((item) => {
+        const parsedValue = JSON.parse(raw);
+        const parsed: DownloadedTrack[] = Array.isArray(parsedValue)
+          ? parsedValue
+          : [];
+        const valid = parsed.filter((item) => {
           try {
             return Boolean(item?.song?.id && item?.uri && new File(item.uri).exists);
           } catch {
@@ -84,11 +87,15 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
         downloadsRef.current = valid;
         setDownloads(valid);
-        if (valid.length !== parsed.length) {
+        if (!Array.isArray(parsedValue) || valid.length !== parsed.length) {
           await AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(valid));
         }
       } catch {
+        downloadsRef.current = [];
         setDownloads([]);
+        // A malformed index should be repaired once rather than reparsed and
+        // rejected on every app launch.
+        await AsyncStorage.removeItem(DOWNLOADS_KEY).catch(() => {});
       }
     })();
   }, []);
