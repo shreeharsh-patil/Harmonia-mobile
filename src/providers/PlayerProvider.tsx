@@ -225,7 +225,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const restoredPosition = useRef(0);
   const pendingSeek = useRef<number | null>(null);
   const lastPersistedSecond = useRef(-1);
-  const lastPersistedQueueSignature = useRef('');
+  const lastPersistedQueueRef = useRef<Song[] | null>(null);
+  const lastPersistedQueueIndex = useRef(-1);
   const finishing = useRef(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
@@ -281,8 +282,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const clearHistory = useCallback(async () => {
+    const emptyStats: ListeningStats = {
+      totalSeconds: 0,
+      playCount: 0,
+      trackCounts: {},
+      dailySeconds: {},
+    };
     setHistory([]);
-    await AsyncStorage.removeItem(HISTORY_KEY);
+    setListeningStats(emptyStats);
+    await Promise.all([
+      AsyncStorage.removeItem(HISTORY_KEY),
+      AsyncStorage.removeItem(LISTENING_STATS_KEY),
+    ]);
   }, []);
 
   const persistSettings = useCallback((
@@ -1201,11 +1212,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const wholeSecond = Math.floor(
       status.currentTime || restoredPosition.current || 0
     );
-    const queueSignature = `${currentIndex}:${queue
-      .map((song) => String(song.id || ''))
-      .join('\u001f')}`;
     const queueChanged =
-      queueSignature !== lastPersistedQueueSignature.current;
+      queue !== lastPersistedQueueRef.current ||
+      currentIndex !== lastPersistedQueueIndex.current;
 
     // Queue/index edits are persisted immediately. Position-only updates are
     // throttled so playback does not rewrite a large JSON snapshot every few
@@ -1232,7 +1241,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const baseWindow = createQueueWindow(baseQueue, baseIndex, 100);
 
     lastPersistedSecond.current = wholeSecond;
-    lastPersistedQueueSignature.current = queueSignature;
+    lastPersistedQueueRef.current = queue;
+    lastPersistedQueueIndex.current = currentIndex;
 
     const snapshot: PlaybackSnapshot = {
       queue: currentWindow.items.map(persistenceSafeSong),
