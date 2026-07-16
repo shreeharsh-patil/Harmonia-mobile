@@ -254,6 +254,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     trackId: null,
     attempts: 0,
   });
+  const pendingHistoryRef = useRef<{ trackId: string; song: Song } | null>(null);
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -462,6 +463,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const shouldRecordHistory = options.recordHistory !== false;
     const bypassOffline = options.bypassOffline === true;
 
+    if (shouldRecordHistory) {
+      // A new explicit play supersedes any previous track that had not yet
+      // reached the native-loaded state.
+      pendingHistoryRef.current = null;
+    } else if (
+      pendingHistoryRef.current &&
+      pendingHistoryRef.current.trackId !== stable.id
+    ) {
+      pendingHistoryRef.current = null;
+    }
+
     setCurrentIndex(index);
     indexRef.current = index;
     playbackIntentRef.current = autoplay;
@@ -589,7 +601,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       lastKnownPositionRef.current = Math.max(0, startPosition);
       pendingSeek.current = startPosition > 0 ? startPosition : null;
       setLockScreenMetadata(resolved.song);
-      if (shouldRecordHistory) recordHistory(resolved.song);
+      if (shouldRecordHistory) {
+        pendingHistoryRef.current = {
+          trackId: stable.id,
+          song: normalizeSong(resolved.song as any),
+        };
+      }
 
       if (autoplay) {
         player.play();
@@ -1046,6 +1063,23 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       lastKnownPositionRef.current = current;
     }
   }, [status.currentTime, status.isLoaded]);
+
+  useEffect(() => {
+    if (!status.isLoaded || status.error) return;
+    const pending = pendingHistoryRef.current;
+    if (!pending) return;
+
+    const active = queueRef.current[indexRef.current];
+    if (
+      loadedTrackId.current !== pending.trackId ||
+      String(active?.id || '') !== pending.trackId
+    ) {
+      return;
+    }
+
+    pendingHistoryRef.current = null;
+    recordHistory(pending.song);
+  }, [recordHistory, status.error, status.isLoaded]);
 
   useEffect(() => {
     if (!status.isLoaded || pendingSeek.current == null) return;
