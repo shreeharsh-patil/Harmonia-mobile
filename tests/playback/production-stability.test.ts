@@ -18,7 +18,8 @@ test('live player queue preserves embedded audio while persisted snapshots sanit
     /const normalizedQueue = \(contextQueue\?\.length[\s\S]*?\.map\(\(item\) => normalizeSong\(item as any\)\)/
   );
   assert.match(source, /nextQueue\[index\] = normalizeSong\(resolved\.song as any\)/);
-  assert.match(source, /queue: queue\.slice\(0, 100\)\.map\(persistenceSafeSong\)/);
+  assert.match(source, /const currentWindow = createQueueWindow\(queue, currentIndex, 100\)/);
+  assert.match(source, /queue: currentWindow\.items\.map\(persistenceSafeSong\)/);
 });
 
 test('legacy playback history is sanitized during hydration', async () => {
@@ -98,7 +99,8 @@ test('detail routes ignore stale navigation responses', async () => {
 test('Canvas lookup cleanup cannot clear newer artwork state', async () => {
   const source = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
   assert.match(source, /let active = true/);
-  assert.match(source, /if \(active\) setCanvasUrl/);
+  assert.match(source, /if \(!active\) return/);
+  assert.match(source, /if \(!active \|\| cause\?\.name === 'AbortError'\) return/);
   assert.match(source, /active = false/);
   assert.match(source, /controller\.abort\(\)/);
 });

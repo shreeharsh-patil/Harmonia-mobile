@@ -1019,15 +1019,17 @@ test('39 JioSaavn playback matching preserves Harmonia catalog identity', async 
     quality: 'normal',
   });
 
-  assert.equal(resolved.track.id, 'harmonia-catalog-id');
-  assert.equal(resolved.track.songId, 'harmonia-catalog-id');
-  assert.equal((resolved.track as any).saavnId, 'saavn-match-1');
-  assert.equal((resolved.track as any).jiosaavnId, 'saavn-match-1');
-  assert.equal((resolved.track as any).playbackProvider, 'jiosaavn');
-  assert.equal(resolved.track.source, 'harmonia');
-  assert.equal(resolved.track.provider, 'harmonia');
-  assert.equal(resolved.track.spotifyId, '0123456789ABCDEFGHIJKL');
-  assert.deepEqual(resolved.track.image, original.image);
+  assert.ok(resolved.track);
+  const resolvedTrack = resolved.track!;
+  assert.equal(resolvedTrack.id, 'harmonia-catalog-id');
+  assert.equal(resolvedTrack.songId, 'harmonia-catalog-id');
+  assert.equal((resolvedTrack as any).saavnId, 'saavn-match-1');
+  assert.equal((resolvedTrack as any).jiosaavnId, 'saavn-match-1');
+  assert.equal((resolvedTrack as any).playbackProvider, 'jiosaavn');
+  assert.equal(resolvedTrack.source, 'harmonia');
+  assert.equal(resolvedTrack.provider, 'harmonia');
+  assert.equal(resolvedTrack.spotifyId, '0123456789ABCDEFGHIJKL');
+  assert.deepEqual(resolvedTrack.image, original.image);
   assert.equal(resolved.provider, 'jiosaavn');
   assert.match(resolved.url, /provider_160/);
 });
@@ -1083,7 +1085,9 @@ test('40 stale JioSaavn ids fall back to recording matching', async () => {
 
   assert.equal(detailCalls, 1);
   assert.equal(searchCalls, 1);
-  assert.equal(resolved.track.id, 'stale-catalog-id');
-  assert.equal((resolved.track as any).saavnId, 'fresh-saavn-id');
+  assert.ok(resolved.track);
+  const recoveredTrack = resolved.track!;
+  assert.equal(recoveredTrack.id, 'stale-catalog-id');
+  assert.equal((recoveredTrack as any).saavnId, 'fresh-saavn-id');
   assert.match(resolved.url, /fresh_160/);
 });
