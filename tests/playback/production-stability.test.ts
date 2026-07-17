@@ -179,3 +179,11 @@ test('YouTube direct fallback keeps canonical Harmonia identity', async () => {
     /id: match\.id/
   );
 });
+
+
+test('listening history records only after native playback actually starts', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /pendingHistoryRef/);
+  assert.match(source, /if \(!status\.playing \|\| status\.error\) return/);
+  assert.match(source, /pendingHistoryRef\.current = null;[\s\S]*?recordHistory\(pending\.song\)/);
+});
