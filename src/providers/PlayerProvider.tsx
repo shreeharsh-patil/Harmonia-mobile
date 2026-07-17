@@ -17,7 +17,11 @@ import {
   useState,
 } from 'react';
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
-import { resolvePlayableSong, type StreamQuality } from '@/src/lib/api';
+import {
+  resolvePlayableSong,
+  type ResolvedStreamDiagnostics,
+  type StreamQuality,
+} from '@/src/lib/api';
 import {
   albumName,
   artistNames,
@@ -61,6 +65,10 @@ export type ListeningStats = {
   trackCounts: Record<string, number>;
 };
 
+export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
+  source: ResolvedStreamDiagnostics['source'] | 'offline' | 'local';
+};
+
 type PlayerContextValue = {
   currentSong: Song | null;
   queue: Song[];
@@ -79,6 +87,7 @@ type PlayerContextValue = {
   shuffleEnabled: boolean;
   history: PlaybackHistoryEntry[];
   listeningStats: ListeningStats;
+  playbackDiagnostics: PlaybackDiagnostics | null;
   clearHistory: () => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
@@ -116,6 +125,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
   const [shuffleEnabled, setShuffleEnabledState] = useState(false);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
+  const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
   const [listeningStats, setListeningStats] = useState<ListeningStats>({
     totalSeconds: 0,
     playCount: 0,
@@ -299,6 +309,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackIntentRef.current = autoplay;
     setIsLoadingTrack(true);
     setError(null);
+    setPlaybackDiagnostics(null);
 
     if (!options.recovery) {
       recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
@@ -309,7 +320,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
       const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
       const resolved = localUri || offlineUri
-        ? { song: stable, url: localUri || offlineUri! }
+        ? { song: stable, url: localUri || offlineUri!, diagnostics: null }
         : await resolvePlayableSong(stable, qualityRef.current);
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
@@ -318,6 +329,27 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       player.replace(resolved.url);
       player.setPlaybackRate(rateRef.current);
+      setPlaybackDiagnostics(
+        localUri
+          ? {
+              provider: 'Device',
+              source: 'local',
+              codec: null,
+              bitrate: null,
+              quality: null,
+              streamHost: 'device',
+            }
+          : offlineUri
+            ? {
+                provider: String(stable.provider || stable.source || 'Harmonia'),
+                source: 'offline',
+                codec: null,
+                bitrate: null,
+                quality: null,
+                streamHost: 'device',
+              }
+            : resolved.diagnostics
+      );
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
       lastKnownPositionRef.current = Math.max(0, startPosition);
@@ -750,6 +782,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     shuffleEnabled,
     history,
     listeningStats,
+    playbackDiagnostics,
     clearHistory,
     playSong,
     playAt,
@@ -786,6 +819,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     shuffleEnabled,
     history,
     listeningStats,
+    playbackDiagnostics,
     clearHistory,
     playSong,
     playAt,
