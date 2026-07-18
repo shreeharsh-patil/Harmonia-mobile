@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -41,10 +41,12 @@ export default function ExploreScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
 
   const load = useCallback(async (refresh = false) => {
+    const generation = ++loadGenerationRef.current;
     refresh ? setRefreshing(true) : setLoading(true);
     setError(null);
 
@@ -52,6 +54,8 @@ export default function ExploreScreen() {
       fetchHomeSections(),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
     ]);
+
+    if (generation !== loadGenerationRef.current) return;
 
     if (homeResult.status === 'fulfilled') {
       setSections(homeResult.value);
@@ -66,6 +70,9 @@ export default function ExploreScreen() {
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
   }, [load]);
 
   const openPlaylist = (playlist: Playlist) => {
