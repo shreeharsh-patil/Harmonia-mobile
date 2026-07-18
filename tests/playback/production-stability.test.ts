@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { inferDownloadExtension } from '../../src/lib/downloads';
+import { MetadataMemoryCache } from '../../src/lib/playback/streamCache';
 
 test('download extension follows actual resolved media container', () => {
   assert.equal(inferDownloadExtension('https://cdn.test/audio', 'audio/webm', 'opus'), 'webm');
@@ -186,4 +187,64 @@ test('listening history records only after native playback actually starts', asy
   assert.match(source, /pendingHistoryRef/);
   assert.match(source, /if \(!status\.playing \|\| status\.error\) return/);
   assert.match(source, /pendingHistoryRef\.current = null;[\s\S]*?recordHistory\(pending\.song\)/);
+});
+
+
+test('library mutations dedupe rapid repeated toggles without whole-library refresh races', async () => {
+  const source = await readFile('src/providers/LibraryProvider.tsx', 'utf8');
+  assert.match(source, /mutationKeysRef = useRef\(new Set<string>\(\)\)/);
+  assert.match(source, /tokenRef = useRef\(token\)/);
+  assert.match(source, /tokenRef\.current !== token/);
+  assert.match(source, /mutationKey = `song:\$\{normalized\.id\}`/);
+  assert.match(source, /mutationKey = `playlist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `album:\$\{id\}`/);
+  assert.match(source, /mutationKey = `artist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
+  assert.match(source, /mutationKey = `add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
+  assert.match(source, /mutationKeysRef\.current\.has\(mutationKey\)/);
+  assert.match(source, /finally \{[\s\S]*?mutationKeysRef\.current\.delete\(mutationKey\)/);
+});
+
+test('clearing downloads invalidates completions that race native task cancellation', async () => {
+  const source = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  assert.match(source, /downloadEpochRef = useRef\(0\)/);
+  assert.match(source, /const downloadEpoch = downloadEpochRef\.current/);
+  assert.match(source, /downloadEpoch !== downloadEpochRef\.current/);
+  assert.match(source, /downloadEpochRef\.current \+= 1/);
+});
+
+test('Explore ignores stale account and refresh responses after rerender or navigation', async () => {
+  const source = await readFile('app/explore.tsx', 'utf8');
+  assert.match(source, /loadGenerationRef = useRef\(0\)/);
+  assert.match(source, /const generation = \+\+loadGenerationRef\.current/);
+  assert.match(source, /generation !== loadGenerationRef\.current/);
+  assert.match(source, /loadGenerationRef\.current \+= 1/);
+});
+
+test('radio continuation never overwrites a queue edited while suggestions are in flight', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const guards = source.match(/queueRef\.current !== list/g) || [];
+  assert.ok(guards.length >= 2);
+  assert.match(source, /queueRef\.current\[endIndex \+ 1\]/);
+  assert.match(source, /await loadIndex\(endIndex \+ 1, true, 0\)/);
+});
+
+
+test('invalidated in-flight metadata cannot repopulate the cache', async () => {
+  const cache = new MetadataMemoryCache<string>();
+  let resolveLoader!: (value: string) => void;
+  const first = cache.getOrLoad(
+    'track',
+    () => new Promise<string>((resolve) => {
+      resolveLoader = resolve;
+    })
+  );
+
+  cache.invalidate('track');
+  resolveLoader('stale');
+  assert.equal(await first, 'stale');
+  assert.equal(cache.get('track'), null);
+
+  assert.equal(await cache.getOrLoad('track', async () => 'fresh'), 'fresh');
+  assert.equal(cache.get('track'), 'fresh');
 });

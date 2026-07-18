@@ -58,6 +58,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     new Map<string, ReturnType<typeof File.createDownloadTask>>()
   );
   const cancelledDownloadsRef = useRef(new Set<string>());
+  const downloadEpochRef = useRef(0);
 
   downloadsRef.current = downloads;
 
@@ -126,6 +127,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
     activeDownloadsRef.current.add(id);
     cancelledDownloadsRef.current.delete(id);
+    const downloadEpoch = downloadEpochRef.current;
     setDownloading((current) => ({ ...current, [id]: 0 }));
     setDownloadFailures((current) => {
       const next = { ...current };
@@ -150,7 +152,10 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       if (!DOWNLOAD_DIR.exists) DOWNLOAD_DIR.create();
 
       const resolved = await resolvePlayableSong(song, quality);
-      if (cancelledDownloadsRef.current.has(id)) return false;
+      if (
+        cancelledDownloadsRef.current.has(id) ||
+        downloadEpoch !== downloadEpochRef.current
+      ) return false;
 
       const extension = inferDownloadExtension(
         resolved.url,
@@ -172,7 +177,10 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       activeDownloadTasksRef.current.set(id, task);
 
       const output = await task.downloadAsync();
-      if (cancelledDownloadsRef.current.has(id)) {
+      if (
+        cancelledDownloadsRef.current.has(id) ||
+        downloadEpoch !== downloadEpochRef.current
+      ) {
         try {
           if (destination.exists) destination.delete();
         } catch {}
@@ -244,6 +252,11 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   }, [byId, persist]);
 
   const clearDownloads = useCallback(async () => {
+    // Invalidate every in-flight completion before cancelling native tasks.
+    // This closes the small race where a task finishes between cancellation
+    // and clearing the persisted index.
+    downloadEpochRef.current += 1;
+
     for (const id of activeDownloadsRef.current) {
       cancelledDownloadsRef.current.add(id);
       activeDownloadTasksRef.current.get(id)?.cancel();

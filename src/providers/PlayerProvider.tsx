@@ -860,6 +860,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           ) {
             return;
           }
+          if (queueRef.current !== list) {
+            // Manual queue edits always win over late Radio suggestions. If the
+            // user appended a next track while Radio was resolving, continue
+            // directly into that track instead of leaving playback stopped.
+            if (queueRef.current[endIndex + 1]) {
+              await loadIndex(endIndex + 1, true, 0);
+            }
+            return;
+          }
 
           const existingIds = new Set(list.map((song) => String(song.id)));
           const additions = suggestions
@@ -885,6 +894,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         indexRef.current !== endIndex ||
         String(queueRef.current[endIndex]?.id || '') !== seedId
       ) {
+        return;
+      }
+      if (queueRef.current !== list) {
+        if (queueRef.current[endIndex + 1]) {
+          await loadIndex(endIndex + 1, true, 0);
+        }
         return;
       }
 
