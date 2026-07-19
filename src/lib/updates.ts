@@ -22,12 +22,26 @@ export function isNewerVersion(candidate: string, current = APP_VERSION) {
 }
 
 export async function checkForAppUpdate() {
-  const response = await fetch(RELEASES_URL, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'Harmonia-Mobile',
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  let response: Response;
+  try {
+    response = await fetch(RELEASES_URL, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'Harmonia-Mobile',
+      },
+    });
+  } catch (cause: any) {
+    if (cause?.name === 'AbortError') {
+      throw new Error('Update check timed out');
+    }
+    throw cause;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (response.status === 404) {
     return {

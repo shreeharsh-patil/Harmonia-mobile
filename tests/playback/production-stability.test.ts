@@ -25,8 +25,9 @@ test('live player queue preserves embedded audio while persisted snapshots sanit
 
 test('legacy playback history is sanitized during hydration', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /sanitizedHistory/);
+  assert.match(source, /storedHistory = parsedHistory/);
   assert.match(source, /persistenceSafeSong\(normalizeSong\(entry\.song as any\)\)/);
+  assert.match(source, /const mergedHistory = \[/);
 });
 
 test('auth keeps cached sessions on transient failures and clears rejected credentials', async () => {
@@ -195,12 +196,12 @@ test('library mutations dedupe rapid repeated toggles without whole-library refr
   assert.match(source, /mutationKeysRef = useRef\(new Set<string>\(\)\)/);
   assert.match(source, /tokenRef = useRef\(token\)/);
   assert.match(source, /tokenRef\.current !== token/);
-  assert.match(source, /mutationKey = `song:\$\{normalized\.id\}`/);
-  assert.match(source, /mutationKey = `playlist:\$\{id\}`/);
-  assert.match(source, /mutationKey = `album:\$\{id\}`/);
-  assert.match(source, /mutationKey = `artist:\$\{id\}`/);
-  assert.match(source, /mutationKey = `create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
-  assert.match(source, /mutationKey = `add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:song:\$\{normalized\.id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:playlist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:album:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:artist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
   assert.match(source, /mutationKeysRef\.current\.has\(mutationKey\)/);
   assert.match(source, /finally \{[\s\S]*?mutationKeysRef\.current\.delete\(mutationKey\)/);
 });
@@ -247,4 +248,102 @@ test('invalidated in-flight metadata cannot repopulate the cache', async () => {
 
   assert.equal(await cache.getOrLoad('track', async () => 'fresh'), 'fresh');
   assert.equal(cache.get('track'), 'fresh');
+});
+
+
+test('account refresh cannot overwrite or clear a newer session', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+  assert.match(source, /tokenRef = useRef\(token\)/);
+  assert.match(source, /const refreshToken = token/);
+  assert.match(source, /tokenRef\.current !== refreshToken/);
+  assert.match(source, /tokenRef\.current === refreshToken/);
+});
+
+test('preferences merge early user changes over asynchronous hydration', async () => {
+  const source = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  assert.match(source, /hydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingChangesRef/);
+  assert.match(source, /const merged: StoredPreferences = \{[\s\S]*?\.\.\.restored,[\s\S]*?\.\.\.pending/);
+  assert.match(source, /if \(!hydratedRef\.current\)/);
+  assert.match(source, /writeChainRef/);
+});
+
+test('recent searches reject stale hydration and serialize storage writes', async () => {
+  const source = await readFile('app/(tabs)/search.tsx', 'utf8');
+  assert.match(source, /recentSearchesRef/);
+  assert.match(source, /recentMutationRef/);
+  assert.match(source, /generation !== recentMutationRef\.current/);
+  assert.match(source, /recentWriteChainRef/);
+  assert.match(source, /recentMutationRef\.current \+= 1/);
+});
+
+test('app update checks cannot hang indefinitely', async () => {
+  const source = await readFile('src/lib/updates.ts', 'utf8');
+  assert.match(source, /new AbortController\(\)/);
+  assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), 10_000\)/);
+  assert.match(source, /signal: controller\.signal/);
+  assert.match(source, /clearTimeout\(timeout\)/);
+});
+
+
+test('player settings preserve live changes made before storage hydration finishes', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /settingsHydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingSettingsRef/);
+  assert.match(source, /const mergedSettings: PersistedPlayerSettings = \{[\s\S]*?\.\.\.restoredSettings,[\s\S]*?\.\.\.pendingSettings/);
+  assert.match(source, /persistSettings\(\{ playbackRate: normalized \}\)/);
+  assert.match(source, /persistSettings\(\{ streamQuality: quality \}\)/);
+  assert.match(source, /settingsWriteChainRef/);
+});
+
+test('player history and listening stats merge live activity over startup hydration', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /historyHydratedRef = useRef\(false\)/);
+  assert.match(source, /statsHydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingHistoryEntriesRef/);
+  assert.match(source, /pendingStatsDeltaRef/);
+  assert.match(source, /const mergedHistory = \[/);
+  assert.match(source, /const mergedStats = mergeListeningStats\(storedStats, pendingStats\)/);
+  assert.match(source, /historyClearedBeforeHydrationRef/);
+  assert.match(source, /statsClearedBeforeHydrationRef/);
+  assert.match(source, /historyWriteChainRef/);
+  assert.match(source, /statsWriteChainRef/);
+});
+
+test('corrupt player persistence is repaired per key instead of aborting all hydration', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /AsyncStorage\.removeItem\(HISTORY_KEY\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(LISTENING_STATS_KEY\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(PLAYER_SETTINGS_KEY\)/);
+  assert.match(source, /let snapshot: PlaybackSnapshot/);
+});
+
+
+test('offline index hydration cannot overwrite downloads started during app startup', async () => {
+  const source = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  assert.match(source, /downloadsMutationRef = useRef\(0\)/);
+  assert.match(source, /const hydrationGeneration = downloadsMutationRef\.current/);
+  assert.match(source, /downloadsMutationRef\.current !== hydrationGeneration/);
+  assert.match(source, /downloadsMutationRef\.current \+= 1/);
+  assert.match(source, /downloadsWriteChainRef/);
+});
+
+
+test('library mutation locks are isolated per authenticated account', async () => {
+  const source = await readFile('src/providers/LibraryProvider.tsx', 'utf8');
+  const scopedKeys = source.match(/const mutationKey = `\$\{token\}:/g) || [];
+  assert.ok(scopedKeys.length >= 6);
+});
+
+
+test('corrupt preferences are repaired without leaving rejected write promises', async () => {
+  const source = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  assert.match(source, /try \{[\s\S]*?JSON\.parse\(raw\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(PREFS_KEY\)/);
+  assert.match(source, /writeChainRef\.current = writeChainRef\.current[\s\S]*?\.catch\(\(\) => \{\}\)/);
+});
+
+test('player settings persistence handles storage failures after ordered writes', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /settingsWriteChainRef\.current = settingsWriteChainRef\.current[\s\S]*?\.catch\(\(\) => \{\}\)/);
 });
