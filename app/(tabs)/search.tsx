@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -37,15 +37,40 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const [retrySeq, setRetrySeq] = useState(0);
+  const recentSearchesRef = useRef<string[]>([]);
+  const recentMutationRef = useRef(0);
+  const recentWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  recentSearchesRef.current = recentSearches;
+
+  const commitRecentSearches = (next: string[]) => {
+    recentSearchesRef.current = next;
+    setRecentSearches(next);
+  };
+
+  const persistRecentSearches = (next: string[]) => {
+    recentWriteChainRef.current = recentWriteChainRef.current
+      .catch(() => {})
+      .then(() => next.length
+        ? AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
+        : AsyncStorage.removeItem(RECENT_SEARCHES_KEY)
+      );
+    return recentWriteChainRef.current;
+  };
 
   const trimmed = query.trim();
 
   useEffect(() => {
+    const generation = recentMutationRef.current;
     AsyncStorage.getItem(RECENT_SEARCHES_KEY)
       .then((raw) => {
-        if (!raw) return;
+        if (!raw || generation !== recentMutationRef.current) return;
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setRecentSearches(parsed.filter((item) => typeof item === 'string').slice(0, MAX_RECENT_SEARCHES));
+        if (Array.isArray(parsed)) {
+          commitRecentSearches(
+            parsed.filter((item) => typeof item === 'string').slice(0, MAX_RECENT_SEARCHES)
+          );
+        }
       })
       .catch(() => {});
   }, []);
@@ -95,14 +120,21 @@ export default function SearchScreen() {
   const rememberSearch = async (value = trimmed) => {
     const clean = value.trim();
     if (!clean) return;
-    const next = [clean, ...recentSearches.filter((item) => item.toLowerCase() !== clean.toLowerCase())].slice(0, MAX_RECENT_SEARCHES);
-    setRecentSearches(next);
-    await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next)).catch(() => {});
+    recentMutationRef.current += 1;
+    const next = [
+      clean,
+      ...recentSearchesRef.current.filter(
+        (item) => item.toLowerCase() !== clean.toLowerCase()
+      ),
+    ].slice(0, MAX_RECENT_SEARCHES);
+    commitRecentSearches(next);
+    await persistRecentSearches(next).catch(() => {});
   };
 
   const clearRecent = async () => {
-    setRecentSearches([]);
-    await AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+    recentMutationRef.current += 1;
+    commitRecentSearches([]);
+    await persistRecentSearches([]).catch(() => {});
   };
 
   const openPlaylist = (playlist: Playlist) => {
