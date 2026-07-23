@@ -128,6 +128,15 @@ export type ListeningStats = {
   dailySeconds: Record<string, number>;
 };
 
+type PersistedPlayerSettings = {
+  playbackRate: number;
+  streamQuality: StreamQuality;
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
+  radioEnabled: boolean;
+  adaptivePipelineEnabled: boolean;
+};
+
 export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
   source: ResolvedStreamDiagnostics['source'] | 'offline' | 'local';
 };
@@ -255,6 +264,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     attempts: 0,
   });
   const pendingHistoryRef = useRef<{ trackId: string; song: Song } | null>(null);
+  const settingsHydratedRef = useRef(false);
+  const pendingSettingsRef = useRef<Partial<PersistedPlayerSettings>>({});
+  const settingsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -297,33 +309,38 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     ]);
   }, []);
 
-  const persistSettings = useCallback((
-    nextRate: number,
-    nextQuality: StreamQuality,
-    nextRepeat: RepeatMode = repeatModeRef.current,
-    nextShuffle: boolean = shuffleRef.current,
-    nextRadio: boolean = radioRef.current,
-    nextAdaptivePipeline: boolean = adaptivePipelineRef.current
-  ) => {
-    AsyncStorage.setItem(
-      PLAYER_SETTINGS_KEY,
-      JSON.stringify({
-        playbackRate: nextRate,
-        streamQuality: nextQuality,
-        repeatMode: nextRepeat,
-        shuffleEnabled: nextShuffle,
-        radioEnabled: nextRadio,
-        adaptivePipelineEnabled: nextAdaptivePipeline,
-      })
-    ).catch(() => {});
+  const currentSettingsSnapshot = useCallback((): PersistedPlayerSettings => ({
+    playbackRate: rateRef.current,
+    streamQuality: qualityRef.current,
+    repeatMode: repeatModeRef.current,
+    shuffleEnabled: shuffleRef.current,
+    radioEnabled: radioRef.current,
+    adaptivePipelineEnabled: adaptivePipelineRef.current,
+  }), []);
+
+  const writeSettingsSnapshot = useCallback((snapshot: PersistedPlayerSettings) => {
+    settingsWriteChainRef.current = settingsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(snapshot)));
   }, []);
+
+  const persistSettings = useCallback((patch: Partial<PersistedPlayerSettings>) => {
+    if (!settingsHydratedRef.current) {
+      pendingSettingsRef.current = {
+        ...pendingSettingsRef.current,
+        ...patch,
+      };
+      return;
+    }
+    writeSettingsSnapshot(currentSettingsSnapshot());
+  }, [currentSettingsSnapshot, writeSettingsSnapshot]);
 
   const setPlaybackRate = useCallback((rate: number) => {
     const normalized = Math.max(0.5, Math.min(2, rate));
     rateRef.current = normalized;
     setPlaybackRateState(normalized);
     player.setPlaybackRate(normalized);
-    persistSettings(normalized, qualityRef.current);
+    persistSettings({ playbackRate: normalized });
   }, [persistSettings, player]);
 
   const setStreamQuality = useCallback((quality: StreamQuality) => {
@@ -331,7 +348,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     qualityRef.current = quality;
     effectiveQualityRef.current = qualityFor(quality);
     setStreamQualityState(quality);
-    persistSettings(rateRef.current, quality);
+    persistSettings({ streamQuality: quality });
     void qualityReloadRef.current();
   }, [persistSettings, qualityFor]);
 
@@ -340,7 +357,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const next = modes[(modes.indexOf(repeatModeRef.current) + 1) % modes.length];
     repeatModeRef.current = next;
     setRepeatModeState(next);
-    persistSettings(rateRef.current, qualityRef.current, next, shuffleRef.current);
+    persistSettings({ repeatMode: next });
   }, [persistSettings]);
 
   const toggleShuffle = useCallback(() => {
@@ -350,7 +367,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     const current = queueRef.current[indexRef.current];
     if (!current) {
-      persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+      persistSettings({ shuffleEnabled: nextEnabled });
       return;
     }
 
@@ -386,20 +403,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setCurrentIndex(restoredIndex);
     }
 
-    persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+    persistSettings({ shuffleEnabled: nextEnabled });
   }, [persistSettings]);
 
   const toggleRadio = useCallback(() => {
     const nextEnabled = !radioRef.current;
     radioRef.current = nextEnabled;
     setRadioEnabledState(nextEnabled);
-    persistSettings(
-      rateRef.current,
-      qualityRef.current,
-      repeatModeRef.current,
-      shuffleRef.current,
-      nextEnabled
-    );
+    persistSettings({ radioEnabled: nextEnabled });
   }, [persistSettings]);
 
   const toggleAdaptivePipeline = useCallback(() => {
@@ -407,14 +418,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     adaptivePipelineRef.current = nextEnabled;
     setAdaptivePipelineEnabledState(nextEnabled);
     if (!nextEnabled) setAdaptivePipelineStatus('idle');
-    persistSettings(
-      rateRef.current,
-      qualityRef.current,
-      repeatModeRef.current,
-      shuffleRef.current,
-      radioRef.current,
-      nextEnabled
-    );
+    persistSettings({ adaptivePipelineEnabled: nextEnabled });
   }, [persistSettings]);
 
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
@@ -1010,29 +1014,45 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           });
         }
 
-        if (settingsRaw) {
-          const settings = JSON.parse(settingsRaw);
-          const nextRate = Math.max(0.5, Math.min(2, Number(settings.playbackRate || 1)));
-          const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
-          const nextQuality = validQualities.includes(settings.streamQuality) ? settings.streamQuality : 'automatic';
-          const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
-          const nextRepeat = validRepeatModes.includes(settings.repeatMode) ? settings.repeatMode : 'off';
-          const nextShuffle = Boolean(settings.shuffleEnabled);
-          const nextRadio = settings.radioEnabled !== false;
-          const nextAdaptivePipeline = settings.adaptivePipelineEnabled !== false;
-          rateRef.current = nextRate;
-          qualityRef.current = nextQuality;
-          repeatModeRef.current = nextRepeat;
-          shuffleRef.current = nextShuffle;
-          radioRef.current = nextRadio;
-          adaptivePipelineRef.current = nextAdaptivePipeline;
-          setPlaybackRateState(nextRate);
-          setStreamQualityState(nextQuality);
-          setRepeatModeState(nextRepeat);
-          setShuffleEnabledState(nextShuffle);
-          setRadioEnabledState(nextRadio);
-          setAdaptivePipelineEnabledState(nextAdaptivePipeline);
-          player.setPlaybackRate(nextRate);
+        const rawSettings = settingsRaw ? JSON.parse(settingsRaw) : {};
+        const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
+        const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
+        const restoredSettings: PersistedPlayerSettings = {
+          playbackRate: Math.max(0.5, Math.min(2, Number(rawSettings.playbackRate || 1))),
+          streamQuality: validQualities.includes(rawSettings.streamQuality)
+            ? rawSettings.streamQuality
+            : 'automatic',
+          repeatMode: validRepeatModes.includes(rawSettings.repeatMode)
+            ? rawSettings.repeatMode
+            : 'off',
+          shuffleEnabled: Boolean(rawSettings.shuffleEnabled),
+          radioEnabled: rawSettings.radioEnabled !== false,
+          adaptivePipelineEnabled: rawSettings.adaptivePipelineEnabled !== false,
+        };
+        const pendingSettings = pendingSettingsRef.current;
+        const mergedSettings: PersistedPlayerSettings = {
+          ...restoredSettings,
+          ...pendingSettings,
+        };
+        pendingSettingsRef.current = {};
+        settingsHydratedRef.current = true;
+
+        rateRef.current = mergedSettings.playbackRate;
+        qualityRef.current = mergedSettings.streamQuality;
+        repeatModeRef.current = mergedSettings.repeatMode;
+        shuffleRef.current = mergedSettings.shuffleEnabled;
+        radioRef.current = mergedSettings.radioEnabled;
+        adaptivePipelineRef.current = mergedSettings.adaptivePipelineEnabled;
+        setPlaybackRateState(mergedSettings.playbackRate);
+        setStreamQualityState(mergedSettings.streamQuality);
+        setRepeatModeState(mergedSettings.repeatMode);
+        setShuffleEnabledState(mergedSettings.shuffleEnabled);
+        setRadioEnabledState(mergedSettings.radioEnabled);
+        setAdaptivePipelineEnabledState(mergedSettings.adaptivePipelineEnabled);
+        player.setPlaybackRate(mergedSettings.playbackRate);
+
+        if (Object.keys(pendingSettings).length) {
+          writeSettingsSnapshot(mergedSettings);
         }
 
         if (!snapshotRaw || loadGenerationRef.current !== restoreGeneration) return;
@@ -1065,7 +1085,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
       }
     })();
-  }, [player]);
+  }, [player, writeSettingsSnapshot]);
 
   useEffect(() => {
     const current = Number(status.currentTime || 0);
