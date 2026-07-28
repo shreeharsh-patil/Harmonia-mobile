@@ -195,12 +195,12 @@ test('library mutations dedupe rapid repeated toggles without whole-library refr
   assert.match(source, /mutationKeysRef = useRef\(new Set<string>\(\)\)/);
   assert.match(source, /tokenRef = useRef\(token\)/);
   assert.match(source, /tokenRef\.current !== token/);
-  assert.match(source, /mutationKey = `song:\$\{normalized\.id\}`/);
-  assert.match(source, /mutationKey = `playlist:\$\{id\}`/);
-  assert.match(source, /mutationKey = `album:\$\{id\}`/);
-  assert.match(source, /mutationKey = `artist:\$\{id\}`/);
-  assert.match(source, /mutationKey = `create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
-  assert.match(source, /mutationKey = `add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:song:\$\{normalized\.id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:playlist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:album:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:artist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
+  assert.match(source, /mutationKey = `\$\{token\}:add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
   assert.match(source, /mutationKeysRef\.current\.has\(mutationKey\)/);
   assert.match(source, /finally \{[\s\S]*?mutationKeysRef\.current\.delete\(mutationKey\)/);
 });
@@ -321,4 +321,11 @@ test('offline index hydration cannot overwrite downloads started during app star
   assert.match(source, /downloadsMutationRef\.current !== hydrationGeneration/);
   assert.match(source, /downloadsMutationRef\.current \+= 1/);
   assert.match(source, /downloadsWriteChainRef/);
+});
+
+
+test('library mutation locks are isolated per authenticated account', async () => {
+  const source = await readFile('src/providers/LibraryProvider.tsx', 'utf8');
+  const scopedKeys = source.match(/const mutationKey = `\$\{token\}:/g) || [];
+  assert.ok(scopedKeys.length >= 6);
 });
