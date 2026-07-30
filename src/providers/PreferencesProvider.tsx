@@ -74,7 +74,8 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     // AsyncStorage write finish after and replace a newer snapshot.
     writeChainRef.current = writeChainRef.current
       .catch(() => {})
-      .then(() => AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)));
+      .then(() => AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -86,15 +87,19 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
 
         let restored = { ...DEFAULTS };
         if (raw) {
-          const parsed = JSON.parse(raw);
-          const qualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
-          restored = {
-            networkAwareQuality: parsed?.networkAwareQuality !== false,
-            wifiQuality: qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality,
-            cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
-            batterySaver: Boolean(parsed?.batterySaver),
-            wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
-          };
+          try {
+            const parsed = JSON.parse(raw);
+            const qualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
+            restored = {
+              networkAwareQuality: parsed?.networkAwareQuality !== false,
+              wifiQuality: qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality,
+              cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
+              batterySaver: Boolean(parsed?.batterySaver),
+              wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
+            };
+          } catch {
+            AsyncStorage.removeItem(PREFS_KEY).catch(() => {});
+          }
         }
 
         const pending = pendingChangesRef.current;
