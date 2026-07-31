@@ -419,7 +419,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const writeSettingsSnapshot = useCallback((snapshot: PersistedPlayerSettings) => {
     settingsWriteChainRef.current = settingsWriteChainRef.current
       .catch(() => {})
-      .then(() => AsyncStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(snapshot)));
+      .then(() => AsyncStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(snapshot)))
+      .catch(() => {});
   }, []);
 
   const persistSettings = useCallback((patch: Partial<PersistedPlayerSettings>) => {
