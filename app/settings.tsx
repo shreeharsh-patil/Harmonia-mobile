@@ -105,6 +105,8 @@ export default function SettingsScreen() {
           {token && user ? (
             <>
               <StaticRow icon="person-outline" title={user.name || 'Harmonia account'} detail={user.email} />
+              <ActionRow icon="create-outline" title="Edit profile" detail="Update your name and profile picture" onPress={() => router.push('/edit-profile')} />
+              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist into Harmonia" onPress={() => router.push('/import-playlist')} />
               <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from the phone" destructive onPress={() => void signOutNow()} />
             </>
           ) : (
