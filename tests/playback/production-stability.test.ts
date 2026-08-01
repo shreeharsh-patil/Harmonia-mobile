@@ -333,3 +333,16 @@ test('library mutation locks are isolated per authenticated account', async () =
   const scopedKeys = source.match(/const mutationKey = `\$\{token\}:/g) || [];
   assert.ok(scopedKeys.length >= 6);
 });
+
+
+test('corrupt preferences are repaired without leaving rejected write promises', async () => {
+  const source = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  assert.match(source, /try \{[\s\S]*?JSON\.parse\(raw\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(PREFS_KEY\)/);
+  assert.match(source, /writeChainRef\.current = writeChainRef\.current[\s\S]*?\.catch\(\(\) => \{\}\)/);
+});
+
+test('player settings persistence handles storage failures after ordered writes', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /settingsWriteChainRef\.current = settingsWriteChainRef\.current[\s\S]*?\.catch\(\(\) => \{\}\)/);
+});
