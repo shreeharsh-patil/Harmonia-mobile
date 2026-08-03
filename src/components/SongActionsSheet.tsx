@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
+import { shareSong } from '@/src/lib/share';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
@@ -127,6 +128,7 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
             <View style={styles.actions}>
               <Action label="Play next" detail="Move behind the current track" glyph="↳" onPress={() => finish(() => playNext(song), 'Playing next')} />
               <Action label="Add to queue" detail="Place at the end of the queue" glyph="+" onPress={() => finish(() => addToQueue(song), 'Added to queue')} />
+              <Action label="Share" detail="Send this track with the native share sheet" glyph="↗" onPress={() => { void shareSong(song); close(); }} />
               <Action
                 label={isLiked(song.id) ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
                 detail="Sync with your Harmonia account"
