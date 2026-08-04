@@ -9,6 +9,8 @@ import {
   fetchDirectJioSaavnPlaylist,
   fetchDirectJioSaavnTracks,
   searchDirectJioSaavn,
+  searchDirectJioSaavnAlbums,
+  searchDirectJioSaavnArtists,
   searchDirectJioSaavnPlaylists,
   type DirectSaavnSearchTrack,
   type DirectSaavnTrack,
@@ -102,6 +104,85 @@ function mergePlaylists(primary: Playlist[], secondary: Playlist[], limit: numbe
     if (result.length >= limit) break;
   }
   return result;
+}
+
+function mergeAlbums(primary: HarmoniaAlbum[], secondary: HarmoniaAlbum[], limit: number) {
+  const result: HarmoniaAlbum[] = [];
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+
+  for (const album of [...primary, ...secondary]) {
+    const id = String(album.id || '').trim();
+    const title = String(album.name || album.title || '').toLowerCase().trim();
+    if ((id && seenIds.has(id)) || (title && seenTitles.has(title))) continue;
+    if (id) seenIds.add(id);
+    if (title) seenTitles.add(title);
+    result.push(album);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function mergeArtists(
+  primary: HarmoniaArtistEntity[],
+  secondary: HarmoniaArtistEntity[],
+  limit: number
+) {
+  const result: HarmoniaArtistEntity[] = [];
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
+
+  for (const artist of [...primary, ...secondary]) {
+    const id = String(artist.id || '').trim();
+    const name = String(artist.name || artist.title || '').toLowerCase().trim();
+    if ((id && seenIds.has(id)) || (name && seenNames.has(name))) continue;
+    if (id) seenIds.add(id);
+    if (name) seenNames.add(name);
+    result.push(artist);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+
+function primaryArtistKey(song: Song) {
+  return artistNames(song)
+    .split(',')[0]
+    ?.trim()
+    .toLowerCase() || '';
+}
+
+function diversifySuggestions(seed: Song, candidates: Song[], limit: number) {
+  const seedId = String(seed.id || '');
+  const seedArtist = primaryArtistKey(seed);
+  const artistCounts = new Map<string, number>();
+  const selected: Song[] = [];
+  const deferred: Song[] = [];
+  const seen = new Set<string>([seedId]);
+
+  for (const candidate of candidates) {
+    const id = String(candidate.id || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    const artist = primaryArtistKey(candidate);
+    const count = artistCounts.get(artist) || 0;
+    const ceiling = artist && artist === seedArtist ? 4 : 2;
+    if (artist && count >= ceiling) {
+      deferred.push(candidate);
+      continue;
+    }
+
+    selected.push(candidate);
+    if (artist) artistCounts.set(artist, count + 1);
+    if (selected.length >= limit) return selected;
+  }
+
+  // Diversity is a preference, not a reason to leave Radio with an undersized queue.
+  for (const candidate of deferred) {
+    selected.push(candidate);
+    if (selected.length >= limit) break;
+  }
+  return selected;
 }
 
 type RequestOptions = RequestInit & {
@@ -443,13 +524,32 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
   }
 
   const local = searchStaticCatalog(query, limit);
-  const [directTracks, directPlaylists] = await Promise.all([
+  const providerLimit = Math.min(20, limit);
+  const [directTracks, directAlbums, directArtists, directPlaylists] = await Promise.all([
     searchDirectJioSaavn(query, { limit, signal }),
-    searchDirectJioSaavnPlaylists(query, { limit: Math.min(20, limit), signal }),
+    searchDirectJioSaavnAlbums(query, { limit: providerLimit, signal }),
+    searchDirectJioSaavnArtists(query, { limit: providerLimit, signal }),
+    searchDirectJioSaavnPlaylists(query, { limit: providerLimit, signal }),
   ]);
 
   const directSongs = directTracks.map(directTrackToSong);
   const songs = mergeSongs(local.songs?.results || [], directSongs, limit);
+  const providerAlbums: HarmoniaAlbum[] = directAlbums.map((album) => ({
+    id: album.id,
+    name: album.title,
+    title: album.title,
+    year: album.year || undefined,
+    image: album.image ? [{ quality: '500x500', url: album.image }] : [],
+    primaryArtists: album.artists.join(', '),
+    type: 'album',
+  }));
+  const providerArtists: HarmoniaArtistEntity[] = directArtists.map((artist) => ({
+    id: artist.id,
+    name: artist.name,
+    title: artist.name,
+    image: artist.image ? [{ quality: '500x500', url: artist.image }] : [],
+    type: 'artist',
+  }));
   const providerPlaylists: Playlist[] = directPlaylists.map((playlist) => ({
     id: playlist.id,
     _id: playlist.id,
@@ -461,13 +561,22 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
     source: 'jiosaavn',
     catalogSource: 'provider',
   }));
+
+  const albums = mergeAlbums(local.albums?.results || [], providerAlbums, providerLimit);
+  const artists = mergeArtists(local.artists?.results || [], providerArtists, providerLimit);
   const playlists = mergePlaylists(
     local.playlists?.results || [],
     providerPlaylists,
-    Math.min(20, limit)
+    providerLimit
   );
 
-  const topResult = local.topQuery?.results?.[0] || songs[0] || playlists[0];
+  const topResult =
+    local.topQuery?.results?.[0] ||
+    songs[0] ||
+    artists[0] ||
+    albums[0] ||
+    playlists[0];
+
   return {
     topQuery: {
       total: topResult ? 1 : 0,
@@ -475,8 +584,8 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
       results: topResult ? [topResult] : [],
     },
     songs: { total: songs.length, start: 0, results: songs },
-    albums: local.albums || { total: 0, start: 0, results: [] },
-    artists: local.artists || { total: 0, start: 0, results: [] },
+    albums: { total: albums.length, start: 0, results: albums },
+    artists: { total: artists.length, start: 0, results: artists },
     playlists: { total: playlists.length, start: 0, results: playlists },
   };
 }
@@ -687,11 +796,32 @@ export async function fetchSongs(ids: string[]): Promise<Song[]> {
 
 export async function fetchSongSuggestions(songId: string, limit = 20): Promise<Song[]> {
   if (!songId) return [];
-  const payload = await requestJson<{ success: true; data: Song[] }>(
-    `/api/songs/${encodeURIComponent(songId)}/suggestions?limit=${limit}`,
-    { cache: 'no-store' }
-  );
-  return (payload.data || []).map((song) => normalizeSong(song as any));
+
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: Song[] }>(
+        `/api/songs/${encodeURIComponent(songId)}/suggestions?limit=${limit}`,
+        { cache: 'no-store' }
+      );
+      const serverSuggestions = (payload.data || []).map((song) => normalizeSong(song as any));
+      if (serverSuggestions.length) return serverSuggestions;
+    } catch {
+      // Radio should survive account/catalog backend outages.
+    }
+  }
+
+  const [seed] = await fetchSongs([songId]);
+  if (!seed) return [];
+
+  const query = primaryArtistKey(seed) || String(seed.name || seed.title || '').trim();
+  if (!query) return [];
+
+  const candidateLimit = Math.min(50, Math.max(limit * 3, 30));
+  const local = searchStaticCatalog(query, candidateLimit).songs?.results || [];
+  const direct = await searchDirectJioSaavn(query, { limit: candidateLimit });
+  const candidates = mergeSongs(local, direct.map(directTrackToSong), candidateLimit);
+
+  return diversifySuggestions(seed, candidates, Math.max(1, limit));
 }
 
 export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
