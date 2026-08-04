@@ -374,6 +374,21 @@ export type DirectSaavnPlaylist = DirectSaavnPlaylistSearch & {
   tracks: DirectSaavnTrack[];
 };
 
+export type DirectSaavnAlbumSearch = {
+  id: string;
+  title: string;
+  year: string | null;
+  image: string | null;
+  artists: string[];
+};
+
+export type DirectSaavnArtistSearch = {
+  id: string;
+  name: string;
+  image: string | null;
+  role: string | null;
+};
+
 function payloadSongs(payload: any) {
   if (Array.isArray(payload?.songs)) return payload.songs;
   if (Array.isArray(payload)) return payload;
@@ -471,6 +486,97 @@ export async function searchDirectJioSaavnPlaylists(
         songCount: Number(raw?.list_count || raw?.song_count || 0) || 0,
       }))
       .filter((item: DirectSaavnPlaylistSearch) => Boolean(item.id && item.title))
+      .slice(0, limit);
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return [];
+  }
+}
+
+export async function searchDirectJioSaavnAlbums(
+  query: string,
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+    limit = 20,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    limit?: number;
+  } = {}
+): Promise<DirectSaavnAlbumSearch[]> {
+  const cleanQuery = String(query || '').trim();
+  if (!cleanQuery) return [];
+
+  try {
+    const payload = await requestJson({
+      __call: 'search.getAlbumResults',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'android',
+      q: cleanQuery,
+      p: '0',
+      n: String(Math.max(1, Math.min(50, limit))),
+    }, { fetchImpl, signal, timeoutMs });
+
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    return results
+      .map((raw: any) => ({
+        id: String(raw?.id || raw?.albumid || ''),
+        title: decodeHtml(raw?.title || raw?.name || ''),
+        year: raw?.year ? String(raw.year) : null,
+        image: providerImage(raw?.image),
+        artists: rawArtists(raw),
+      }))
+      .filter((item: DirectSaavnAlbumSearch) => Boolean(item.id && item.title))
+      .slice(0, limit);
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return [];
+  }
+}
+
+export async function searchDirectJioSaavnArtists(
+  query: string,
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+    limit = 20,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    limit?: number;
+  } = {}
+): Promise<DirectSaavnArtistSearch[]> {
+  const cleanQuery = String(query || '').trim();
+  if (!cleanQuery) return [];
+
+  try {
+    const payload = await requestJson({
+      __call: 'search.getArtistResults',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'android',
+      q: cleanQuery,
+      p: '0',
+      n: String(Math.max(1, Math.min(50, limit))),
+    }, { fetchImpl, signal, timeoutMs });
+
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    return results
+      .map((raw: any) => ({
+        id: String(raw?.id || raw?.artistId || ''),
+        name: decodeHtml(raw?.name || raw?.title || ''),
+        image: providerImage(raw?.image),
+        role: raw?.role ? decodeHtml(raw.role) : null,
+      }))
+      .filter((item: DirectSaavnArtistSearch) => Boolean(item.id && item.name))
       .slice(0, limit);
   } catch (error: any) {
     if (signal?.aborted || error?.name === 'AbortError') throw error;
