@@ -24,6 +24,7 @@ import {
   updatePlaylist,
 } from '@/src/lib/api';
 import { playlistTitle } from '@/src/lib/entities';
+import { sharePlaylist } from '@/src/lib/share';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -200,6 +201,9 @@ export default function PlaylistScreen() {
             <View style={styles.top}>
               <BackButton />
               <View style={styles.headerActions}>
+                <Pressable onPress={() => void sharePlaylist(playlist)} style={styles.headerAction} accessibilityLabel="Share playlist">
+                  <Ionicons name="share-outline" size={20} color="#E8E8E8" />
+                </Pressable>
                 {!owned && (
                   <Pressable
                     onPress={() => {

@@ -58,6 +58,9 @@ export default function LoginScreen() {
             style={styles.input}
             onSubmitEditing={submit}
           />
+          <Pressable onPress={() => router.push('/forgot-password')} style={styles.forgot}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </Pressable>
           {!!error && <Text style={styles.error}>{error}</Text>}
 
           <Pressable
@@ -88,6 +91,9 @@ export default function LoginScreen() {
           >
             <Text style={styles.socialText}>Continue with GitHub</Text>
           </Pressable>
+          <Pressable onPress={() => router.push('/signup')} style={styles.signup}>
+            <Text style={styles.signupText}>New to Harmonia? Create account</Text>
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -105,6 +111,8 @@ const styles = StyleSheet.create({
   subtitle: { color: '#909090', fontSize: 16, lineHeight: 23, marginTop: 14, maxWidth: 330 },
   form: { gap: 11 },
   input: { height: 54, borderRadius: 16, borderWidth: 1, borderColor: '#242424', backgroundColor: '#101010', color: '#FFF', paddingHorizontal: 17, fontSize: 16 },
+  forgot: { alignSelf: 'flex-end', minHeight: 32, justifyContent: 'center', paddingHorizontal: 4, marginTop: -2 },
+  forgotText: { color: '#9C9C9C', fontSize: 12, fontWeight: '700' },
   error: { color: '#FF7373', fontSize: 13, paddingHorizontal: 4 },
   primary: { height: 54, borderRadius: 16, backgroundColor: '#F2F2F2', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   primaryText: { color: '#050505', fontWeight: '800', fontSize: 16 },
@@ -113,5 +121,7 @@ const styles = StyleSheet.create({
   or: { color: '#555', fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
   social: { height: 50, borderRadius: 16, borderWidth: 1, borderColor: '#262626', backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' },
   socialText: { color: '#E9E9E9', fontWeight: '700', fontSize: 15 },
+  signup: { minHeight: 42, alignItems: 'center', justifyContent: 'center' },
+  signupText: { color: '#8D8D8D', fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.7, transform: [{ scale: 0.99 }] },
 });
