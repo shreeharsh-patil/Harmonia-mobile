@@ -4,6 +4,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { fetchCanvasMedia, spotifyTrackId } from '@/src/lib/canvas';
 import type { Song } from '@/src/types';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 type Props = {
   song: Song;
@@ -36,6 +37,7 @@ function MotionCanvas({ url, active }: { url: string; active: boolean }) {
 }
 
 export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, style }: Props) {
+  const { batterySaver } = usePreferences();
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -66,19 +68,19 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
     const controller = new AbortController();
     setCanvasUrl(null);
 
-    if (enableMotion && !reduceMotion && foreground) {
+    if (enableMotion && !batterySaver && !reduceMotion && foreground) {
       fetchCanvasMedia(song, controller.signal)
         .then((media) => setCanvasUrl(media?.url || null))
         .catch(() => setCanvasUrl(null));
     }
 
     return () => controller.abort();
-  }, [canvasLookupKey, enableMotion, foreground, reduceMotion, song]);
+  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion, song]);
 
   return (
     <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
       <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
-      {!!canvasUrl && foreground && !reduceMotion && <MotionCanvas url={canvasUrl} active={foreground} />}
+      {!!canvasUrl && foreground && !batterySaver && !reduceMotion && <MotionCanvas url={canvasUrl} active={foreground} />}
     </View>
   );
 }
