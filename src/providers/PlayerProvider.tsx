@@ -34,6 +34,7 @@ import {
 } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 import { useOffline } from '@/src/providers/OfflineProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
@@ -123,6 +124,7 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOffline();
+  const { batterySaver, qualityFor } = usePreferences();
   const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Song[]>([]);
@@ -153,6 +155,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
   const qualityRef = useRef<StreamQuality>('automatic');
+  const effectiveQualityRef = useRef<StreamQuality>('automatic');
   const rateRef = useRef(1);
   const sleepTimerRef = useRef<SleepTimerMode>('off');
   const sleepDeadlineRef = useRef<number | null>(null);
@@ -354,7 +357,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
       const resolved = localUri || offlineUri
         ? { song: stable, url: localUri || offlineUri!, diagnostics: null }
-        : await resolvePlayableSong(stable, qualityRef.current);
+        : await resolvePlayableSong(stable, effectiveQualityRef.current);
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
       queueRef.current = nextQueue;
@@ -400,6 +403,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setIsLoadingTrack(false);
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
+
+  useEffect(() => {
+    const next = qualityFor(streamQuality);
+    if (next === effectiveQualityRef.current) return;
+    effectiveQualityRef.current = next;
+    void qualityReloadRef.current();
+  }, [qualityFor, streamQuality]);
 
   useEffect(() => {
     qualityReloadRef.current = async () => {
@@ -703,6 +713,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     let cancelled = false;
 
     const warmNextTrack = async () => {
+      if (batterySaver) return;
       const upcoming = queueRef.current[indexRef.current + 1];
       if (!upcoming?.id) return;
 
@@ -713,7 +724,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       if (!source) {
         try {
-          const resolved = await resolvePlayableSong(stable, qualityRef.current);
+          const resolved = await resolvePlayableSong(stable, effectiveQualityRef.current);
           source = resolved.url;
         } catch {
           return;
@@ -736,7 +747,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, [currentIndex, getOfflineUri, queue, streamQuality]);
+  }, [batterySaver, currentIndex, getOfflineUri, queue, streamQuality]);
 
   useEffect(() => {
     if (status.didJustFinish && !finishing.current) {
