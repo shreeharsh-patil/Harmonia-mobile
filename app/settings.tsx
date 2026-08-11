@@ -51,11 +51,13 @@ export default function SettingsScreen() {
     wifiQuality,
     cellularQuality,
     batterySaver,
+    wifiOnlyDownloads,
     networkType,
     setNetworkAwareQuality,
     setWifiQuality,
     setCellularQuality,
     setBatterySaver,
+    setWifiOnlyDownloads,
   } = usePreferences();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const { downloads, totalBytes, clearDownloads } = useOffline();
@@ -240,6 +242,13 @@ export default function SettingsScreen() {
               />
             ))}
           </ChoiceRow>
+          <ToggleRow
+            icon="download-outline"
+            title="Wi-Fi-only downloads"
+            detail="Block offline downloads on cellular data"
+            enabled={wifiOnlyDownloads}
+            onPress={() => setWifiOnlyDownloads(!wifiOnlyDownloads)}
+          />
           <ToggleRow
             icon="leaf-outline"
             title="Battery saver"
