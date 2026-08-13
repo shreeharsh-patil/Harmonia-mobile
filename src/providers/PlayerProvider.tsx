@@ -234,10 +234,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const setStreamQuality = useCallback((quality: StreamQuality) => {
     if (quality === qualityRef.current) return;
     qualityRef.current = quality;
+    effectiveQualityRef.current = qualityFor(quality);
     setStreamQualityState(quality);
     persistSettings(rateRef.current, quality);
     void qualityReloadRef.current();
-  }, [persistSettings]);
+  }, [persistSettings, qualityFor]);
 
   const toggleRepeat = useCallback(() => {
     const modes: RepeatMode[] = ['off', 'all', 'one'];
