@@ -35,6 +35,10 @@ import {
 import type { Song } from '@/src/types';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
+import {
+  createAdaptivePipeline,
+  type AdaptivePipelineStatus,
+} from '@/src/lib/streamPipeline';
 
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
@@ -96,6 +100,12 @@ type PlayerContextValue = {
   repeatMode: RepeatMode;
   shuffleEnabled: boolean;
   radioEnabled: boolean;
+  adaptivePipelineEnabled: boolean;
+  adaptivePipelineStatus: AdaptivePipelineStatus;
+  pipelineStartQuality: StreamQuality | null;
+  pipelineTargetQuality: StreamQuality | null;
+  pipelineInitialResolveMs: number | null;
+  pipelinePromotionResolveMs: number | null;
   history: PlaybackHistoryEntry[];
   listeningStats: ListeningStats;
   playbackDiagnostics: PlaybackDiagnostics | null;
@@ -117,6 +127,7 @@ type PlayerContextValue = {
   toggleRepeat: () => void;
   toggleShuffle: () => void;
   toggleRadio: () => void;
+  toggleAdaptivePipeline: () => void;
   clearError: () => void;
 };
 
@@ -138,6 +149,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
   const [shuffleEnabled, setShuffleEnabledState] = useState(false);
   const [radioEnabled, setRadioEnabledState] = useState(true);
+  const [adaptivePipelineEnabled, setAdaptivePipelineEnabledState] = useState(true);
+  const [adaptivePipelineStatus, setAdaptivePipelineStatus] = useState<AdaptivePipelineStatus>('idle');
+  const [pipelineStartQuality, setPipelineStartQuality] = useState<StreamQuality | null>(null);
+  const [pipelineTargetQuality, setPipelineTargetQuality] = useState<StreamQuality | null>(null);
+  const [pipelineInitialResolveMs, setPipelineInitialResolveMs] = useState<number | null>(null);
+  const [pipelinePromotionResolveMs, setPipelinePromotionResolveMs] = useState<number | null>(null);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
   const [listeningStats, setListeningStats] = useState<ListeningStats>({
@@ -162,6 +179,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const repeatModeRef = useRef<RepeatMode>('off');
   const shuffleRef = useRef(false);
   const radioRef = useRef(true);
+  const adaptivePipelineRef = useRef(true);
+  const loadGenerationRef = useRef(0);
   const unshuffledQueueRef = useRef<Song[]>([]);
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
@@ -209,7 +228,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     nextQuality: StreamQuality,
     nextRepeat: RepeatMode = repeatModeRef.current,
     nextShuffle: boolean = shuffleRef.current,
-    nextRadio: boolean = radioRef.current
+    nextRadio: boolean = radioRef.current,
+    nextAdaptivePipeline: boolean = adaptivePipelineRef.current
   ) => {
     AsyncStorage.setItem(
       PLAYER_SETTINGS_KEY,
@@ -219,6 +239,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         repeatMode: nextRepeat,
         shuffleEnabled: nextShuffle,
         radioEnabled: nextRadio,
+        adaptivePipelineEnabled: nextAdaptivePipeline,
       })
     ).catch(() => {});
   }, []);
@@ -300,6 +321,21 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     );
   }, [persistSettings]);
 
+  const toggleAdaptivePipeline = useCallback(() => {
+    const nextEnabled = !adaptivePipelineRef.current;
+    adaptivePipelineRef.current = nextEnabled;
+    setAdaptivePipelineEnabledState(nextEnabled);
+    if (!nextEnabled) setAdaptivePipelineStatus('idle');
+    persistSettings(
+      rateRef.current,
+      qualityRef.current,
+      repeatModeRef.current,
+      shuffleRef.current,
+      radioRef.current,
+      nextEnabled
+    );
+  }, [persistSettings]);
+
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
     sleepTimerRef.current = mode;
     setSleepTimerState(mode);
@@ -337,6 +373,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const target = queueRef.current[index];
     if (!target) return false;
 
+    const generation = ++loadGenerationRef.current;
     const stable = normalizeSong(target as any);
     const shouldRecordHistory = options.recordHistory !== false;
     const bypassOffline = options.bypassOffline === true;
@@ -347,6 +384,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setIsLoadingTrack(true);
     setError(null);
     setPlaybackDiagnostics(null);
+    setPipelineStartQuality(null);
+    setPipelineTargetQuality(null);
+    setPipelineInitialResolveMs(null);
+    setPipelinePromotionResolveMs(null);
+    setAdaptivePipelineStatus('starting');
 
     if (!options.recovery) {
       recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
@@ -356,9 +398,37 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       player.pause();
       const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
       const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
-      const resolved = localUri || offlineUri
-        ? { song: stable, url: localUri || offlineUri!, diagnostics: null }
-        : await resolvePlayableSong(stable, effectiveQualityRef.current);
+      let resolved: {
+        song: Song;
+        url: string;
+        diagnostics: ResolvedStreamDiagnostics | null;
+      };
+      let promotion: ReturnType<typeof createAdaptivePipeline> extends Promise<infer T>
+        ? T['promotion']
+        : Promise<never> = Promise.resolve(null as never);
+
+      if (localUri || offlineUri) {
+        resolved = { song: stable, url: localUri || offlineUri!, diagnostics: null };
+        setAdaptivePipelineStatus('idle');
+      } else if (adaptivePipelineRef.current && !options.recovery) {
+        const plan = await createAdaptivePipeline(stable, effectiveQualityRef.current);
+        if (generation !== loadGenerationRef.current) return false;
+        resolved = plan.initial;
+        promotion = plan.promotion;
+        setPipelineStartQuality(plan.startQuality);
+        setPipelineTargetQuality(plan.targetQuality);
+        setPipelineInitialResolveMs(plan.initial.resolveMs);
+        setAdaptivePipelineStatus(
+          plan.startQuality === plan.targetQuality ? 'upgrade-skipped' : 'playing-fast'
+        );
+      } else {
+        resolved = await resolvePlayableSong(stable, effectiveQualityRef.current);
+        if (generation !== loadGenerationRef.current) return false;
+        setPipelineStartQuality(effectiveQualityRef.current);
+        setPipelineTargetQuality(effectiveQualityRef.current);
+        setAdaptivePipelineStatus('upgrade-skipped');
+      }
+
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
       queueRef.current = nextQueue;
@@ -395,13 +465,62 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (shouldRecordHistory) recordHistory(resolved.song);
 
       if (autoplay) player.play();
+
+      if (!localUri && !offlineUri && adaptivePipelineRef.current && !options.recovery) {
+        setAdaptivePipelineStatus((current) =>
+          current === 'playing-fast' ? 'upgrading' : current
+        );
+
+        void promotion
+          .then((candidate) => {
+            if (generation !== loadGenerationRef.current) return;
+            if (!candidate) {
+              setAdaptivePipelineStatus((current) =>
+                current === 'upgrading' ? 'upgrade-skipped' : current
+              );
+              return;
+            }
+
+            const resumeAt = Math.max(0, lastKnownPositionRef.current);
+            const shouldResume = playbackIntentRef.current;
+            const current = queueRef.current[indexRef.current];
+            if (!current || current.id !== stable.id) return;
+
+            player.pause();
+            player.replace(candidate.url);
+            player.setPlaybackRate(rateRef.current);
+            pendingSeek.current = resumeAt;
+            restoredPosition.current = resumeAt;
+            lastKnownPositionRef.current = resumeAt;
+
+            const upgradedQueue = [...queueRef.current];
+            upgradedQueue[indexRef.current] = persistenceSafeSong(candidate.song);
+            queueRef.current = upgradedQueue;
+            setQueue(upgradedQueue);
+            setPlaybackDiagnostics(candidate.diagnostics);
+            setPipelinePromotionResolveMs(candidate.resolveMs);
+            setLockScreenMetadata(candidate.song);
+            setAdaptivePipelineStatus('upgraded');
+
+            if (shouldResume) player.play();
+          })
+          .catch(() => {
+            if (generation === loadGenerationRef.current) {
+              setAdaptivePipelineStatus('upgrade-failed');
+            }
+          });
+      }
+
       return true;
     } catch (cause: any) {
-      loadedTrackId.current = null;
-      setError(cause?.message || 'Unable to play this track');
+      if (generation === loadGenerationRef.current) {
+        loadedTrackId.current = null;
+        setAdaptivePipelineStatus('upgrade-failed');
+        setError(cause?.message || 'Unable to play this track');
+      }
       return false;
     } finally {
-      setIsLoadingTrack(false);
+      if (generation === loadGenerationRef.current) setIsLoadingTrack(false);
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
 
@@ -653,16 +772,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const nextRepeat = validRepeatModes.includes(settings.repeatMode) ? settings.repeatMode : 'off';
           const nextShuffle = Boolean(settings.shuffleEnabled);
           const nextRadio = settings.radioEnabled !== false;
+          const nextAdaptivePipeline = settings.adaptivePipelineEnabled !== false;
           rateRef.current = nextRate;
           qualityRef.current = nextQuality;
           repeatModeRef.current = nextRepeat;
           shuffleRef.current = nextShuffle;
           radioRef.current = nextRadio;
+          adaptivePipelineRef.current = nextAdaptivePipeline;
           setPlaybackRateState(nextRate);
           setStreamQualityState(nextQuality);
           setRepeatModeState(nextRepeat);
           setShuffleEnabledState(nextShuffle);
           setRadioEnabledState(nextRadio);
+          setAdaptivePipelineEnabledState(nextAdaptivePipeline);
           player.setPlaybackRate(nextRate);
         }
 
@@ -928,6 +1050,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     repeatMode,
     shuffleEnabled,
     radioEnabled,
+    adaptivePipelineEnabled,
+    adaptivePipelineStatus,
+    pipelineStartQuality,
+    pipelineTargetQuality,
+    pipelineInitialResolveMs,
+    pipelinePromotionResolveMs,
     history,
     listeningStats,
     playbackDiagnostics,
@@ -949,6 +1077,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleRepeat,
     toggleShuffle,
     toggleRadio,
+    toggleAdaptivePipeline,
     clearError: () => setError(null),
   }), [
     currentSong,
@@ -967,6 +1096,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     repeatMode,
     shuffleEnabled,
     radioEnabled,
+    adaptivePipelineEnabled,
+    adaptivePipelineStatus,
+    pipelineStartQuality,
+    pipelineTargetQuality,
+    pipelineInitialResolveMs,
+    pipelinePromotionResolveMs,
     history,
     listeningStats,
     playbackDiagnostics,
@@ -988,6 +1123,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleRepeat,
     toggleShuffle,
     toggleRadio,
+    toggleAdaptivePipeline,
   ]);
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
