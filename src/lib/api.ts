@@ -892,11 +892,17 @@ export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
 export async function resolvePlayableSong(
   song: Song,
   quality: StreamQuality = 'automatic'
-): Promise<{ song: Song; url: string; diagnostics: ResolvedStreamDiagnostics }> {
+): Promise<{
+  song: Song;
+  url: string;
+  headers: Record<string, string> | null;
+  diagnostics: ResolvedStreamDiagnostics;
+}> {
   const resolved = await resolveTrackStream(song, { quality });
   return {
     song: resolved.track,
     url: resolved.url,
+    headers: resolved.headers,
     diagnostics: resolved.diagnostics,
   };
 }
