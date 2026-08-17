@@ -51,7 +51,8 @@ function diagnosticSourceLabel(source?: string | null) {
     case 'embedded': return 'Embedded';
     case 'jiosaavn': return 'Refreshed catalog';
     case 'backend-search': return 'Harmonia fallback';
-    case 'youtube': return 'YouTube fallback';
+    case 'youtube': return 'YouTube Music direct';
+    case 'youtube-server': return 'Harmonia YouTube fallback';
     case 'offline': return 'Offline download';
     case 'local': return 'Local device';
     default: return source || 'Not loaded';
