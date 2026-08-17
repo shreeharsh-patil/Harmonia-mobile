@@ -3,6 +3,7 @@ import {
   type ResolvedStreamDiagnostics,
   type StreamQuality,
 } from '@/src/lib/api';
+import { HARMONIA_API_URL } from '@/src/config';
 import type { Song } from '@/src/types';
 
 export type AdaptivePipelineStatus =
@@ -80,15 +81,51 @@ export function isMeaningfulPromotion(
     QUALITY_RANK[initial.requestedQuality];
 }
 
+function fallbackYoutubeId(song: Song) {
+  const raw = song as any;
+  const candidate = String(raw.videoId || raw.youtubeId || '').trim();
+  return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : null;
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url, HARMONIA_API_URL).host || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function resolveTimed(song: Song, quality: StreamQuality) {
   const started = Date.now();
-  const resolved = await resolvePlayableSong(song, quality);
-  return {
-    ...resolved,
-    requestedQuality: quality,
-    resolvedAt: Date.now(),
-    resolveMs: Date.now() - started,
-  } satisfies PipelineResolvedStream;
+  try {
+    const resolved = await resolvePlayableSong(song, quality);
+    return {
+      ...resolved,
+      requestedQuality: quality,
+      resolvedAt: Date.now(),
+      resolveMs: Date.now() - started,
+    } satisfies PipelineResolvedStream;
+  } catch (primaryError) {
+    const youtubeId = fallbackYoutubeId(song);
+    if (!youtubeId) throw primaryError;
+
+    const url = `${HARMONIA_API_URL}/api/yt-stream?id=${encodeURIComponent(youtubeId)}`;
+    return {
+      song,
+      url,
+      diagnostics: {
+        provider: 'YouTube fallback',
+        source: 'proxy',
+        codec: null,
+        bitrate: null,
+        quality: quality === 'automatic' ? 'adaptive' : quality,
+        streamHost: hostOf(url),
+      },
+      requestedQuality: quality,
+      resolvedAt: Date.now(),
+      resolveMs: Date.now() - started,
+    } satisfies PipelineResolvedStream;
+  }
 }
 
 export async function createAdaptivePipeline(
