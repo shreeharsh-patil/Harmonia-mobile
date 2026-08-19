@@ -510,7 +510,11 @@ export async function resolveDirectYouTubeMusicTrack(
   const visitor = await visitorData(fetchImpl, signal).catch(() => null);
 
   for (const client of PLAYER_CLIENTS) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (signal?.aborted) {
+      const aborted = new Error('YouTube Music resolution aborted');
+      aborted.name = 'AbortError';
+      throw aborted;
+    }
 
     try {
       const payload = await withTimeout(async (innerSignal) => {
