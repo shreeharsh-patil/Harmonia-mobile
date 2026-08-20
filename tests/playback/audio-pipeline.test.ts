@@ -916,3 +916,54 @@ test('41 direct YouTube refusal falls through to Harmonia server when configured
   assert.equal(result.source, 'youtube-server');
   assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
 });
+
+
+test('42 YouTube-identified songs still prefer a JioSaavn metadata match', async () => {
+  let youtubeCalls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('jiosaavn.com/api.php')) {
+        return json({
+          results: [{
+            id: 'jio-youtube-match',
+            title: 'Test Song',
+            image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+            more_info: {
+              album: 'Album',
+              duration: '180',
+              encrypted_media_url: encryptedSaavnUrl(
+                'https://aac.saavncdn.com/001/match_96.mp4?Expires=9999999999'
+              ),
+              '320kbps': 'true',
+              artistMap: {
+                primary_artists: [{ id: 'artist-1', name: 'Test Artist' }],
+              },
+            },
+          }],
+        });
+      }
+      if (url.includes('youtube')) youtubeCalls += 1;
+      return json({}, 404);
+    },
+  });
+
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+    name: 'Test Song',
+    title: 'Test Song',
+    artist: 'Test Artist',
+    duration: 180,
+  }), { quality: 'normal' });
+
+  assert.equal(result.source, 'jiosaavn');
+  assert.equal(youtubeCalls, 0);
+});
