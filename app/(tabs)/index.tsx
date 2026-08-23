@@ -124,6 +124,30 @@ export default function HomeScreen() {
           </Pressable>
         )}
 
+        <View style={styles.featureRow}>
+          <Pressable onPress={() => router.push('/explore')} style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Ionicons name="compass-outline" size={21} color="#EDEDED" />
+            </View>
+            <View style={styles.featureCopy}>
+              <Text style={styles.featureKicker}>DISCOVER</Text>
+              <Text style={styles.featureTitle}>Explore</Text>
+              <Text style={styles.featureBody}>Browse moods, trends and catalog shelves.</Text>
+            </View>
+          </Pressable>
+
+          <Pressable onPress={() => router.push('/replay')} style={styles.featureCard}>
+            <View style={styles.featureIcon}>
+              <Ionicons name="stats-chart-outline" size={21} color="#EDEDED" />
+            </View>
+            <View style={styles.featureCopy}>
+              <Text style={styles.featureKicker}>YOUR MONTH</Text>
+              <Text style={styles.featureTitle}>Replay</Text>
+              <Text style={styles.featureBody}>See top songs, artists and listening time.</Text>
+            </View>
+          </Pressable>
+        </View>
+
         {!!error && (
           <Pressable onPress={() => void load()} style={styles.errorBox}>
             <Text style={styles.error}>{error}</Text>
@@ -253,6 +277,29 @@ const styles = StyleSheet.create({
   resumeArtist: { color: '#7C7C7C', fontSize: 12, marginTop: 2 },
   resumeButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center' },
   resumeButtonText: { color: '#080808', fontSize: 17, fontWeight: '900' },
+  featureRow: { flexDirection: 'row', gap: 10, marginBottom: 28 },
+  featureCard: {
+    flex: 1,
+    minHeight: 128,
+    borderRadius: 18,
+    backgroundColor: '#101010',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#272727',
+    padding: 13,
+  },
+  featureIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#181818',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  featureCopy: { minWidth: 0 },
+  featureKicker: { color: '#595959', fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
+  featureTitle: { color: '#F0F0F0', fontSize: 16, fontWeight: '800', marginTop: 3 },
+  featureBody: { color: '#707070', fontSize: 10, lineHeight: 15, marginTop: 5 },
   quick: { marginBottom: 28 },
   likedQuick: { height: 68, backgroundColor: '#111', borderWidth: StyleSheet.hairlineWidth, borderColor: '#282828', borderRadius: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 11 },
   likedIcon: { width: 46, height: 46, borderRadius: 13, backgroundColor: '#E9E9E9', alignItems: 'center', justifyContent: 'center' },
