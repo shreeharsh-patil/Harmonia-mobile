@@ -19,6 +19,7 @@ type PreferencesContextValue = {
   cellularQuality: StreamQuality;
   batterySaver: boolean;
   networkType: Network.NetworkStateType | undefined;
+  networkConnected: boolean;
   setNetworkAwareQuality: (enabled: boolean) => void;
   setWifiQuality: (quality: StreamQuality) => void;
   setCellularQuality: (quality: StreamQuality) => void;
@@ -115,6 +116,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     cellularQuality,
     batterySaver,
     networkType: network.type,
+    networkConnected: network.isConnected !== false && network.type !== Network.NetworkStateType.NONE,
     setNetworkAwareQuality,
     setWifiQuality,
     setCellularQuality,
@@ -123,6 +125,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   }), [
     batterySaver,
     cellularQuality,
+    network.isConnected,
     network.type,
     networkAwareQuality,
     qualityFor,
