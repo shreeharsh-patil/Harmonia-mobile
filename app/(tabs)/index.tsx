@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import {
