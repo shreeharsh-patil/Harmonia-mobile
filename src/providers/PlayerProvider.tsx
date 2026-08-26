@@ -410,6 +410,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!target) return false;
 
     const generation = ++loadGenerationRef.current;
+    activeResolutionAbortRef.current?.abort();
+    const controller = new AbortController();
+    activeResolutionAbortRef.current = controller;
+
     const stable = normalizeSong(target as any);
     const shouldRecordHistory = options.recordHistory !== false;
     const bypassOffline = options.bypassOffline === true;
@@ -419,6 +423,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackIntentRef.current = autoplay;
     setIsLoadingTrack(true);
     setError(null);
+    setPlaybackErrorType(null);
+    setPlaybackState(options.recovery ? 'RECOVERING' : 'RESOLVING');
     setPlaybackDiagnostics(null);
     setPipelineStartQuality(null);
     setPipelineTargetQuality(null);
@@ -432,8 +438,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     try {
       player.pause();
-      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+
       const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
+      const immediate = getImmediateLocalSource(stable, offlineUri);
+
       let resolved: {
         song: Song;
         url: string;
@@ -441,12 +449,27 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       };
       let promotion: Promise<PipelineResolvedStream | null> = Promise.resolve(null);
 
-      if (localUri || offlineUri) {
-        resolved = { song: stable, url: localUri || offlineUri!, diagnostics: null };
+      if (immediate) {
+        resolved = {
+          song: stable,
+          url: immediate.url,
+          diagnostics: null,
+        };
         setAdaptivePipelineStatus('idle');
-      } else if (adaptivePipelineRef.current && !options.recovery) {
-        const plan = await createAdaptivePipeline(stable, effectiveQualityRef.current);
-        if (generation !== loadGenerationRef.current) return false;
+      } else if (
+        adaptivePipelineRef.current &&
+        !options.recovery &&
+        !options.skipAdaptive &&
+        !options.forceFresh
+      ) {
+        const plan = await createAdaptivePipeline(stable, effectiveQualityRef.current, {
+          signal: controller.signal,
+          excludeProviders: options.excludeProviders,
+          recoveryAttempt: options.recoveryAttempt,
+        });
+
+        if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
+
         resolved = plan.initial;
         promotion = plan.promotion;
         setPipelineStartQuality(plan.startQuality);
@@ -456,12 +479,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           plan.startQuality === plan.targetQuality ? 'upgrade-skipped' : 'playing-fast'
         );
       } else {
-        resolved = await resolvePlayableSong(stable, effectiveQualityRef.current);
-        if (generation !== loadGenerationRef.current) return false;
+        const direct = await resolveTrackStream(stable, {
+          quality: effectiveQualityRef.current,
+          forceFresh: options.forceFresh,
+          excludeProviders: options.excludeProviders,
+          signal: controller.signal,
+          priority: 'high',
+          recoveryAttempt: options.recoveryAttempt,
+        });
+
+        if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
+
+        resolved = {
+          song: direct.track,
+          url: direct.url,
+          diagnostics: direct.diagnostics,
+        };
         setPipelineStartQuality(effectiveQualityRef.current);
         setPipelineTargetQuality(effectiveQualityRef.current);
         setAdaptivePipelineStatus('upgrade-skipped');
       }
+
+      if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
 
       const nextQueue = [...queueRef.current];
       nextQueue[index] = persistenceSafeSong(resolved.song);
@@ -470,27 +509,30 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       player.replace(resolved.url);
       player.setPlaybackRate(rateRef.current);
-      setPlaybackDiagnostics(
-        localUri
-          ? {
-              provider: 'Device',
-              source: 'local',
-              codec: null,
-              bitrate: null,
-              quality: null,
-              streamHost: 'device',
-            }
-          : offlineUri
-            ? {
-                provider: String(stable.provider || stable.source || 'Harmonia'),
-                source: 'offline',
-                codec: null,
-                bitrate: null,
-                quality: null,
-                streamHost: 'device',
-              }
-            : resolved.diagnostics
-      );
+      setPlaybackState('LOADING');
+
+      const diagnostics: PlaybackDiagnostics = immediate
+        ? {
+            provider: immediate.source === 'local' ? 'Device' : String(stable.provider || stable.source || 'Harmonia'),
+            source: immediate.source,
+            codec: null,
+            bitrate: null,
+            quality: null,
+            mimeType: null,
+            streamHost: 'device',
+            resolutionTimeMs: 0,
+            cache: 'hit',
+            expiresAt: null,
+            recoveryAttempt: options.recoveryAttempt ?? null,
+          }
+        : {
+            ...(resolved.diagnostics as ResolvedStreamDiagnostics),
+            recoveryAttempt: options.recoveryAttempt ?? resolved.diagnostics?.recoveryAttempt ?? null,
+          };
+
+      setPlaybackDiagnostics(diagnostics);
+      activeProviderRef.current = diagnostics.provider;
+      lastPlaybackErrorRef.current = null;
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
       lastKnownPositionRef.current = Math.max(0, startPosition);
@@ -498,27 +540,45 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setLockScreenMetadata(resolved.song);
       if (shouldRecordHistory) recordHistory(resolved.song);
 
-      if (autoplay) player.play();
+      if (autoplay) {
+        player.play();
+      }
 
-      if (!localUri && !offlineUri && adaptivePipelineRef.current && !options.recovery) {
+      if (
+        !immediate &&
+        adaptivePipelineRef.current &&
+        !options.recovery &&
+        !options.skipAdaptive &&
+        !options.forceFresh
+      ) {
         setAdaptivePipelineStatus((current) =>
           current === 'playing-fast' ? 'upgrading' : current
         );
 
         void promotion
           .then((candidate) => {
-            if (generation !== loadGenerationRef.current) return;
-            if (!candidate) {
-              setAdaptivePipelineStatus((current) =>
-                current === 'upgrading' ? 'upgrade-skipped' : current
-              );
+            if (
+              generation !== loadGenerationRef.current ||
+              controller.signal.aborted ||
+              !candidate
+            ) {
+              if (
+                generation === loadGenerationRef.current &&
+                !controller.signal.aborted &&
+                !candidate
+              ) {
+                setAdaptivePipelineStatus((current) =>
+                  current === 'upgrading' ? 'upgrade-skipped' : current
+                );
+              }
               return;
             }
 
-            const resumeAt = Math.max(0, lastKnownPositionRef.current);
-            const shouldResume = playbackIntentRef.current;
             const current = queueRef.current[indexRef.current];
             if (!current || current.id !== stable.id) return;
+
+            const resumeAt = Math.max(0, lastKnownPositionRef.current);
+            const shouldResume = playbackIntentRef.current;
 
             player.pause();
             player.replace(candidate.url);
@@ -532,29 +592,50 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             queueRef.current = upgradedQueue;
             setQueue(upgradedQueue);
             setPlaybackDiagnostics(candidate.diagnostics);
+            activeProviderRef.current = candidate.diagnostics.provider;
             setPipelinePromotionResolveMs(candidate.resolveMs);
             setLockScreenMetadata(candidate.song);
             setAdaptivePipelineStatus('upgraded');
+            setPlaybackState('LOADING');
 
             if (shouldResume) player.play();
           })
-          .catch(() => {
-            if (generation === loadGenerationRef.current) {
+          .catch((cause) => {
+            if (generation !== loadGenerationRef.current || controller.signal.aborted) return;
+            const typed = classifyPlaybackError(cause);
+            if (typed.type !== PlaybackErrorType.REQUEST_ABORTED) {
               setAdaptivePipelineStatus('upgrade-failed');
             }
           });
       }
 
       return true;
-    } catch (cause: any) {
-      if (generation === loadGenerationRef.current) {
+    } catch (cause) {
+      const typed = classifyPlaybackError(cause);
+      lastPlaybackErrorRef.current = typed;
+
+      if (
+        generation === loadGenerationRef.current &&
+        typed.type !== PlaybackErrorType.REQUEST_ABORTED
+      ) {
         loadedTrackId.current = null;
         setAdaptivePipelineStatus('upgrade-failed');
-        setError(cause?.message || 'Unable to play this track');
+        setPlaybackErrorType(typed.type);
+        setPlaybackState('ERROR');
+        setError(
+          typed.type === PlaybackErrorType.NETWORK_ERROR
+            ? 'Network connection interrupted. Harmonia will retry when possible.'
+            : typed.message
+        );
       }
       return false;
     } finally {
-      if (generation === loadGenerationRef.current) setIsLoadingTrack(false);
+      if (generation === loadGenerationRef.current) {
+        setIsLoadingTrack(false);
+        if (activeResolutionAbortRef.current === controller) {
+          activeResolutionAbortRef.current = null;
+        }
+      }
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
 
