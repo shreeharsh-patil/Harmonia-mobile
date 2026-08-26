@@ -55,6 +55,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
+  const mutationKeysRef = useRef(new Set<string>());
 
   const load = useCallback(async (manual = false) => {
     const generation = ++loadGenerationRef.current;
@@ -107,6 +108,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     const normalized = normalizeSong(song as any);
     if (!normalized.id) return null;
     const accountSafeSong = persistenceSafeSong(normalized);
+    const mutationKey = `song:${normalized.id}`;
+    if (mutationKeysRef.current.has(mutationKey)) return null;
+    mutationKeysRef.current.add(mutationKey);
 
     const previouslyLiked = likedIds.has(normalized.id);
     setLikedSongs((current) => previouslyLiked
@@ -116,10 +120,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
     try {
       const result = await toggleLikedSong(token, accountSafeSong);
+      setLikedSongs((current) => result.liked
+        ? [normalized, ...current.filter((item) => item.id !== normalized.id)]
+        : current.filter((item) => item.id !== normalized.id)
+      );
       Haptics.selectionAsync().catch(() => {});
-      if (result.liked !== !previouslyLiked) {
-        await load(true);
-      }
       return result.liked;
     } catch (cause: any) {
       setLikedSongs((current) => previouslyLiked
@@ -128,8 +133,10 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       );
       setError(cause?.message || 'Could not update liked songs');
       return null;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
-  }, [likedIds, load, token]);
+  }, [likedIds, token]);
 
   const likedPlaylistIds = useMemo(
     () => new Set(likedPlaylists.map((item) => String(item.id || item._id || ''))),
@@ -152,64 +159,103 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token) return null;
     const id = String(playlist.id || playlist._id || '');
     if (!id) return null;
+    const mutationKey = `playlist:${id}`;
+    if (mutationKeysRef.current.has(mutationKey)) return null;
+    mutationKeysRef.current.add(mutationKey);
+
     const wasLiked = likedPlaylistIds.has(id);
+    const normalized = { ...playlist, id };
     setLikedPlaylists((current) => wasLiked
       ? current.filter((item) => String(item.id || item._id || '') !== id)
-      : [{ ...playlist, id }, ...current.filter((item) => String(item.id || item._id || '') !== id)]
+      : [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
     );
     try {
-      const result = await toggleLikedEntity(token, 'playlists', { ...playlist, id });
-      if (result.liked !== !wasLiked) await load(true);
+      const result = await toggleLikedEntity(token, 'playlists', normalized);
+      setLikedPlaylists((current) => result.liked
+        ? [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
+        : current.filter((item) => String(item.id || item._id || '') !== id)
+      );
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
-      await load(true);
+      setLikedPlaylists((current) => wasLiked
+        ? [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
+        : current.filter((item) => String(item.id || item._id || '') !== id)
+      );
       setError(cause?.message || 'Could not update saved playlists');
       return null;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
-  }, [likedPlaylistIds, load, token]);
+  }, [likedPlaylistIds, token]);
 
   const toggleAlbumLike = useCallback(async (album: HarmoniaAlbum) => {
     if (!token) return null;
     const id = String(album.id || '');
     if (!id) return null;
+    const mutationKey = `album:${id}`;
+    if (mutationKeysRef.current.has(mutationKey)) return null;
+    mutationKeysRef.current.add(mutationKey);
+
     const wasLiked = likedAlbumIds.has(id);
+    const normalized = { ...album, id };
     setLikedAlbums((current) => wasLiked
       ? current.filter((item) => String(item.id || '') !== id)
-      : [{ ...album, id }, ...current.filter((item) => String(item.id || '') !== id)]
+      : [normalized, ...current.filter((item) => String(item.id || '') !== id)]
     );
     try {
-      const result = await toggleLikedEntity(token, 'albums', { ...album, id });
-      if (result.liked !== !wasLiked) await load(true);
+      const result = await toggleLikedEntity(token, 'albums', normalized);
+      setLikedAlbums((current) => result.liked
+        ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
+        : current.filter((item) => String(item.id || '') !== id)
+      );
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
-      await load(true);
+      setLikedAlbums((current) => wasLiked
+        ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
+        : current.filter((item) => String(item.id || '') !== id)
+      );
       setError(cause?.message || 'Could not update saved albums');
       return null;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
-  }, [likedAlbumIds, load, token]);
+  }, [likedAlbumIds, token]);
 
   const toggleArtistLike = useCallback(async (artist: HarmoniaArtistEntity) => {
     if (!token) return null;
     const id = String(artist.id || '');
     if (!id) return null;
+    const mutationKey = `artist:${id}`;
+    if (mutationKeysRef.current.has(mutationKey)) return null;
+    mutationKeysRef.current.add(mutationKey);
+
     const wasLiked = likedArtistIds.has(id);
+    const normalized = { ...artist, id };
     setLikedArtists((current) => wasLiked
       ? current.filter((item) => String(item.id || '') !== id)
-      : [{ ...artist, id }, ...current.filter((item) => String(item.id || '') !== id)]
+      : [normalized, ...current.filter((item) => String(item.id || '') !== id)]
     );
     try {
-      const result = await toggleLikedEntity(token, 'artists', { ...artist, id });
-      if (result.liked !== !wasLiked) await load(true);
+      const result = await toggleLikedEntity(token, 'artists', normalized);
+      setLikedArtists((current) => result.liked
+        ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
+        : current.filter((item) => String(item.id || '') !== id)
+      );
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
-      await load(true);
+      setLikedArtists((current) => wasLiked
+        ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
+        : current.filter((item) => String(item.id || '') !== id)
+      );
       setError(cause?.message || 'Could not update followed artists');
       return null;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
-  }, [likedArtistIds, load, token]);
+  }, [likedArtistIds, token]);
 
   const createPlaylist = useCallback(async (name: string) => {
     if (!token || !name.trim()) return null;
