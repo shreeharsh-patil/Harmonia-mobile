@@ -653,16 +653,21 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (!target) return;
 
       const stable = normalizeSong(target as any);
-      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
       const offlineUri = getOfflineUri(stable.id);
-      if (localUri || offlineUri) return;
+      if (getImmediateLocalSource(stable, offlineUri)) return;
 
       const resumeAt = Math.max(
         0,
         Number(status.currentTime || lastKnownPositionRef.current || 0)
       );
       const shouldResume = Boolean(status.playing || playbackIntentRef.current);
-      await loadIndex(index, shouldResume, resumeAt, { recordHistory: false });
+
+      invalidateResolvedStream(stable.id);
+      await loadIndex(index, shouldResume, resumeAt, {
+        recordHistory: false,
+        forceFresh: true,
+        skipAdaptive: true,
+      });
     };
   }, [getOfflineUri, loadIndex, status.currentTime, status.playing]);
 
@@ -949,43 +954,58 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     const warmNextTrack = async () => {
-      if (batterySaver) return;
+      if (batterySaver || !networkConnected) return;
       const upcoming = queueRef.current[indexRef.current + 1];
       if (!upcoming?.id) return;
 
       const stable = normalizeSong(upcoming as any);
-      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
       const offlineUri = getOfflineUri(stable.id);
-      let source = localUri || offlineUri || null;
+      const immediate = getImmediateLocalSource(stable, offlineUri);
+      let source = immediate?.url || null;
 
       if (!source) {
         try {
-          const resolved = await resolvePlayableSong(stable, effectiveQualityRef.current);
+          const resolved = await resolveTrackStream(stable, {
+            quality: effectiveQualityRef.current,
+            signal: controller.signal,
+            priority: 'medium',
+          });
           source = resolved.url;
         } catch {
           return;
         }
       }
 
-      if (cancelled || !source || source === preloadedSourceRef.current) return;
+      if (
+        cancelled ||
+        controller.signal.aborted ||
+        !source ||
+        source === preloadedSourceRef.current
+      ) {
+        return;
+      }
 
       const previous = preloadedSourceRef.current;
       preloadedSourceRef.current = source;
       if (previous) {
         clearPreloadedSource(previous).catch(() => {});
       }
+
       preload(source, { preferredForwardBufferDuration: 12 }).catch(() => {
         if (preloadedSourceRef.current === source) preloadedSourceRef.current = null;
       });
     };
 
     void warmNextTrack();
+
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [batterySaver, currentIndex, getOfflineUri, queue, streamQuality]);
+  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, streamQuality]);
 
   useEffect(() => {
     if (status.didJustFinish && !finishing.current) {
