@@ -192,6 +192,8 @@ test('listening history records only after native playback actually starts', asy
 test('library mutations dedupe rapid repeated toggles without whole-library refresh races', async () => {
   const source = await readFile('src/providers/LibraryProvider.tsx', 'utf8');
   assert.match(source, /mutationKeysRef = useRef\(new Set<string>\(\)\)/);
+  assert.match(source, /tokenRef = useRef\(token\)/);
+  assert.match(source, /tokenRef\.current !== token/);
   assert.match(source, /mutationKey = `song:\$\{normalized\.id\}`/);
   assert.match(source, /mutationKey = `playlist:\$\{id\}`/);
   assert.match(source, /mutationKey = `album:\$\{id\}`/);
