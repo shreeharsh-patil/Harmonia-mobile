@@ -106,7 +106,19 @@ export class MetadataMemoryCache<T> {
     if (cached) return cached;
     const pending = this.inFlight.get(key);
     if (pending) return pending;
-    const request = loader().then((data) => { this.set(key, data); return data; }).finally(() => this.inFlight.delete(key));
+
+    // Only the request that is still registered for this key may populate the
+    // cache. invalidate()/clear() remove that registration, so an older
+    // provider response cannot resurrect stale metadata after invalidation.
+    let request: Promise<T>;
+    request = loader()
+      .then((data) => {
+        if (this.inFlight.get(key) === request) this.set(key, data);
+        return data;
+      })
+      .finally(() => {
+        if (this.inFlight.get(key) === request) this.inFlight.delete(key);
+      });
     this.inFlight.set(key, request);
     return request;
   }
