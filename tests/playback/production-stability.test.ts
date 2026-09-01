@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { inferDownloadExtension } from '../../src/lib/downloads';
+import { MetadataMemoryCache } from '../../src/lib/playback/streamCache';
 
 test('download extension follows actual resolved media container', () => {
   assert.equal(inferDownloadExtension('https://cdn.test/audio', 'audio/webm', 'opus'), 'webm');
@@ -222,4 +223,24 @@ test('radio continuation never overwrites a queue edited while suggestions are i
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   const guards = source.match(/queueRef\.current !== list/g) || [];
   assert.ok(guards.length >= 2);
+});
+
+
+test('invalidated in-flight metadata cannot repopulate the cache', async () => {
+  const cache = new MetadataMemoryCache<string>();
+  let resolveLoader!: (value: string) => void;
+  const first = cache.getOrLoad(
+    'track',
+    () => new Promise<string>((resolve) => {
+      resolveLoader = resolve;
+    })
+  );
+
+  cache.invalidate('track');
+  resolveLoader('stale');
+  assert.equal(await first, 'stale');
+  assert.equal(cache.get('track'), null);
+
+  assert.equal(await cache.getOrLoad('track', async () => 'fresh'), 'fresh');
+  assert.equal(cache.get('track'), 'fresh');
 });
