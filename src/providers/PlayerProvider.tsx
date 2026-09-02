@@ -855,10 +855,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const suggestions = await fetchSongSuggestions(seed.id, 20);
           if (
             endGeneration !== loadGenerationRef.current ||
-            queueRef.current !== list ||
             indexRef.current !== endIndex ||
             String(queueRef.current[endIndex]?.id || '') !== seedId
           ) {
+            return;
+          }
+          if (queueRef.current !== list) {
+            // Manual queue edits always win over late Radio suggestions. If the
+            // user appended a next track while Radio was resolving, continue
+            // directly into that track instead of leaving playback stopped.
+            if (queueRef.current[endIndex + 1]) {
+              await loadIndex(endIndex + 1, true, 0);
+            }
             return;
           }
 
@@ -883,10 +891,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       if (
         endGeneration !== loadGenerationRef.current ||
-        queueRef.current !== list ||
         indexRef.current !== endIndex ||
         String(queueRef.current[endIndex]?.id || '') !== seedId
       ) {
+        return;
+      }
+      if (queueRef.current !== list) {
+        if (queueRef.current[endIndex + 1]) {
+          await loadIndex(endIndex + 1, true, 0);
+        }
         return;
       }
 
