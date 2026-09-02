@@ -633,9 +633,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     } finally {
       if (generation === loadGenerationRef.current) {
         setIsLoadingTrack(false);
-        if (activeResolutionAbortRef.current === controller) {
-          activeResolutionAbortRef.current = null;
-        }
+        // Keep the most recent controller referenced after initial resolution.
+        // A newer track load aborts it, which also cancels any late quality promotion.
       }
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
@@ -1220,6 +1219,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             resumeAt,
             {
               recordHistory: false,
+              bypassOffline: attempt > 1,
               recovery: true,
               recoveryAttempt: attempt,
               forceFresh: true,
