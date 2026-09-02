@@ -269,8 +269,13 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
   const createPlaylist = useCallback(async (name: string) => {
     if (!token || !name.trim()) return null;
+    const cleanName = name.trim();
+    const mutationKey = `create-playlist:${cleanName.toLowerCase()}`;
+    if (mutationKeysRef.current.has(mutationKey)) return null;
+    mutationKeysRef.current.add(mutationKey);
+
     try {
-      const playlist = await createPlaylistApi(token, name.trim());
+      const playlist = await createPlaylistApi(token, cleanName);
       if (tokenRef.current !== token) return null;
       setPlaylists((current) => [playlist, ...current]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -279,11 +284,17 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       if (tokenRef.current !== token) return null;
       setError(cause?.message || 'Could not create playlist');
       return null;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
   }, [token]);
 
   const addToPlaylist = useCallback(async (playlistId: string, songId: string) => {
     if (!token) return false;
+    const mutationKey = `add-to-playlist:${playlistId}:${songId}`;
+    if (mutationKeysRef.current.has(mutationKey)) return false;
+    mutationKeysRef.current.add(mutationKey);
+
     try {
       await addSongToPlaylist(token, playlistId, songId);
       if (tokenRef.current !== token) return false;
@@ -299,6 +310,8 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       if (tokenRef.current !== token) return false;
       setError(cause?.message || 'Could not add song to playlist');
       return false;
+    } finally {
+      mutationKeysRef.current.delete(mutationKey);
     }
   }, [token]);
 
