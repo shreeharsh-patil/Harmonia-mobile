@@ -199,6 +199,8 @@ test('library mutations dedupe rapid repeated toggles without whole-library refr
   assert.match(source, /mutationKey = `playlist:\$\{id\}`/);
   assert.match(source, /mutationKey = `album:\$\{id\}`/);
   assert.match(source, /mutationKey = `artist:\$\{id\}`/);
+  assert.match(source, /mutationKey = `create-playlist:\$\{cleanName\.toLowerCase\(\)\}`/);
+  assert.match(source, /mutationKey = `add-to-playlist:\$\{playlistId\}:\$\{songId\}`/);
   assert.match(source, /mutationKeysRef\.current\.has\(mutationKey\)/);
   assert.match(source, /finally \{[\s\S]*?mutationKeysRef\.current\.delete\(mutationKey\)/);
 });
@@ -223,6 +225,8 @@ test('radio continuation never overwrites a queue edited while suggestions are i
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   const guards = source.match(/queueRef\.current !== list/g) || [];
   assert.ok(guards.length >= 2);
+  assert.match(source, /queueRef\.current\[endIndex \+ 1\]/);
+  assert.match(source, /await loadIndex\(endIndex \+ 1, true, 0\)/);
 });
 
 
