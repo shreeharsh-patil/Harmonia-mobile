@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import {
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -72,6 +73,27 @@ export default function ReplayScreen() {
 
   const maxDay = Math.max(1, ...days.map((day) => day.seconds));
   const topQueue = topTracks.map((item) => item.song);
+  const activeDays = days.filter((day) => day.seconds > 0).length;
+
+  const shareReplay = async () => {
+    const topTrack = topTracks[0];
+    const topArtist = topArtists[0];
+    const lines = [
+      'My Harmonia Replay',
+      `${minutes(listeningStats.totalSeconds)} minutes listened`,
+      `${listeningStats.playCount} tracks started`,
+      `${activeDays}/7 active listening days`,
+      topTrack ? `Top track: ${topTrack.song.name} — ${artistNames(topTrack.song)}` : null,
+      topArtist ? `Top artist: ${topArtist[0]}` : null,
+      '',
+      'Made with Harmonia Mobile',
+    ].filter(Boolean);
+
+    await Share.share({
+      title: 'My Harmonia Replay',
+      message: lines.join('\n'),
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -97,8 +119,8 @@ export default function ReplayScreen() {
             </View>
             <View style={styles.divider} />
             <View style={styles.heroMetric}>
-              <Text style={styles.metricValue}>{topTracks.length}</Text>
-              <Text style={styles.metricLabel}>top tracks</Text>
+              <Text style={styles.metricValue}>{activeDays}/7</Text>
+              <Text style={styles.metricLabel}>active days</Text>
             </View>
             <View style={styles.divider} />
             <View style={styles.heroMetric}>
@@ -106,6 +128,9 @@ export default function ReplayScreen() {
               <Text style={styles.metricLabel}>top artists</Text>
             </View>
           </View>
+          <Pressable onPress={() => void shareReplay()} style={styles.shareReplay} accessibilityLabel="Share Harmonia Replay">
+            <Text style={styles.shareReplayText}>Share Replay</Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -197,6 +222,8 @@ const styles = StyleSheet.create({
   heroNumber: { color: '#FAFAFA', fontSize: 58, lineHeight: 64, fontWeight: '900', letterSpacing: -2.5, marginTop: 10 },
   heroLabel: { color: '#7A7A7A', fontSize: 13, marginTop: 1 },
   heroStats: { height: 80, flexDirection: 'row', alignItems: 'center', marginTop: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#252525', paddingTop: 15 },
+  shareReplay: { height: 42, borderRadius: 13, backgroundColor: '#ECECEC', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  shareReplayText: { color: '#090909', fontSize: 12, fontWeight: '850' as any },
   heroMetric: { flex: 1, alignItems: 'center' },
   metricValue: { color: '#F0F0F0', fontSize: 19, fontWeight: '850' as any },
   metricLabel: { color: '#606060', fontSize: 9, marginTop: 4, textAlign: 'center' },
