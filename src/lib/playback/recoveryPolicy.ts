@@ -38,9 +38,10 @@ export function getPlaybackRecoveryPolicy(
       errorType === PlaybackErrorType.UNKNOWN) &&
     attempt < MAX_AUTOMATIC_RECOVERY_ATTEMPTS
   ) {
+    const fallbackBackoffMs = [0, 500, 1500] as const;
     return {
       action: 'refresh-stream' as const,
-      delayMs: attempt === 0 ? 0 : Math.min(1500, 300 * (2 ** attempt)),
+      delayMs: fallbackBackoffMs[Math.min(attempt, fallbackBackoffMs.length - 1)],
     };
   }
 
