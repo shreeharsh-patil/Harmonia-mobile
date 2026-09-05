@@ -7,21 +7,32 @@ export type PlaybackRecoveryAction =
   | 'ignore'
   | 'await-user'
   | 'await-online'
+  | 'next-candidate'
   | 'refresh-stream'
   | 'fail';
 
 export function getPlaybackRecoveryPolicy(
   errorType: PlaybackErrorTypeValue,
   attempt = 0,
-  options: { online?: boolean } = {}
+  options: { online?: boolean; hasNextCandidate?: boolean } = {}
 ) {
   const online = options.online !== false;
+  const hasNextCandidate = options.hasNextCandidate === true;
 
   if (errorType === PlaybackErrorType.REQUEST_ABORTED) return { action: 'ignore' as const, delayMs: 0 };
   if (errorType === PlaybackErrorType.AUTOPLAY_BLOCKED) return { action: 'await-user' as const, delayMs: 0 };
   if (!online && errorType === PlaybackErrorType.NETWORK_ERROR) return { action: 'await-online' as const, delayMs: 0 };
   if (errorType === PlaybackErrorType.AUTH_ERROR || errorType === PlaybackErrorType.RATE_LIMIT) {
     return { action: 'fail' as const, delayMs: 0 };
+  }
+
+  if (
+    (errorType === PlaybackErrorType.AUDIO_DECODING_ERROR ||
+      errorType === PlaybackErrorType.TRACK_UNAVAILABLE ||
+      errorType === PlaybackErrorType.INVALID_STREAM_URL) &&
+    hasNextCandidate
+  ) {
+    return { action: 'next-candidate' as const, delayMs: 0 };
   }
 
   if (errorType === PlaybackErrorType.NETWORK_ERROR && attempt < NETWORK_BACKOFF_MS.length) {

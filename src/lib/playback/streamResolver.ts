@@ -72,6 +72,7 @@ export type ResolveTrackOptions = {
   priority?: 'high' | 'medium' | 'low';
   recoveryAttempt?: number | null;
   skipEmbedded?: boolean;
+  embeddedCandidateIndex?: number;
 };
 
 type AudioCandidate = {
@@ -405,11 +406,13 @@ export function createHarmoniaProviders({
     {
       id: 'embedded',
       canResolve(track, options) {
+        const candidateIndex = Math.max(0, Number(options.embeddedCandidateIndex || 0));
         return options.skipEmbedded !== true &&
-          getAudioCandidates(track, options.quality || 'automatic').length > 0;
+          getAudioCandidates(track, options.quality || 'automatic').length > candidateIndex;
       },
       async resolve(track, options) {
-        const candidate = getAudioCandidates(track, options.quality || 'automatic')[0];
+        const candidateIndex = Math.max(0, Number(options.embeddedCandidateIndex || 0));
+        const candidate = getAudioCandidates(track, options.quality || 'automatic')[candidateIndex];
         if (!candidate) {
           throw new PlaybackPipelineError(
             PlaybackErrorType.INVALID_STREAM_URL,

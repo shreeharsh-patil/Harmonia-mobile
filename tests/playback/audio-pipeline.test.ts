@@ -21,7 +21,12 @@ import {
 } from '../../src/lib/playback/recoveryPolicy';
 import { PlaybackErrorType } from '../../src/lib/playback/playbackErrors';
 import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
-import { persistenceSafeSong } from '../../src/lib/song';
+import {
+  artistNames,
+  artworkUrl,
+  normalizeSong,
+  persistenceSafeSong,
+} from '../../src/lib/song';
 import {
   searchDirectJioSaavn,
   searchDirectJioSaavnAlbums,
@@ -579,10 +584,12 @@ test('31 forceFresh JioSaavn resolution requests a fresh direct stream', async (
   assert.match(second.url, /fresh-2_160/);
 });
 
-test('32 recovery retries fresh JioSaavn twice before excluding it for final fallback', async () => {
+test('32 recovery retries alternate embedded candidates before provider fallback', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /skipEmbedded: true/);
-  assert.match(source, /attempt >= 3 && failedProvider/);
+  assert.match(source, /hasNextCandidate/);
+  assert.match(source, /embeddedCandidateIndex:/);
+  assert.match(source, /skipEmbedded: policy\.action !== 'next-candidate'/);
+  assert.match(source, /attempt >= 3/);
 });
 
 test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
@@ -1090,4 +1097,76 @@ test('40 stale JioSaavn ids fall back to recording matching', async () => {
   assert.equal(recoveredTrack.id, 'stale-catalog-id');
   assert.equal((recoveredTrack as any).saavnId, 'fresh-saavn-id');
   assert.match(resolved.url, /fresh_160/);
+});
+
+
+test('43 decode failures prefer another embedded candidate like Harmonia Web', () => {
+  assert.equal(
+    getPlaybackRecoveryPolicy(
+      PlaybackErrorType.AUDIO_DECODING_ERROR,
+      0,
+      { hasNextCandidate: true }
+    ).action,
+    'next-candidate'
+  );
+});
+
+test('44 resolver can select the next embedded candidate during recovery', async () => {
+  const resolver = new StreamResolver(createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async () => { throw new Error('network must not be called'); },
+  }), { healthManager: new ProviderHealthManager() });
+
+  const target = song({
+    downloadUrl: [
+      { url: 'https://cdn.test/160.m4a', quality: '160kbps', bitrate: 160 },
+      { url: 'https://cdn.test/96.m4a', quality: '96kbps', bitrate: 96 },
+    ],
+  });
+
+  const result = await resolver.resolve(target, {
+    quality: 'normal',
+    forceFresh: true,
+    embeddedCandidateIndex: 1,
+  });
+
+  assert.equal(result.source, 'embedded');
+  assert.match(result.url, /96\.m4a/);
+});
+
+test('45 normalization preserves string artist names and alternate stable ids', () => {
+  const normalized = normalizeSong({
+    _id: 'mongo-track-id',
+    name: 'Encoded &amp; Song',
+    artists: ['Artist One', { name: 'Artist Two' }],
+  } as any);
+
+  assert.equal(normalized.id, 'mongo-track-id');
+  assert.equal(normalized.songId, 'mongo-track-id');
+  assert.equal(normalized.name, 'Encoded & Song');
+  assert.equal(artistNames(normalized), 'Artist One, Artist Two');
+});
+
+test('46 artwork follows Harmonia Web priority and selects the sharp Spotify image', () => {
+  const normalized = normalizeSong({
+    id: 'art-track',
+    name: 'Artwork Song',
+    artist: 'Artist',
+    spotifyImages: [
+      {
+        url: 'http://image-cdn-ak.spotifycdn.com/image/small',
+        width: 64,
+        height: 64,
+      },
+      {
+        url: 'http://image-cdn-ak.spotifycdn.com/image/large',
+        width: 640,
+        height: 640,
+      },
+    ],
+    image: [{ quality: '500x500', url: 'https://provider.test/cover.jpg' }],
+  } as any);
+
+  assert.equal(artworkUrl(normalized), 'https://i.scdn.co/image/large');
 });
