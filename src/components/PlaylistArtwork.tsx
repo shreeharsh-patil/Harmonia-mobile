@@ -1,17 +1,46 @@
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
-import type { Playlist } from '@/src/types';
+import { artworkUrl, bestArtworkUrl, normalizeArtworkUrl, normalizeSong } from '@/src/lib/song';
+import type { Playlist, Song } from '@/src/types';
 
-function playlistArtwork(playlist: Playlist) {
-  const image = playlist.image;
-  if (typeof image === 'string') return image;
-  if (Array.isArray(image) && image.length) {
-    const sorted = [...image].sort((a, b) => {
-      const score = (value?: string) => Number(String(value || '').match(/\d+/)?.[0] || 0);
-      return score(b.quality) - score(a.quality);
-    });
-    return sorted[0]?.url || '';
+function isPlaceholderArtwork(url: string) {
+  const normalized = String(url || '').trim().toLowerCase();
+  return !normalized ||
+    normalized.endsWith('/default-playlist-image.png') ||
+    normalized.startsWith('data:image/svg+xml');
+}
+
+function playlistArtwork(playlist: Playlist, targetSize: number) {
+  const raw = playlist as any;
+  for (const field of [
+    raw.spotifyImages,
+    raw.image,
+    raw.images,
+    raw.cover,
+    raw.coverUrl,
+    raw.coverImage,
+    raw.thumbnail,
+    raw.thumbnailUrl,
+    raw.artwork,
+    raw.imageUrl,
+  ]) {
+    const url = bestArtworkUrl(field, targetSize);
+    if (url && !isPlaceholderArtwork(url)) return url;
   }
+
+  // Web Harmonia derives a playlist cover from its tracks when the stored
+  // playlist image is missing/default. Do the same on mobile.
+  const tracks = [
+    ...(Array.isArray(raw.tracks) ? raw.tracks : []),
+    ...(Array.isArray(raw.songs) ? raw.songs : []),
+    ...(Array.isArray(raw.sourceTracks) ? raw.sourceTracks : []),
+  ] as Song[];
+
+  for (const track of tracks) {
+    const url = artworkUrl(normalizeSong(track as any), targetSize);
+    if (url) return normalizeArtworkUrl(url);
+  }
+
   return '';
 }
 
@@ -24,7 +53,7 @@ export function PlaylistArtwork({
   size: number;
   radius?: number;
 }) {
-  const url = playlistArtwork(playlist);
+  const url = playlistArtwork(playlist, size);
   if (!url) {
     return (
       <View style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}>
