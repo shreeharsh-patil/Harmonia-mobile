@@ -13,6 +13,19 @@ import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
 export const MINI_PLAYER_HEIGHT = 64;
+export const TAB_BAR_HEIGHT = 58;
+export const TAB_BAR_MIN_BOTTOM = 8;
+export const TAB_BAR_TO_MINI_GAP = 8;
+export const TAB_CONTENT_EXTRA_GAP = 24;
+
+export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boolean) {
+  const navBottom = Math.max(bottomInset, TAB_BAR_MIN_BOTTOM);
+  return navBottom +
+    TAB_BAR_HEIGHT +
+    TAB_BAR_TO_MINI_GAP +
+    (hasMiniPlayer ? MINI_PLAYER_HEIGHT + TAB_BAR_TO_MINI_GAP : 0) +
+    TAB_CONTENT_EXTRA_GAP;
+}
 
 export function MiniPlayer() {
   const {

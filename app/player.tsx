@@ -132,7 +132,7 @@ export default function PlayerScreen() {
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const lyricsScrollRef = useRef<ScrollView>(null);
 
-  const cover = artworkUrl(currentSong);
+  const cover = artworkUrl(currentSong, 720);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
   const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
   const activeWord = useMemo(

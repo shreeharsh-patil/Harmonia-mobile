@@ -14,8 +14,9 @@ import {
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { RECENT_SEARCHES_KEY } from '@/src/config';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
@@ -28,6 +29,7 @@ import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song
 const MAX_RECENT_SEARCHES = 10;
 
 export default function SearchScreen() {
+  const insets = useSafeAreaInsets();
   const { isLiked } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [query, setQuery] = useState('');
@@ -116,6 +118,7 @@ export default function SearchScreen() {
   const artists = useMemo(() => results?.artists?.results || [], [results]);
   const playlists = useMemo(() => results?.playlists?.results || [], [results]);
   const hasResults = songs.length || albums.length || artists.length || playlists.length;
+  const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   const rememberSearch = async (value = trimmed) => {
     const clean = value.trim();
@@ -166,7 +169,7 @@ export default function SearchScreen() {
       {!!artists.length && (
         <SearchRail title="Artists">
           {artists.slice(0, 12).map((artist, index) => {
-            const cover = imageUrl(artist.image as any);
+            const cover = imageUrl(artist.image as any, 112);
             const id = String(artist.id || '');
             const navigable = Boolean(id && !id.startsWith('search-'));
             return (
@@ -187,7 +190,7 @@ export default function SearchScreen() {
       {!!albums.length && (
         <SearchRail title="Albums">
           {albums.slice(0, 12).map((album, index) => {
-            const cover = imageUrl(album.image as any);
+            const cover = imageUrl(album.image as any, 126);
             const id = String(album.id || '');
             const navigable = Boolean(id && !id.startsWith('search-'));
             return (
@@ -251,7 +254,10 @@ export default function SearchScreen() {
       </View>
 
       {!trimmed ? (
-        <ScrollView contentContainerStyle={styles.idleContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.idleContent, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+        >
           {!!recentSearches.length ? (
             <View>
               <View style={styles.recentHead}>
@@ -307,13 +313,20 @@ export default function SearchScreen() {
               trailing={isLiked(item.id) ? <Text style={styles.likedIndicator}>♥</Text> : null}
             />
           )}
-          contentContainerStyle={styles.results}
+          contentContainerStyle={[styles.results, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       {loading && <View style={styles.inlineLoading}><ActivityIndicator color="#AAA" size="small" /></View>}
-      {!!error && !!results && <Text numberOfLines={1} style={styles.nonBlockingError}>{error}</Text>}
+      {!!error && !!results && (
+        <Text
+          numberOfLines={1}
+          style={[styles.nonBlockingError, { bottom: Math.max(16, contentBottomInset - 12) }]}
+        >
+          {error}
+        </Text>
+      )}
       <SongActionsSheet song={actionSong} visible={actionSong != null} onClose={() => setActionSong(null)} />
     </SafeAreaView>
   );
@@ -337,7 +350,7 @@ const styles = StyleSheet.create({
   searchBox: { height: 50, borderRadius: 15, backgroundColor: '#131313', borderWidth: StyleSheet.hairlineWidth, borderColor: '#272727', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 9 },
   input: { flex: 1, color: '#FFF', fontSize: 15, paddingVertical: 0 },
   clear: { width: 30, height: 32, alignItems: 'center', justifyContent: 'center' },
-  results: { paddingHorizontal: 18, paddingBottom: 165 },
+  results: { paddingHorizontal: 18 },
   railSection: { marginBottom: 27, paddingTop: 8 },
   rail: { gap: 12, paddingRight: 10 },
   sectionTitle: { color: '#EEE', fontSize: 19, fontWeight: '800', marginBottom: 12 },
@@ -349,7 +362,7 @@ const styles = StyleSheet.create({
   entityTitle: { color: '#E8E8E8', fontSize: 13, fontWeight: '700', marginTop: 8 },
   entityMeta: { color: '#676767', fontSize: 11, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
-  idleContent: { flexGrow: 1, paddingHorizontal: 18, paddingBottom: 160 },
+  idleContent: { flexGrow: 1, paddingHorizontal: 18 },
   discover: { flex: 1, justifyContent: 'center', paddingHorizontal: 12, paddingBottom: 80 },
   discoverKicker: { color: '#575757', fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
   discoverTitle: { color: '#F4F4F4', fontSize: 28, lineHeight: 33, fontWeight: '800', letterSpacing: -0.8, marginTop: 8 },
@@ -365,6 +378,6 @@ const styles = StyleSheet.create({
   retryText: { color: '#080808', fontWeight: '800', fontSize: 12 },
   empty: { color: '#777', textAlign: 'center', paddingVertical: 60 },
   inlineLoading: { position: 'absolute', top: 101, right: 32 },
-  nonBlockingError: { position: 'absolute', left: 20, right: 20, bottom: 154, color: '#D98787', fontSize: 11, backgroundColor: '#171010', borderRadius: 10, padding: 9 },
+  nonBlockingError: { position: 'absolute', left: 20, right: 20, color: '#D98787', fontSize: 11, backgroundColor: '#171010', borderRadius: 10, padding: 9 },
   likedIndicator: { color: '#FFF', fontSize: 17, marginLeft: 8 },
 });
