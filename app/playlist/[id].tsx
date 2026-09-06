@@ -215,7 +215,7 @@ export default function PlaylistScreen() {
   const count = songs.length || Number(playlist.songCount || playlist.songIds?.length || 0);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <FlatList
         data={songs}
         keyExtractor={(item, index) => item.id || String(index)}
@@ -358,7 +358,7 @@ function BackButton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
-  list: { paddingHorizontal: 18, paddingBottom: 150 },
+  list: { paddingHorizontal: 18, paddingBottom: 32 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', gap: 8 },

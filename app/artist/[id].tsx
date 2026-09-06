@@ -125,11 +125,11 @@ export default function ArtistScreen() {
     );
   }
 
-  const cover = imageUrl(artist.image as any);
+  const cover = imageUrl(artist.image as any, 208);
   const followerText = artist.followerCount ? `${Number(artist.followerCount).toLocaleString()} followers` : '';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <FlatList
         data={visibleSongs}
         keyExtractor={(item, index) => item.id || String(index)}
@@ -185,7 +185,7 @@ export default function ArtistScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.albumRail}>
                   {albums.slice(0, 16).map((album, index) => {
                     const albumId = String(album.id || '');
-                    const albumCover = imageUrl(album.image as any);
+                    const albumCover = imageUrl(album.image as any, 126);
                     return (
                       <Pressable
                         key={albumId || `${albumTitle(album)}-${index}`}
@@ -241,7 +241,7 @@ function BackButton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
-  list: { paddingHorizontal: 18, paddingBottom: 150 },
+  list: { paddingHorizontal: 18, paddingBottom: 32 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', gap: 8 },

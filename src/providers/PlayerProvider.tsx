@@ -534,7 +534,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         title: song.name,
         artist: artistNames(song),
         albumTitle: albumName(song),
-        artworkUrl: artworkUrl(song) || undefined,
+        artworkUrl: artworkUrl(song, 512) || undefined,
       },
       {
         showSeekBackward: true,
