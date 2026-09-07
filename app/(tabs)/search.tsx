@@ -22,6 +22,12 @@ import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import {
+  SONG_LIST_BATCHING_PERIOD_MS,
+  SONG_LIST_BATCH_SIZE,
+  SONG_LIST_INITIAL_RENDER,
+  SONG_LIST_WINDOW_SIZE,
+} from '@/src/lib/listPerformance';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song } from '@/src/types';
@@ -297,6 +303,10 @@ export default function SearchScreen() {
         <FlatList<Song>
           data={songs}
           keyExtractor={(item, index) => item.id || String(index)}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
           ListEmptyComponent={!loading && !hasResults ? <Text style={styles.empty}>No results found for “{trimmed}”.</Text> : null}
