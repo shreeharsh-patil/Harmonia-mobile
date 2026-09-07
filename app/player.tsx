@@ -46,6 +46,18 @@ function formatBitrate(value?: number | null) {
   return `${kbps} kbps`;
 }
 
+function diagnosticSourceLabel(source?: string | null) {
+  switch (source) {
+    case 'embedded': return 'Embedded';
+    case 'jiosaavn': return 'Refreshed catalog';
+    case 'backend-search': return 'Harmonia fallback';
+    case 'youtube': return 'YouTube fallback';
+    case 'offline': return 'Offline download';
+    case 'local': return 'Local device';
+    default: return source || 'Not loaded';
+  }
+}
+
 function DiagnosticsRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.diagnosticsRow}>
@@ -497,7 +509,7 @@ export default function PlayerScreen() {
               {diagnosticsExpanded && (
                 <View style={styles.diagnosticsList}>
                   <DiagnosticsRow label="Provider" value={playbackDiagnostics?.provider || 'Not reported'} />
-                  <DiagnosticsRow label="Source" value={playbackDiagnostics?.source || 'Not loaded'} />
+                  <DiagnosticsRow label="Source" value={diagnosticSourceLabel(playbackDiagnostics?.source)} />
                   <DiagnosticsRow label="Adaptive pipeline" value={adaptivePipelineEnabled ? adaptivePipelineStatus : 'disabled'} />
                   <DiagnosticsRow
                     label="Pipeline quality"
