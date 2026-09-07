@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Image } from 'expo-image';
 import {
   ImageStyle,
@@ -16,7 +17,7 @@ type Props = {
   style?: StyleProp<ImageStyle>;
 };
 
-export function TrackArtwork({ song, size, radius = 12, style }: Props) {
+export const TrackArtwork = memo(function TrackArtwork({ song, size, radius = 12, style }: Props) {
   const url = artworkUrl(song, size);
 
   if (!url) {
@@ -34,9 +35,10 @@ export function TrackArtwork({ song, size, radius = 12, style }: Props) {
       contentFit="cover"
       transition={120}
       cachePolicy="memory-disk"
+      recyclingKey={String(song?.id || url)}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   fallback: {

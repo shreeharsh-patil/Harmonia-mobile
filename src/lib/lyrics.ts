@@ -69,24 +69,31 @@ export function parseLrc(value?: string | null): LyricLine[] {
   return lines.sort((a, b) => a.time - b.time);
 }
 
+function lastTimedIndexAtOrBefore<T>(items: T[], threshold: number, timeOf: (item: T) => number) {
+  let low = 0;
+  let high = items.length - 1;
+  let result = -1;
+
+  while (low <= high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (timeOf(items[middle]) <= threshold) {
+      result = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+
+  return result;
+}
+
 export function activeLyricIndex(lines: LyricLine[], position: number) {
   if (!lines.length) return -1;
-  let active = 0;
-  for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index].time <= position + 0.08) active = index;
-    else break;
-  }
-  return active;
+  return Math.max(0, lastTimedIndexAtOrBefore(lines, position + 0.08, (line) => line.time));
 }
 
 export function activeLyricWordIndex(line: LyricLine | undefined, position: number) {
   const words = line?.words || [];
   if (!words.length) return -1;
-
-  let active = -1;
-  for (let index = 0; index < words.length; index += 1) {
-    if (words[index].time <= position + 0.04) active = index;
-    else break;
-  }
-  return active;
+  return lastTimedIndexAtOrBefore(words, position + 0.04, (word) => word.time);
 }
