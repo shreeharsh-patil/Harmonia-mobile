@@ -175,14 +175,15 @@ export default function PlayerScreen() {
     let active = true;
     if (panel !== 'lyrics' || !currentSong) return;
 
+    const controller = new AbortController();
     setLyricsLoading(true);
     setLyrics(null);
-    fetchLyrics(currentSong)
+    fetchLyrics(currentSong, controller.signal)
       .then((value) => {
         if (active) setLyrics(value);
       })
-      .catch(() => {
-        if (active) setLyrics(null);
+      .catch((cause: any) => {
+        if (active && cause?.name !== 'AbortError') setLyrics(null);
       })
       .finally(() => {
         if (active) setLyricsLoading(false);
@@ -190,6 +191,7 @@ export default function PlayerScreen() {
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [currentSong?.id, panel]);
 
