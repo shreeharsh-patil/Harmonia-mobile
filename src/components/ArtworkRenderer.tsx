@@ -142,7 +142,9 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
   return (
     <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
       <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
-      {!!canvasUrl && foreground && !batterySaver && !reduceMotion && <MotionCanvas url={canvasUrl} active={foreground} />}
+      {!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion && (
+        <MotionCanvas url={canvasUrl} active={foreground} />
+      )}
     </View>
   );
 }

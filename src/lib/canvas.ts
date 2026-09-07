@@ -9,6 +9,7 @@ export type CanvasMedia = {
 };
 
 const SPOTIFY_TRACK_ID = /^[A-Za-z0-9]{22}$/;
+const CANVAS_TIMEOUT_MS = 10_000;
 
 function candidateString(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -40,28 +41,39 @@ export function spotifyTrackId(song: Song | null | undefined) {
 export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promise<CanvasMedia | null> {
   if (!HAS_HARMONIA_API) return null;
 
-  const trackId = spotifyTrackId(song);
-  const params = new URLSearchParams({
-    source: String(song.source || song.provider || 'jiosaavn'),
-    sourceId: String(song.songId || song.id || ''),
-    trackName: String(song.name || song.title || ''),
-    artistName: artistNames(song),
-    duration: String(song.duration || 0),
-  });
-  if (trackId) params.set('spotifyId', trackId);
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', abortFromParent, { once: true });
+  const timeout = setTimeout(() => controller.abort(), CANVAS_TIMEOUT_MS);
 
-  const response = await fetch(
-    `${HARMONIA_API_URL}/api/proxy/spotify-canvas?${params.toString()}`,
-    { headers: { Accept: 'application/json' }, signal }
-  );
-  if (!response.ok) return null;
+  try {
+    const trackId = spotifyTrackId(song);
+    const params = new URLSearchParams({
+      source: String(song.source || song.provider || 'jiosaavn'),
+      sourceId: String(song.songId || song.id || ''),
+      trackName: String(song.name || song.title || ''),
+      artistName: artistNames(song),
+      duration: String(song.duration || 0),
+    });
+    if (trackId) params.set('spotifyId', trackId);
 
-  const payload = await response.json().catch(() => null);
-  const canvasUrl = candidateString(payload?.canvasUrl);
-  if (!/^https:\/\//i.test(canvasUrl)) return null;
-  return {
-    id: candidateString(payload?.spotifyTrackId) || undefined,
-    url: canvasUrl,
-    trackUri: payload?.spotifyTrackId ? `spotify:track:${payload.spotifyTrackId}` : undefined,
-  };
+    const response = await fetch(
+      `${HARMONIA_API_URL}/api/proxy/spotify-canvas?${params.toString()}`,
+      { headers: { Accept: 'application/json' }, signal: controller.signal }
+    );
+    if (!response.ok) return null;
+
+    const payload = await response.json().catch(() => null);
+    const canvasUrl = candidateString(payload?.canvasUrl);
+    if (!/^https:\/\//i.test(canvasUrl)) return null;
+    return {
+      id: candidateString(payload?.spotifyTrackId) || undefined,
+      url: canvasUrl,
+      trackUri: payload?.spotifyTrackId ? `spotify:track:${payload.spotifyTrackId}` : undefined,
+    };
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromParent);
+  }
 }

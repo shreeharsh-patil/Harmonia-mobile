@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,6 +22,16 @@ export default function ImportPlaylistScreen() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const navigationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (navigationTimerRef.current) {
+        clearTimeout(navigationTimerRef.current);
+        navigationTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const submit = async () => {
     if (!token) {
@@ -36,7 +46,11 @@ export default function ImportPlaylistScreen() {
       const result = await importSpotifyPlaylist(token, url.trim());
       setStatus(result.message || 'Playlist imported');
       await refresh();
-      setTimeout(() => router.back(), 700);
+      if (navigationTimerRef.current) clearTimeout(navigationTimerRef.current);
+      navigationTimerRef.current = setTimeout(() => {
+        navigationTimerRef.current = null;
+        router.back();
+      }, 700);
     } catch (cause: any) {
       setError(cause?.message || 'Unable to import this playlist');
     } finally {
