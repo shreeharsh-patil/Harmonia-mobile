@@ -32,7 +32,6 @@ export type ResolvedStreamDiagnostics = {
   cache: 'hit' | 'miss';
   expiresAt: number | null;
   recoveryAttempt?: number | null;
-  skipEmbedded?: boolean;
 };
 
 export type ResolvedStream = {
@@ -59,6 +58,7 @@ export type ResolveTrackOptions = {
   signal?: AbortSignal;
   priority?: 'high' | 'medium' | 'low';
   recoveryAttempt?: number | null;
+  skipEmbedded?: boolean;
 };
 
 type AudioCandidate = {
