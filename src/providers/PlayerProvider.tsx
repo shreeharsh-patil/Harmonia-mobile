@@ -79,6 +79,7 @@ type LoadTrackOptions = {
   forceFresh?: boolean;
   excludeProviders?: string[];
   skipAdaptive?: boolean;
+  skipEmbedded?: boolean;
 };
 
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
@@ -467,6 +468,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           signal: controller.signal,
           excludeProviders: options.excludeProviders,
           recoveryAttempt: options.recoveryAttempt,
+          skipEmbedded: options.skipEmbedded,
         });
 
         if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
@@ -487,6 +489,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           signal: controller.signal,
           priority: 'high',
           recoveryAttempt: options.recoveryAttempt,
+          skipEmbedded: options.skipEmbedded,
         });
 
         if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
@@ -1234,8 +1237,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
               recoveryAttempt: attempt,
               forceFresh: true,
               skipAdaptive: true,
+              skipEmbedded: true,
               excludeProviders:
-                attempt >= 2 && failedProvider
+                attempt >= 3 && failedProvider
                   ? [failedProvider]
                   : [],
             }
