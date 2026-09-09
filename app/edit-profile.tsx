@@ -23,21 +23,36 @@ export default function EditProfileScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
+    setError(null);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Photo library permission is required to choose a profile picture.');
+        return;
+      }
 
-    const compressed = await manipulateAsync(
-      result.assets[0].uri,
-      [{ resize: { width: 512, height: 512 } }],
-      { compress: 0.66, format: SaveFormat.JPEG, base64: true }
-    );
-    if (compressed.base64) {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const compressed = await manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 512, height: 512 } }],
+        { compress: 0.66, format: SaveFormat.JPEG, base64: true }
+      );
+
+      if (!compressed.base64) {
+        setError('Harmonia could not process this image. Try a different photo.');
+        return;
+      }
+
       setImage(`data:image/jpeg;base64,${compressed.base64}`);
+    } catch (cause: any) {
+      setError(cause?.message || 'Harmonia could not open or process this photo.');
     }
   };
 
