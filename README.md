@@ -40,8 +40,7 @@ The mobile app is designed to start playback quickly, prefer on-device/direct so
 - Embedded audio candidate playback
 - Direct **JioSaavn** resolution
 - Direct **YouTube Music / Innertube** fallback
-- Optional Harmonia server fallbacks
-- Spotify Canvas through the Harmonia Canvas proxy
+- Spotify Canvas fetched directly by the APK from the configured Canvas service
 - Synced lyrics with seekable timed lines and words
 - Playlist, liked song, liked album and liked artist synchronization
 - Spotify playlist import through the Harmonia backend
@@ -172,16 +171,12 @@ flowchart TD
     EMBQ -- Yes --> EMB["3 · Embedded Audio"]
     EMBQ -- No / failed --> SAAVN["4 · Direct JioSaavn"]
     SAAVN -- unavailable --> YTM["5 · Direct YouTube Music"]
-    YTM -- unavailable --> YTS["6 · Harmonia YouTube Server Fallback"]
-    YTS -- unavailable --> BACK["7 · Harmonia Backend Search Fallback"]
 
     LOCAL --> PLAYER["expo-audio"]
     OFF --> PLAYER
     EMB --> PLAYER
     SAAVN --> PLAYER
     YTM --> PLAYER
-    YTS --> PLAYER
-    BACK --> PLAYER
 
     PLAYER --> MEDIA["Notification / Lock Screen / Background Audio"]
 ```
@@ -193,8 +188,6 @@ flowchart TD
 3. **Embedded playable URLs already attached to the track**
 4. **Fresh direct JioSaavn resolution**
 5. **Direct YouTube Music / Innertube**
-6. **Optional Harmonia `/api/yt-stream` fallback when a valid YouTube ID exists**
-7. **Optional Harmonia backend stream search**
 
 The resolver also maintains:
 
@@ -320,15 +313,16 @@ Harmonia uses `expo-media-library` to read audio assets and intentionally batche
 
 # 🎬 Spotify Canvas
 
-Canvas rendering uses `expo-video` and the Harmonia backend proxy.
+Canvas rendering uses `expo-video` and calls the configured Spotify Canvas service directly from the APK. Canvas lookup traffic does not pass through the Harmonia account backend.
 
 Behavior includes:
 
 - Spotify identity extraction from normalized track metadata
 - bounded Canvas lookup timeout
 - cancellation when the active track changes
-- LRU-style Canvas URL cache
-- negative-result cache
+- in-memory LRU-style Canvas URL cache
+- persistent AsyncStorage Canvas cache (7-day positive TTL, bounded to 200 tracks)
+- short negative-result cache to avoid repeated misses
 - automatic pause/unmount when the app is backgrounded
 - disabled motion when Lyrics, Queue or Tools replaces the artwork view
 - Reduced Motion support
@@ -369,6 +363,7 @@ Harmonia Mobile is intentionally **local/direct-first**, but account synchroniza
 - queue / shuffle / repeat
 - local history
 - local Replay statistics
+- Spotify Canvas when `EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL` is configured
 - bundled build-time catalog
 - playback speed
 - sleep timer
@@ -383,8 +378,6 @@ Harmonia Mobile is intentionally **local/direct-first**, but account synchroniza
 - Spotify playlist import
 - cloud library sync
 - server recommendations where available
-- Spotify Canvas proxy
-- optional server stream fallbacks
 
 The app does **not** embed MongoDB credentials or database administration credentials inside the APK.
 
@@ -536,8 +529,9 @@ Copy the values you need from `.env.example`.
 # Optional Harmonia account/catalog backend.
 EXPO_PUBLIC_HARMONIA_API_URL=https://your-harmonia-api.example
 
-# Optional dedicated stream fallback backend.
-EXPO_PUBLIC_HARMONIA_STREAM_API_URL=https://your-harmonia-stream-backend.example
+# Spotify Canvas service called directly by the APK (public URL, not a secret).
+EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL=
+
 ```
 
 For EAS/catalog builds, the following are build secrets rather than public app variables:
