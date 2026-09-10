@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -29,28 +29,47 @@ export default function MixScreen() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const load = async () => {
+    const generation = ++loadGenerationRef.current;
     if (!token || !id) {
+      setMix(null);
+      setSongs([]);
       setLoading(false);
+      if (token && !id) setError('Mix ID is missing');
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
       const mixes = await fetchRecommendedMixes(token);
       const found = mixes.find((item) => String(item._mixId || item.id || '') === id) || null;
       if (!found) throw new Error('This mix is no longer available');
+      const nextSongs = await fetchSongs((found.songIds || []).slice(0, 100));
+      if (generation !== loadGenerationRef.current) return;
+
       setMix(found);
-      setSongs(await fetchSongs((found.songIds || []).slice(0, 100)));
+      setSongs(nextSongs);
     } catch (cause: any) {
-      setError(cause?.message || 'Unable to load this mix');
+      if (generation === loadGenerationRef.current) {
+        setError(cause?.message || 'Unable to load this mix');
+      }
     } finally {
-      setLoading(false);
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [id, token]);
+  useEffect(() => {
+    setMix(null);
+    setSongs([]);
+    setActionSong(null);
+    void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
+  }, [id, token]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;

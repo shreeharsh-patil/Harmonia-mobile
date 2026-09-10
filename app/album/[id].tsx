@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -33,6 +33,7 @@ export default function AlbumScreen() {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const songs = useMemo(
     () => (Array.isArray(album?.songs) ? album.songs : []).map((song) => normalizeSong(song as any)),
@@ -40,19 +41,37 @@ export default function AlbumScreen() {
   );
 
   const load = async () => {
-    if (!id) return;
+    const generation = ++loadGenerationRef.current;
+    if (!id) {
+      setAlbum(null);
+      setLoading(false);
+      setError('Album ID is missing');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      setAlbum(await fetchAlbum(id));
+      const nextAlbum = await fetchAlbum(id);
+      if (generation !== loadGenerationRef.current) return;
+      setAlbum(nextAlbum);
     } catch (cause: any) {
-      setError(cause?.message || 'Unable to load this album');
+      if (generation === loadGenerationRef.current) {
+        setError(cause?.message || 'Unable to load this album');
+      }
     } finally {
-      setLoading(false);
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [id]);
+  useEffect(() => {
+    setAlbum(null);
+    setActionSong(null);
+    void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
+  }, [id]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;
