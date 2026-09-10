@@ -9,7 +9,7 @@ import {
 } from 'react';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { HARMONIA_API_URL } from '@/src/config';
+import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import {
   ApiError,
   exchangeMobileTicket,
@@ -165,6 +165,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setAuthenticating(true);
     setError(null);
     try {
+      if (!HAS_HARMONIA_API) {
+        setError('Sign-in needs your Harmonia backend. Playback can still work without it.');
+        return;
+      }
       await WebBrowser.openBrowserAsync(
         `${HARMONIA_API_URL}/auth/mobile-google-start?provider=${encodeURIComponent(provider)}`
       );

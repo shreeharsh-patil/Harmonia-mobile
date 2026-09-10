@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import CryptoJS from 'crypto-js';
 import {
   StreamResolver,
   createHarmoniaProviders,
@@ -39,6 +40,34 @@ function json(data: any, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function encryptedSaavnUrl(url: string) {
+  const key = CryptoJS.enc.Utf8.parse('38346591');
+  const encrypted = CryptoJS.DES.encrypt(url, key, {
+    mode: CryptoJS.mode.ECB,
+    padding: CryptoJS.pad.Pkcs7,
+  });
+  return encrypted.ciphertext.toString(CryptoJS.enc.Base64);
+}
+
+function saavnDetails(id: string, url: string, options: { supports320?: boolean; title?: string } = {}) {
+  return {
+    [id]: {
+      id,
+      title: options.title || 'Fresh',
+      image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+      more_info: {
+        album: 'Album',
+        duration: '180',
+        encrypted_media_url: encryptedSaavnUrl(url),
+        '320kbps': options.supports320 === false ? 'false' : 'true',
+        artistMap: {
+          primary_artists: [{ id: 'artist-1', name: 'Artist' }],
+        },
+      },
+    },
+  };
 }
 
 test('1 embedded audio is selected without a network request', async () => {
@@ -99,26 +128,19 @@ test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () 
   assert.equal(result.provider, 'youtube');
 });
 
-test('4 JioSaavn refresh resolves the best requested downloadUrl', async () => {
+test('4 JioSaavn refresh resolves directly on-device at requested quality', async () => {
   const calls: string[] = [];
   const providers = createHarmoniaProviders({
     apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
-      calls.push(String(input));
-      return json({
-        success: true,
-        data: [{
-          id: 'jio-1',
-          name: 'Fresh',
-          artist: 'Artist',
-          source: 'jiosaavn',
-          downloadUrl: [
-            { url: 'https://saavncdn.com/160.m4a', quality: '160kbps', bitrate: 160 },
-            { url: 'https://saavncdn.com/320.m4a', quality: '320kbps', bitrate: 320 },
-          ],
-        }],
-      });
+      const url = String(input);
+      calls.push(url);
+      assert.match(url, /jiosaavn\.com\/api\.php/);
+      return json(saavnDetails(
+        'jio-1',
+        'https://aac.saavncdn.com/001/fresh_96.mp4?Expires=9999999999',
+      ));
     },
   });
   const resolver = new StreamResolver(providers, {
@@ -129,12 +151,13 @@ test('4 JioSaavn refresh resolves the best requested downloadUrl', async () => {
     quality: 'high',
   });
 
-  assert.match(result.url, /320/);
+  assert.match(result.url, /_320\.mp4/);
   assert.equal(result.source, 'jiosaavn');
   assert.equal(calls.length, 1);
+  assert.ok(calls.every((value) => !value.includes('catalog.test/api/songs')));
 });
 
-test('5 JioSaavn failure falls through to backend-search', async () => {
+test('5 direct JioSaavn failure falls through to optional backend-search', async () => {
   const calls: string[] = [];
   const providers = createHarmoniaProviders({
     apiBase: 'https://catalog.test',
@@ -142,7 +165,7 @@ test('5 JioSaavn failure falls through to backend-search', async () => {
     fetchImpl: async (input) => {
       const url = String(input);
       calls.push(url);
-      if (url.includes('/api/songs')) return json({ error: 'provider down' }, 500);
+      if (url.includes('jiosaavn.com/api.php')) return json({ error: 'provider down' }, 500);
       if (url.includes('/api/stream-track')) {
         return json({
           streamUrl: 'https://piped.test/audio.webm?token=secret',
@@ -161,16 +184,22 @@ test('5 JioSaavn failure falls through to backend-search', async () => {
 
   assert.equal(result.source, 'backend-search');
   assert.equal(result.provider, 'backend-search');
+  assert.ok(calls.some((value) => value.includes('jiosaavn.com/api.php')));
   assert.ok(calls.some((value) => value.includes('/api/stream-track')));
 });
 
-test('6 metadata-only Spotify tracks use backend search, never protected Spotify audio', async () => {
+test('6 metadata-only Spotify tracks try direct JioSaavn before backend fallback', async () => {
+  let saavnSearchCalls = 0;
   let streamCalls = 0;
   const providers = createHarmoniaProviders({
     apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
+      if (url.includes('jiosaavn.com/api.php')) {
+        saavnSearchCalls += 1;
+        return json({ results: [] });
+      }
       assert.match(url, /stream-track/);
       streamCalls += 1;
       return json({
@@ -186,6 +215,7 @@ test('6 metadata-only Spotify tracks use backend search, never protected Spotify
   const result = await resolver.resolve(song({ id: 'spotify-1', source: 'spotify' }));
 
   assert.equal(result.source, 'backend-search');
+  assert.equal(saavnSearchCalls, 1);
   assert.equal(streamCalls, 1);
 });
 
@@ -501,28 +531,20 @@ test('30 JioSaavn catalog resolution stays ahead of YouTube fallback', async () 
   assert.equal(youtubeCalls, 0);
 });
 
-test('31 forceFresh JioSaavn resolution bypasses stale metadata cache', async () => {
+test('31 forceFresh JioSaavn resolution requests a fresh direct stream', async () => {
   let calls = 0;
   const providers = createHarmoniaProviders({
     apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
-      if (!url.includes('/api/songs')) throw new Error('unexpected fallback');
+      if (!url.includes('jiosaavn.com/api.php')) throw new Error('unexpected fallback');
       calls += 1;
-      return json({
-        success: true,
-        data: [{
-          id: 'fresh-jio',
-          name: 'Fresh Jio',
-          artist: 'Artist',
-          source: 'jiosaavn',
-          downloadUrl: [{
-            url: `https://saavncdn.com/fresh-${calls}_160.m4a`,
-            quality: '160kbps',
-          }],
-        }],
-      });
+      return json(saavnDetails(
+        'fresh-jio',
+        `https://aac.saavncdn.com/001/fresh-${calls}_96.mp4?Expires=9999999999`,
+        { title: 'Fresh Jio' },
+      ));
     },
   });
   const resolver = new StreamResolver(providers, {
@@ -541,8 +563,8 @@ test('31 forceFresh JioSaavn resolution bypasses stale metadata cache', async ()
   });
 
   assert.equal(calls, 2);
-  assert.match(first.url, /fresh-1/);
-  assert.match(second.url, /fresh-2/);
+  assert.match(first.url, /fresh-1_160/);
+  assert.match(second.url, /fresh-2_160/);
 });
 
 test('32 recovery retries fresh JioSaavn twice before excluding it for final fallback', async () => {
@@ -564,4 +586,19 @@ test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
     getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 2).delayMs,
     1500
   );
+});
+
+
+test('34 YouTube server fallback is disabled when no Harmonia API is configured', async () => {
+  const providers = createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async () => { throw new Error('network must not be called'); },
+  });
+  const youtube = providers.find((provider) => provider.id === 'youtube');
+  assert.equal(Boolean(youtube?.canResolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+  }), {})), false);
 });
