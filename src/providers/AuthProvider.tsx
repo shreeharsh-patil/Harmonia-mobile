@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import * as Linking from 'expo-linking';
@@ -46,6 +47,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [authenticating, setAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeTicketRef = useRef<string | null>(null);
+  const completedTicketsRef = useRef(new Set<string>());
 
   const adoptSession = useCallback(async (accessToken: string, nextUser: HarmoniaUser) => {
     await writeAccessToken(accessToken);
@@ -67,14 +70,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
     if (!ticket) return;
+    if (
+      completedTicketsRef.current.has(ticket) ||
+      activeTicketRef.current === ticket
+    ) {
+      return;
+    }
 
+    activeTicketRef.current = ticket;
     setAuthenticating(true);
     try {
       const result = await exchangeMobileTicket(ticket);
       await adoptSession(result.accessToken, result.user);
+      completedTicketsRef.current.add(ticket);
     } catch (cause: any) {
       setError(cause?.message || 'Unable to finish sign-in');
     } finally {
+      if (activeTicketRef.current === ticket) activeTicketRef.current = null;
       setAuthenticating(false);
       WebBrowser.dismissBrowser().catch(() => {});
     }
