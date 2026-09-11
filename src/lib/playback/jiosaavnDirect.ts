@@ -8,13 +8,16 @@ export type DirectSaavnCandidate = {
   mimeType: 'audio/mp4';
 };
 
-export type DirectSaavnTrack = {
+export type DirectSaavnSearchTrack = {
   id: string;
   title: string;
   album: string | null;
   artists: string[];
   duration: number | null;
   image: string | null;
+};
+
+export type DirectSaavnTrack = DirectSaavnSearchTrack & {
   candidates: DirectSaavnCandidate[];
 };
 
@@ -200,11 +203,8 @@ function matchScore(
   return score;
 }
 
-function toDirectTrack(raw: any, fallbackId: string): DirectSaavnTrack | null {
+function toSearchTrack(raw: any, fallbackId = ''): DirectSaavnSearchTrack {
   const moreInfo = raw?.more_info || {};
-  const decrypted = decryptMediaUrl(String(moreInfo.encrypted_media_url || ''));
-  if (!decrypted) return null;
-
   return {
     id: String(raw?.id || fallbackId),
     title: decodeHtml(raw?.title || ''),
@@ -214,6 +214,16 @@ function toDirectTrack(raw: any, fallbackId: string): DirectSaavnTrack | null {
     image: typeof raw?.image === 'string'
       ? raw.image.replace(/150x150|50x50/g, '500x500')
       : null,
+  };
+}
+
+function toDirectTrack(raw: any, fallbackId: string): DirectSaavnTrack | null {
+  const moreInfo = raw?.more_info || {};
+  const decrypted = decryptMediaUrl(String(moreInfo.encrypted_media_url || ''));
+  if (!decrypted) return null;
+
+  return {
+    ...toSearchTrack(raw, fallbackId),
     candidates: streamCandidates(
       decrypted,
       String(moreInfo['320kbps'] || '').toLowerCase() === 'true'
@@ -307,5 +317,46 @@ export async function findDirectJioSaavnTrack(
   } catch (error: any) {
     if (signal?.aborted || error?.name === 'AbortError') throw error;
     return null;
+  }
+}
+
+
+export async function searchDirectJioSaavn(
+  query: string,
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+    limit = 30,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    limit?: number;
+  } = {}
+): Promise<DirectSaavnSearchTrack[]> {
+  const cleanQuery = String(query || '').trim();
+  if (!cleanQuery) return [];
+
+  try {
+    const payload = await requestJson({
+      __call: 'search.getResults',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'android',
+      q: cleanQuery,
+      p: '1',
+      n: String(Math.max(1, Math.min(50, limit))),
+    }, { fetchImpl, signal, timeoutMs });
+
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    return results
+      .map((raw: any) => toSearchTrack(raw))
+      .filter((track: DirectSaavnSearchTrack) => Boolean(track.id && track.title))
+      .slice(0, limit);
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return [];
   }
 }
