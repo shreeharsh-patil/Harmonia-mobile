@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import type { StreamQuality } from '@/src/lib/api';
@@ -54,6 +55,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [cellularQuality, setCellularQualityState] = useState<StreamQuality>(DEFAULTS.cellularQuality);
   const [batterySaver, setBatterySaverState] = useState(DEFAULTS.batterySaver);
   const [wifiOnlyDownloads, setWifiOnlyDownloadsState] = useState(DEFAULTS.wifiOnlyDownloads);
+  const prefsRef = useRef<StoredPreferences>({ ...DEFAULTS });
 
   useEffect(() => {
     AsyncStorage.getItem(PREFS_KEY)
@@ -61,26 +63,33 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         if (!raw) return;
         const parsed = JSON.parse(raw);
         const qualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
-        setNetworkAwareQualityState(parsed?.networkAwareQuality !== false);
-        setWifiQualityState(qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality);
-        setCellularQualityState(qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality);
-        setBatterySaverState(Boolean(parsed?.batterySaver));
-        setWifiOnlyDownloadsState(Boolean(parsed?.wifiOnlyDownloads));
+        const restored: StoredPreferences = {
+          networkAwareQuality: parsed?.networkAwareQuality !== false,
+          wifiQuality: qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality,
+          cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
+          batterySaver: Boolean(parsed?.batterySaver),
+          wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
+        };
+        prefsRef.current = restored;
+        setNetworkAwareQualityState(restored.networkAwareQuality);
+        setWifiQualityState(restored.wifiQuality);
+        setCellularQualityState(restored.cellularQuality);
+        setBatterySaverState(restored.batterySaver);
+        setWifiOnlyDownloadsState(restored.wifiOnlyDownloads);
       })
       .catch(() => {});
   }, []);
 
   const persist = useCallback((next: Partial<StoredPreferences>) => {
-    const snapshot = {
-      networkAwareQuality,
-      wifiQuality,
-      cellularQuality,
-      batterySaver,
-      wifiOnlyDownloads,
+    // Update a synchronous snapshot first so rapid back-to-back setting
+    // changes cannot overwrite each other with stale render-time values.
+    const snapshot: StoredPreferences = {
+      ...prefsRef.current,
       ...next,
     };
+    prefsRef.current = snapshot;
     AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)).catch(() => {});
-  }, [batterySaver, cellularQuality, networkAwareQuality, wifiOnlyDownloads, wifiQuality]);
+  }, []);
 
   const setNetworkAwareQuality = useCallback((enabled: boolean) => {
     setNetworkAwareQualityState(enabled);
