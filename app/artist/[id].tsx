@@ -44,12 +44,15 @@ export default function ArtistScreen() {
       setSongs([]);
       setAlbums([]);
       setLoading(false);
-      setError('Artist ID is missing');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setArtist(null);
+    setSongs([]);
+    setAlbums([]);
+
     const [artistResult, songsResult, albumsResult] = await Promise.allSettled([
       fetchArtist(id),
       fetchArtistSongs(id),
@@ -68,16 +71,7 @@ export default function ArtistScreen() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    setArtist(null);
-    setSongs([]);
-    setAlbums([]);
-    setActionSong(null);
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [id]);
+  useEffect(() => { void load(); }, [id]);
 
   const visibleSongs = useMemo(() => {
     if (songs.length) return songs;
