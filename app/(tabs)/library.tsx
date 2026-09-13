@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';\nimport AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   FlatList,
@@ -25,7 +26,10 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { Song } from '@/src/types';
 
-type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';\ntype LibraryViewMode = 'list' | 'grid';\n\nconst LIBRARY_VIEW_KEY = 'harmonia.mobile.library-view.v1';
+type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
+type LibraryViewMode = 'list' | 'grid';
+
+const LIBRARY_VIEW_KEY = 'harmonia.mobile.library-view.v1';
 
 function formatBytes(bytes: number) {
   if (!bytes) return '0 MB';
@@ -469,7 +473,11 @@ const styles = StyleSheet.create({
   createRow: { flexDirection: 'row', gap: 9 },
   input: { flex: 1, height: 46, borderRadius: 13, backgroundColor: '#181818', color: '#FFF', paddingHorizontal: 14, fontSize: 14 },
   createButton: { width: 46, height: 46, borderRadius: 13, backgroundColor: '#EFEFEF', alignItems: 'center', justifyContent: 'center' },
-  playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },\n  playlistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },\n  playlistGridCard: { marginBottom: 8 },\n  playlistGridName: { color: '#F0F0F0', fontSize: 14, fontWeight: '750' as any, marginTop: 9 },\n  playlistGridMeta: { color: '#686868', fontSize: 11, marginTop: 3 },
+  playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
+  playlistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  playlistGridCard: { marginBottom: 8 },
+  playlistGridName: { color: '#F0F0F0', fontSize: 14, fontWeight: '750' as any, marginTop: 9 },
+  playlistGridMeta: { color: '#686868', fontSize: 11, marginTop: 3 },
   playlistCopy: { flex: 1, marginLeft: 13, minWidth: 0 },
   playlistName: { color: '#F0F0F0', fontSize: 15, fontWeight: '700' },
   playlistMeta: { color: '#6E6E6E', fontSize: 12, marginTop: 4 },
