@@ -134,3 +134,22 @@ test('search UI no longer downgrades backend-free discovery to song-only copy', 
   assert.match(source, /placeholder="Songs, artists, albums, playlists"/);
   assert.match(source, /Bundled Harmonia discovery plus direct JioSaavn/);
 });
+
+
+test('Wi-Fi-only downloads are persisted and enforced before stream resolution', async () => {
+  const prefs = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  const offline = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  const settings = await readFile('app/settings.tsx', 'utf8');
+
+  assert.match(prefs, /wifiOnlyDownloads: boolean/);
+  assert.match(prefs, /setWifiOnlyDownloadsState/);
+  assert.match(prefs, /persist\(\{ wifiOnlyDownloads: enabled \}\)/);
+
+  assert.match(offline, /wifiOnlyDownloads &&/);
+  assert.match(offline, /NetworkStateType\.WIFI/);
+  assert.match(offline, /NetworkStateType\.ETHERNET/);
+  assert.match(offline, /Wi-Fi-only downloads are enabled/);
+
+  assert.match(settings, /title="Wi-Fi-only downloads"/);
+  assert.match(settings, /setWifiOnlyDownloads\(!wifiOnlyDownloads\)/);
+});

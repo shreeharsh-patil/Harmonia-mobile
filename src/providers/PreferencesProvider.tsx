@@ -18,12 +18,14 @@ type PreferencesContextValue = {
   wifiQuality: StreamQuality;
   cellularQuality: StreamQuality;
   batterySaver: boolean;
+  wifiOnlyDownloads: boolean;
   networkType: Network.NetworkStateType | undefined;
   networkConnected: boolean;
   setNetworkAwareQuality: (enabled: boolean) => void;
   setWifiQuality: (quality: StreamQuality) => void;
   setCellularQuality: (quality: StreamQuality) => void;
   setBatterySaver: (enabled: boolean) => void;
+  setWifiOnlyDownloads: (enabled: boolean) => void;
   qualityFor: (fallback: StreamQuality) => StreamQuality;
 };
 
@@ -34,6 +36,7 @@ type StoredPreferences = {
   wifiQuality: StreamQuality;
   cellularQuality: StreamQuality;
   batterySaver: boolean;
+  wifiOnlyDownloads: boolean;
 };
 
 const DEFAULTS: StoredPreferences = {
@@ -41,6 +44,7 @@ const DEFAULTS: StoredPreferences = {
   wifiQuality: 'maximum',
   cellularQuality: 'normal',
   batterySaver: false,
+  wifiOnlyDownloads: false,
 };
 
 export function PreferencesProvider({ children }: PropsWithChildren) {
@@ -49,6 +53,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [wifiQuality, setWifiQualityState] = useState<StreamQuality>(DEFAULTS.wifiQuality);
   const [cellularQuality, setCellularQualityState] = useState<StreamQuality>(DEFAULTS.cellularQuality);
   const [batterySaver, setBatterySaverState] = useState(DEFAULTS.batterySaver);
+  const [wifiOnlyDownloads, setWifiOnlyDownloadsState] = useState(DEFAULTS.wifiOnlyDownloads);
 
   useEffect(() => {
     AsyncStorage.getItem(PREFS_KEY)
@@ -60,6 +65,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
         setWifiQualityState(qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality);
         setCellularQualityState(qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality);
         setBatterySaverState(Boolean(parsed?.batterySaver));
+        setWifiOnlyDownloadsState(Boolean(parsed?.wifiOnlyDownloads));
       })
       .catch(() => {});
   }, []);
@@ -70,10 +76,11 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       wifiQuality,
       cellularQuality,
       batterySaver,
+      wifiOnlyDownloads,
       ...next,
     };
     AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)).catch(() => {});
-  }, [batterySaver, cellularQuality, networkAwareQuality, wifiQuality]);
+  }, [batterySaver, cellularQuality, networkAwareQuality, wifiOnlyDownloads, wifiQuality]);
 
   const setNetworkAwareQuality = useCallback((enabled: boolean) => {
     setNetworkAwareQualityState(enabled);
@@ -93,6 +100,11 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const setBatterySaver = useCallback((enabled: boolean) => {
     setBatterySaverState(enabled);
     persist({ batterySaver: enabled });
+  }, [persist]);
+
+  const setWifiOnlyDownloads = useCallback((enabled: boolean) => {
+    setWifiOnlyDownloadsState(enabled);
+    persist({ wifiOnlyDownloads: enabled });
   }, [persist]);
 
   const qualityFor = useCallback((fallback: StreamQuality): StreamQuality => {
@@ -115,12 +127,14 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     wifiQuality,
     cellularQuality,
     batterySaver,
+    wifiOnlyDownloads,
     networkType: network.type,
     networkConnected: network.isConnected !== false && network.type !== Network.NetworkStateType.NONE,
     setNetworkAwareQuality,
     setWifiQuality,
     setCellularQuality,
     setBatterySaver,
+    setWifiOnlyDownloads,
     qualityFor,
   }), [
     batterySaver,
@@ -131,8 +145,10 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     qualityFor,
     setBatterySaver,
     setCellularQuality,
+    setWifiOnlyDownloads,
     setNetworkAwareQuality,
     setWifiQuality,
+    wifiOnlyDownloads,
     wifiQuality,
   ]);
 
