@@ -1,4 +1,4 @@
-import { HARMONIA_API_URL } from '@/src/config';
+import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import { artistNames } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 
@@ -38,6 +38,8 @@ export function spotifyTrackId(song: Song | null | undefined) {
 }
 
 export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promise<CanvasMedia | null> {
+  if (!HAS_HARMONIA_API) return null;
+
   const trackId = spotifyTrackId(song);
   const params = new URLSearchParams({
     source: String(song.source || song.provider || 'jiosaavn'),
