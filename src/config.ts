@@ -8,7 +8,8 @@ export const HARMONIA_API_URL = publicUrl(
 
 export const HARMONIA_STREAM_API_URL = publicUrl(
   process.env.EXPO_PUBLIC_HARMONIA_STREAM_API_URL ||
-  process.env.EXPO_PUBLIC_HARMONIA_BACKEND_URL
+  process.env.EXPO_PUBLIC_HARMONIA_BACKEND_URL ||
+  HARMONIA_API_URL
 );
 
 export const HAS_HARMONIA_API = Boolean(HARMONIA_API_URL);
