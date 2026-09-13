@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+import { RECENT_SEARCHES_KEY } from '@/src/config';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
@@ -24,7 +25,6 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song } from '@/src/types';
 
-const RECENT_SEARCHES_KEY = 'harmonia.mobile.recent-searches.v1';
 const MAX_RECENT_SEARCHES = 10;
 
 export default function SearchScreen() {
@@ -36,6 +36,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const [retrySeq, setRetrySeq] = useState(0);
 
   const trimmed = query.trim();
 
@@ -79,7 +80,7 @@ export default function SearchScreen() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [trimmed]);
+  }, [trimmed, retrySeq]);
 
   const songs = useMemo(() => results?.songs?.results || [], [results]);
   const albums = useMemo(() => results?.albums?.results || [], [results]);
@@ -244,7 +245,7 @@ export default function SearchScreen() {
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Search failed</Text>
           <Text style={styles.error}>{error}</Text>
-          <Pressable onPress={() => setQuery((value) => `${value} `.trim())} style={styles.retry}>
+          <Pressable onPress={() => setRetrySeq((value) => value + 1)} style={styles.retry}>
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </View>
