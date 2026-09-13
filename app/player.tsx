@@ -65,6 +65,9 @@ export default function PlayerScreen() {
     next,
     seek,
     playAt,
+    removeQueueItem,
+    moveQueueItem,
+    clearUpcoming,
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
@@ -269,25 +272,53 @@ export default function PlayerScreen() {
           {panel === 'queue' && (
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Up next</Text>
-                <Text style={styles.panelMeta}>{currentIndex + 1} of {queue.length}</Text>
+                <View>
+                  <Text style={styles.panelTitle}>Up next</Text>
+                  <Text style={styles.panelMeta}>{currentIndex + 1} of {queue.length}</Text>
+                </View>
+                {queue.length > currentIndex + 1 && (
+                  <Pressable onPress={clearUpcoming} hitSlop={10}>
+                    <Text style={styles.queueClear}>Clear upcoming</Text>
+                  </Pressable>
+                )}
               </View>
               <View style={styles.queueList}>
-                {queue.slice(Math.max(0, currentIndex - 1), currentIndex + 8).map((song, localIndex) => {
+                {queue.slice(Math.max(0, currentIndex - 1), currentIndex + 12).map((song, localIndex) => {
                   const actualIndex = Math.max(0, currentIndex - 1) + localIndex;
                   const active = actualIndex === currentIndex;
                   return (
-                    <Pressable
-                      key={`${song.id}-${actualIndex}`}
-                      onPress={() => void playAt(actualIndex)}
-                      style={[styles.queueRow, active && styles.queueRowActive]}
-                    >
-                      <Text style={styles.queueNumber}>{active ? '▶' : actualIndex + 1}</Text>
-                      <View style={styles.queueCopy}>
-                        <Text numberOfLines={1} style={[styles.queueTitle, active && styles.queueTitleActive]}>{song.name}</Text>
-                        <Text numberOfLines={1} style={styles.queueArtist}>{artistNames(song)}</Text>
-                      </View>
-                    </Pressable>
+                    <View key={`${song.id}-${actualIndex}`} style={[styles.queueRow, active && styles.queueRowActive]}>
+                      <Pressable onPress={() => void playAt(actualIndex)} style={styles.queueMain}>
+                        <Text style={styles.queueNumber}>{active ? '▶' : actualIndex + 1}</Text>
+                        <View style={styles.queueCopy}>
+                          <Text numberOfLines={1} style={[styles.queueTitle, active && styles.queueTitleActive]}>{song.name}</Text>
+                          <Text numberOfLines={1} style={styles.queueArtist}>{artistNames(song)}</Text>
+                        </View>
+                      </Pressable>
+                      {!active && (
+                        <View style={styles.queueActions}>
+                          <Pressable
+                            disabled={actualIndex <= currentIndex + 1}
+                            onPress={() => moveQueueItem(actualIndex, actualIndex - 1)}
+                            hitSlop={8}
+                            style={styles.queueAction}
+                          >
+                            <Text style={[styles.queueActionText, actualIndex <= currentIndex + 1 && styles.queueActionDisabled]}>↑</Text>
+                          </Pressable>
+                          <Pressable
+                            disabled={actualIndex >= queue.length - 1}
+                            onPress={() => moveQueueItem(actualIndex, actualIndex + 1)}
+                            hitSlop={8}
+                            style={styles.queueAction}
+                          >
+                            <Text style={[styles.queueActionText, actualIndex >= queue.length - 1 && styles.queueActionDisabled]}>↓</Text>
+                          </Pressable>
+                          <Pressable onPress={() => removeQueueItem(actualIndex)} hitSlop={8} style={styles.queueAction}>
+                            <Text style={styles.queueRemove}>×</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
                   );
                 })}
               </View>
@@ -476,13 +507,20 @@ const styles = StyleSheet.create({
   lyricActive: { color: '#FFF', fontSize: 24, lineHeight: 29, fontWeight: '800' },
   plainLyrics: { color: '#CFCFCF', fontSize: 17, lineHeight: 25 },
   queueList: { gap: 4 },
-  queueRow: { minHeight: 52, borderRadius: 13, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 },
+  queueRow: { minHeight: 58, borderRadius: 13, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   queueRowActive: { backgroundColor: 'rgba(255,255,255,0.09)' },
+  queueMain: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4 },
   queueNumber: { width: 28, color: '#686868', fontSize: 11, fontWeight: '700' },
   queueCopy: { flex: 1, minWidth: 0 },
   queueTitle: { color: '#D8D8D8', fontSize: 14, fontWeight: '700' },
   queueTitleActive: { color: '#FFF' },
   queueArtist: { color: '#6F6F6F', fontSize: 11, marginTop: 2 },
+  queueClear: { color: '#A8A8A8', fontSize: 12, fontWeight: '700' },
+  queueActions: { flexDirection: 'row', alignItems: 'center' },
+  queueAction: { width: 32, height: 42, alignItems: 'center', justifyContent: 'center' },
+  queueActionText: { color: '#AFAFAF', fontSize: 17, fontWeight: '700' },
+  queueActionDisabled: { color: '#3E3E3E' },
+  queueRemove: { color: '#B8B8B8', fontSize: 22, fontWeight: '400', marginTop: -2 },
   downloadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 8 },
   downloadCopy: { flex: 1, minWidth: 0 },
   downloadTitle: { color: '#D7D7D7', fontSize: 13, lineHeight: 18, marginTop: -4 },
