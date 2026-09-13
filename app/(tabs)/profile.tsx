@@ -14,6 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { usePlayer } from '@/src/providers/PlayerProvider';
+
+function localDayKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
 
 export default function ProfileScreen() {
   const { user, token, loading, signOut, refreshUser } = useAuth();
@@ -40,6 +46,17 @@ export default function ProfileScreen() {
   }
 
   const initial = (user.name || user.email || 'H').trim().charAt(0).toUpperCase();
+  const dailyEntries = Object.entries(listeningStats.dailySeconds || {});
+  const today = localDayKey();
+  const weekKeys = new Set(Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return localDayKey(date);
+  }));
+  const todayMinutes = Math.round((listeningStats.dailySeconds?.[today] || 0) / 60);
+  const weekMinutes = Math.round(
+    dailyEntries.reduce((sum, [key, seconds]) => sum + (weekKeys.has(key) ? Number(seconds || 0) : 0), 0) / 60
+  );
 
   const doRefresh = async () => {
     await Promise.all([refreshUser().catch(() => {}), refresh()]);
@@ -82,8 +99,23 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.rule} />
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
-            <Text style={styles.statLabel}>Minutes</Text>
+            <Text style={styles.statValue}>{todayMinutes}</Text>
+            <Text style={styles.statLabel}>Today min</Text>
+          </View>
+        </View>
+
+        <View style={styles.listeningSummary}>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{weekMinutes}</Text>
+            <Text style={styles.listeningLabel}>Minutes this week</Text>
+          </View>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
+            <Text style={styles.listeningLabel}>Minutes overall</Text>
+          </View>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{listeningStats.playCount}</Text>
+            <Text style={styles.listeningLabel}>Tracks started</Text>
           </View>
         </View>
 
@@ -137,6 +169,10 @@ const styles = StyleSheet.create({
   statValue: { color: '#F2F2F2', fontSize: 23, fontWeight: '800' },
   statLabel: { color: '#6D6D6D', fontSize: 11, fontWeight: '600', marginTop: 4 },
   rule: { height: 42, width: StyleSheet.hairlineWidth, backgroundColor: '#2A2A2A' },
+  listeningSummary: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  listeningMetric: { flex: 1, minHeight: 66, borderRadius: 14, backgroundColor: '#0F0F0F', borderWidth: StyleSheet.hairlineWidth, borderColor: '#222', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  listeningValue: { color: '#E8E8E8', fontSize: 17, fontWeight: '800' },
+  listeningLabel: { color: '#616161', fontSize: 9, fontWeight: '650' as any, textAlign: 'center', marginTop: 4 },
   librarySummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
   librarySummaryText: { color: '#686868', fontSize: 11, fontWeight: '600' },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#444' },
