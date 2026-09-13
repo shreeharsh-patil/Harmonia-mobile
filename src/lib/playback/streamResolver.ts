@@ -13,6 +13,8 @@ import {
   ResolvedStreamMemoryCache,
   getStreamExpiresAt,
 } from '@/src/lib/playback/streamCache';
+
+export { isResolvedStreamFresh } from '@/src/lib/playback/streamCache';
 import { streamHostname } from '@/src/lib/playback/streamDiagnostics';
 
 export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
@@ -56,6 +58,7 @@ export type ResolveTrackOptions = {
   signal?: AbortSignal;
   priority?: 'high' | 'medium' | 'low';
   recoveryAttempt?: number | null;
+  skipEmbedded?: boolean;
 };
 
 type AudioCandidate = {
@@ -370,7 +373,8 @@ export function createHarmoniaProviders({
     {
       id: 'embedded',
       canResolve(track, options) {
-        return options.forceFresh !== true && getAudioCandidates(track, options.quality || 'automatic').length > 0;
+        return options.skipEmbedded !== true &&
+          getAudioCandidates(track, options.quality || 'automatic').length > 0;
       },
       async resolve(track, options) {
         const candidate = getAudioCandidates(track, options.quality || 'automatic')[0];
@@ -432,6 +436,8 @@ export function createHarmoniaProviders({
             { provider: 'jiosaavn' }
           );
         }
+
+        if (options.forceFresh) metadataCache.invalidate(id);
 
         const detailed = await metadataCache.getOrLoad(id, async () => {
           let payload: any;
@@ -537,9 +543,11 @@ function sourceOrderForTrack(track: Song, providers: StreamProvider[]) {
   const map = new Map(providers.map((provider) => [provider.id, provider]));
   const order: StreamResolverProviderId[] = ['embedded'];
 
-  if (youtubeIdOf(track)) order.push('youtube');
-
+  // Harmonia catalog playback is Saavn-first after embedded metadata.
+  // YouTube/server extraction remains a fallback, not the normal catalog path.
   if (!isSpotifyMetadata(track) && isJioSaavnTrack(track)) order.push('jiosaavn');
+
+  if (youtubeIdOf(track)) order.push('youtube');
 
   order.push('backend-search');
 
