@@ -18,7 +18,7 @@ import { activeLyricIndex, parseLrc } from '@/src/lib/lyrics';
 import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
@@ -86,6 +86,8 @@ export default function PlayerScreen() {
     isPlaying,
     isBuffering,
     isLoadingTrack,
+    position,
+    duration,
     error,
     playbackState,
     playbackErrorType,
@@ -116,7 +118,6 @@ export default function PlayerScreen() {
     toggleRepeat,
     toggleShuffle,
   } = usePlayer();
-  const { position, duration } = usePlaybackProgress();
 
   const [progressWidth, setProgressWidth] = useState(1);
   const [panel, setPanel] = useState<Panel>('none');
