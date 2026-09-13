@@ -72,7 +72,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     try {
       const library = await fetchLibrary(token);
       setPlaylists(library.playlists || []);
-      setLikedSongs((library.likedSongs || []).map((song) => persistenceSafeSong(normalizeSong(song as any))));
+      // Keep ephemeral embedded playback candidates in memory. They are stripped
+      // only when data is persisted or sent to account storage.
+      setLikedSongs((library.likedSongs || []).map((song) => normalizeSong(song as any)));
       setLikedPlaylists(library.likedPlaylists || []);
       setLikedAlbums(library.likedAlbums || []);
       setLikedArtists(library.likedArtists || []);
@@ -92,8 +94,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
   const toggleLike = useCallback(async (song: Song) => {
     if (!token) return null;
-    const normalized = persistenceSafeSong(normalizeSong(song as any));
+    const normalized = normalizeSong(song as any);
     if (!normalized.id) return null;
+    const accountSafeSong = persistenceSafeSong(normalized);
 
     const previouslyLiked = likedIds.has(normalized.id);
     setLikedSongs((current) => previouslyLiked
@@ -102,7 +105,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     );
 
     try {
-      const result = await toggleLikedSong(token, normalized);
+      const result = await toggleLikedSong(token, accountSafeSong);
       Haptics.selectionAsync().catch(() => {});
       if (result.liked !== !previouslyLiked) {
         await load(true);
