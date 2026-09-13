@@ -12,7 +12,7 @@ import {
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TrackArtwork } from '@/src/components/TrackArtwork';
+import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
 import { activeLyricIndex, parseLrc } from '@/src/lib/lyrics';
 import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
@@ -176,10 +176,11 @@ export default function PlayerScreen() {
           bounces={false}
         >
           <View style={[styles.artworkWrap, compactArtwork && styles.artworkWrapCompact]}>
-            <TrackArtwork
+            <ArtworkRenderer
               song={currentSong}
               size={compactArtwork ? 244 : 330}
               radius={compactArtwork ? 20 : 25}
+              enableMotion={panel === 'none'}
               style={styles.artwork}
             />
           </View>
