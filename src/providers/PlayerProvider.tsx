@@ -19,12 +19,24 @@ import {
   useState,
 } from 'react';
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
+import { fetchSongSuggestions } from '@/src/lib/api';
 import {
-  fetchSongSuggestions,
-  resolvePlayableSong,
+  getImmediateLocalSource,
+  invalidateResolvedStream,
+  resolveTrackStream,
   type ResolvedStreamDiagnostics,
   type StreamQuality,
-} from '@/src/lib/api';
+} from '@/src/lib/playback/streamResolver';
+import {
+  PlaybackErrorType,
+  PlaybackPipelineError,
+  classifyPlaybackError,
+  type PlaybackErrorTypeValue,
+} from '@/src/lib/playback/playbackErrors';
+import {
+  getPlaybackRecoveryPolicy,
+  MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
+} from '@/src/lib/playback/recoveryPolicy';
 import {
   albumName,
   artistNames,
@@ -62,10 +74,25 @@ type LoadTrackOptions = {
   recordHistory?: boolean;
   bypassOffline?: boolean;
   recovery?: boolean;
+  recoveryAttempt?: number;
+  forceFresh?: boolean;
+  excludeProviders?: string[];
+  skipAdaptive?: boolean;
 };
 
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
 export type RepeatMode = 'off' | 'all' | 'one';
+
+export type PlaybackEngineState =
+  | 'IDLE'
+  | 'RESOLVING'
+  | 'LOADING'
+  | 'READY'
+  | 'PLAYING'
+  | 'PAUSED'
+  | 'BUFFERING'
+  | 'RECOVERING'
+  | 'ERROR';
 
 export type PlaybackHistoryEntry = {
   entryId: string;
@@ -94,6 +121,8 @@ type PlayerContextValue = {
   position: number;
   duration: number;
   error: string | null;
+  playbackState: PlaybackEngineState;
+  playbackErrorType: PlaybackErrorTypeValue | null;
   playbackRate: number;
   streamQuality: StreamQuality;
   sleepTimer: SleepTimerMode;
@@ -136,13 +165,15 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOffline();
-  const { batterySaver, qualityFor } = usePreferences();
+  const { batterySaver, qualityFor, networkConnected } = usePreferences();
   const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playbackState, setPlaybackState] = useState<PlaybackEngineState>('IDLE');
+  const [playbackErrorType, setPlaybackErrorType] = useState<PlaybackErrorTypeValue | null>(null);
   const [playbackRate, setPlaybackRateState] = useState(1);
   const [streamQuality, setStreamQualityState] = useState<StreamQuality>('automatic');
   const [sleepTimer, setSleepTimerState] = useState<SleepTimerMode>('off');
