@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { resolvePlayableSong, type StreamQuality } from '@/src/lib/api';
@@ -43,12 +44,46 @@ function safeName(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 100) || 'track';
 }
 
+export function inferDownloadExtension(
+  url: string,
+  mimeType?: string | null,
+  codec?: string | null
+) {
+  const mime = String(mimeType || '').toLowerCase();
+  const codecName = String(codec || '').toLowerCase();
+
+  if (mime.includes('webm') || codecName.includes('opus')) return 'webm';
+  if (mime.includes('mpeg') || codecName.includes('mp3')) return 'mp3';
+  if (mime.includes('flac') || codecName.includes('flac')) return 'flac';
+  if (mime.includes('wav') || codecName.includes('wav')) return 'wav';
+  if (mime.includes('aac') || codecName.includes('aac')) return 'aac';
+  if (mime.includes('ogg')) return 'ogg';
+
+  try {
+    const pathname = new URL(url).pathname;
+    const match = pathname.match(/\.(m4a|mp4|mp3|aac|ogg|opus|webm|flac|wav)$/i);
+    if (match) {
+      const ext = match[1].toLowerCase();
+      if (ext === 'opus') return 'ogg';
+      if (ext === 'mp4') return 'm4a';
+      return ext;
+    }
+  } catch {}
+
+  return 'm4a';
+}
+
 export function OfflineProvider({ children }: PropsWithChildren) {
   const [downloads, setDownloads] = useState<DownloadedTrack[]>([]);
   const [downloading, setDownloading] = useState<Record<string, number>>({});
   const [downloadFailures, setDownloadFailures] = useState<Record<string, string>>({});
+  const downloadsRef = useRef<DownloadedTrack[]>([]);
+  const activeDownloadsRef = useRef(new Set<string>());
+
+  downloadsRef.current = downloads;
 
   const persist = useCallback(async (next: DownloadedTrack[]) => {
+    downloadsRef.current = next;
     setDownloads(next);
     await AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(next));
   }, []);
@@ -68,6 +103,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
           }
         });
 
+        downloadsRef.current = valid;
         setDownloads(valid);
         if (valid.length !== parsed.length) {
           await AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(valid));
@@ -100,8 +136,9 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     const id = String(song.id || '');
     if (!id) return false;
     if (byId.has(id)) return true;
-    if (downloading[id] != null) return false;
+    if (activeDownloadsRef.current.has(id)) return false;
 
+    activeDownloadsRef.current.add(id);
     setDownloading((current) => ({ ...current, [id]: 0 }));
     setDownloadFailures((current) => {
       const next = { ...current };
@@ -109,12 +146,19 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       return next;
     });
 
+    let destination: File | null = null;
+
     try {
       if (!DOWNLOAD_DIR.exists) DOWNLOAD_DIR.create();
 
       const resolved = await resolvePlayableSong(song, quality);
-      const filename = `${safeName(id)}.m4a`;
-      const destination = new File(DOWNLOAD_DIR, filename);
+      const extension = inferDownloadExtension(
+        resolved.url,
+        resolved.diagnostics?.mimeType,
+        resolved.diagnostics?.codec
+      );
+      const filename = `${safeName(id)}.${extension}`;
+      destination = new File(DOWNLOAD_DIR, filename);
       if (destination.exists) destination.delete();
 
       const task = File.createDownloadTask(resolved.url, destination, {
@@ -134,24 +178,32 @@ export function OfflineProvider({ children }: PropsWithChildren) {
         downloadedAt: Date.now(),
       };
 
-      const next = [entry, ...downloads.filter((item) => item.song.id !== id)];
+      const next = [
+        entry,
+        ...downloadsRef.current.filter((item) => item.song.id !== id),
+      ];
       await persist(next);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return true;
     } catch (cause: any) {
+      try {
+        if (destination?.exists) destination.delete();
+      } catch {}
+
       setDownloadFailures((current) => ({
         ...current,
         [id]: cause?.message || 'Download failed. Check your connection and try again.',
       }));
       return false;
     } finally {
+      activeDownloadsRef.current.delete(id);
       setDownloading((current) => {
         const next = { ...current };
         delete next[id];
         return next;
       });
     }
-  }, [byId, downloading, downloads, persist]);
+  }, [byId, persist]);
 
   const removeDownload = useCallback(async (songId: string) => {
     const id = String(songId);
@@ -163,17 +215,17 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       if (file.exists) file.delete();
     } catch {}
 
-    await persist(downloads.filter((item) => item.song.id !== id));
+    await persist(downloadsRef.current.filter((item) => item.song.id !== id));
     setDownloadFailures((current) => {
       const next = { ...current };
       delete next[id];
       return next;
     });
     Haptics.selectionAsync().catch(() => {});
-  }, [byId, downloads, persist]);
+  }, [byId, persist]);
 
   const clearDownloads = useCallback(async () => {
-    for (const entry of downloads) {
+    for (const entry of downloadsRef.current) {
       try {
         const file = new File(entry.uri);
         if (file.exists) file.delete();
@@ -182,7 +234,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     setDownloadFailures({});
     await persist([]);
     Haptics.selectionAsync().catch(() => {});
-  }, [downloads, persist]);
+  }, [persist]);
 
   const clearDownloadFailure = useCallback((songId: string) => {
     const id = String(songId);
