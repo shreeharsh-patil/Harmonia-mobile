@@ -22,7 +22,7 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { Playlist, Song } from '@/src/types';
 
-type LibraryTab = 'playlists' | 'liked' | 'downloads' | 'local';
+type LibraryTab = 'playlists' | 'liked' | 'downloads' | 'local' | 'history';
 
 function formatBytes(bytes: number) {
   if (!bytes) return '0 MB';
@@ -48,7 +48,13 @@ export default function LibraryScreen() {
     permissionDenied,
     scan: scanLocalMusic,
   } = useLocalMusic();
-  const { currentSong, playSong } = usePlayer();
+  const {
+    currentSong,
+    playSong,
+    history,
+    listeningStats,
+    clearHistory,
+  } = usePlayer();
 
   const [tab, setTab] = useState<LibraryTab>('playlists');
   const [newPlaylist, setNewPlaylist] = useState('');
@@ -139,6 +145,7 @@ export default function LibraryScreen() {
           ['liked', 'Liked'],
           ['downloads', `Downloads · ${downloads.length}`],
           ['local', 'On device'],
+          ['history', 'History'],
         ] as Array<[LibraryTab, string]>).map(([value, label]) => (
           <Pressable
             key={value}
@@ -241,6 +248,63 @@ export default function LibraryScreen() {
         </View>
       )}
 
+      {tab === 'history' && (
+        <View style={styles.flex}>
+          <View style={styles.historySummary}>
+            <View style={styles.historyStat}>
+              <Text style={styles.historyValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
+              <Text style={styles.historyLabel}>Minutes</Text>
+            </View>
+            <View style={styles.historyRule} />
+            <View style={styles.historyStat}>
+              <Text style={styles.historyValue}>{listeningStats.playCount}</Text>
+              <Text style={styles.historyLabel}>Plays</Text>
+            </View>
+            <View style={styles.historyRule} />
+            <View style={styles.historyStat}>
+              <Text style={styles.historyValue}>{Object.keys(listeningStats.trackCounts).length}</Text>
+              <Text style={styles.historyLabel}>Tracks</Text>
+            </View>
+          </View>
+
+          <View style={styles.historyHead}>
+            <View>
+              <Text style={styles.summaryKicker}>RECENTLY PLAYED</Text>
+              <Text style={styles.historyTitle}>Listening history on this phone</Text>
+            </View>
+            {!!history.length && (
+              <Pressable onPress={() => void clearHistory()} style={styles.clearHistory}>
+                <Text style={styles.clearHistoryText}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <FlatList
+            data={history}
+            keyExtractor={(item) => item.entryId}
+            contentContainerStyle={styles.songList}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>No listening history yet</Text>
+                <Text style={styles.emptyBody}>Tracks you play in Harmonia will appear here.</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <SongRow
+                song={item.song}
+                active={currentSong?.id === item.song.id}
+                onPress={() => void playSong(item.song)}
+                trailing={
+                  <Text style={styles.historyTime}>
+                    {new Date(item.playedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </Text>
+                }
+              />
+            )}
+          />
+        </View>
+      )}
+
       {tab === 'local' && (
         <View style={styles.flex}>
           <View style={styles.localHeader}>
@@ -324,4 +388,14 @@ const styles = StyleSheet.create({
   scanButton: { minWidth: 66, height: 38, borderRadius: 12, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   scanButtonText: { color: '#080808', fontSize: 11, fontWeight: '800' },
   permissionError: { color: '#E38A8A', fontSize: 12, lineHeight: 18, paddingHorizontal: 20, paddingVertical: 8 },
+  historySummary: { marginHorizontal: 18, marginTop: 9, minHeight: 86, borderRadius: 18, backgroundColor: '#101010', borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', flexDirection: 'row', alignItems: 'center' },
+  historyStat: { flex: 1, alignItems: 'center' },
+  historyValue: { color: '#F1F1F1', fontSize: 21, fontWeight: '800' },
+  historyLabel: { color: '#686868', fontSize: 10, fontWeight: '700', marginTop: 3 },
+  historyRule: { width: StyleSheet.hairlineWidth, height: 42, backgroundColor: '#292929' },
+  historyHead: { marginHorizontal: 18, marginTop: 18, marginBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  historyTitle: { color: '#D8D8D8', fontSize: 14, fontWeight: '700', marginTop: 4 },
+  clearHistory: { minWidth: 54, height: 34, borderRadius: 11, backgroundColor: '#171717', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  clearHistoryText: { color: '#999', fontSize: 11, fontWeight: '700' },
+  historyTime: { color: '#636363', fontSize: 10, fontWeight: '700', paddingHorizontal: 4 },
 });

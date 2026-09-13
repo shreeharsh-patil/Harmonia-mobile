@@ -29,6 +29,8 @@ import type { Song } from '@/src/types';
 import { useOffline } from '@/src/providers/OfflineProvider';
 
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
+const HISTORY_KEY = 'harmonia.mobile.history.v1';
+const LISTENING_STATS_KEY = 'harmonia.mobile.listening-stats.v1';
 
 type PlaybackSnapshot = {
   queue: Song[];
@@ -39,6 +41,18 @@ type PlaybackSnapshot = {
 };
 
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
+
+export type PlaybackHistoryEntry = {
+  entryId: string;
+  song: Song;
+  playedAt: number;
+};
+
+export type ListeningStats = {
+  totalSeconds: number;
+  playCount: number;
+  trackCounts: Record<string, number>;
+};
 
 type PlayerContextValue = {
   currentSong: Song | null;
@@ -54,6 +68,9 @@ type PlayerContextValue = {
   streamQuality: StreamQuality;
   sleepTimer: SleepTimerMode;
   sleepRemaining: number;
+  history: PlaybackHistoryEntry[];
+  listeningStats: ListeningStats;
+  clearHistory: () => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
   togglePlayback: () => Promise<void>;
@@ -80,6 +97,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [streamQuality, setStreamQualityState] = useState<StreamQuality>('automatic');
   const [sleepTimer, setSleepTimerState] = useState<SleepTimerMode>('off');
   const [sleepRemaining, setSleepRemaining] = useState(0);
+  const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
+  const [listeningStats, setListeningStats] = useState<ListeningStats>({
+    totalSeconds: 0,
+    playCount: 0,
+    trackCounts: {},
+  });
 
   const loadedTrackId = useRef<string | null>(null);
   const restoredPosition = useRef(0);
@@ -97,6 +120,32 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   indexRef.current = currentIndex;
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
+
+  const recordHistory = useCallback((song: Song) => {
+    const stable = persistenceSafeSong(song);
+    setHistory((current) => {
+      const next: PlaybackHistoryEntry[] = [
+        {
+          entryId: `${Date.now()}-${stable.id}`,
+          song: stable,
+          playedAt: Date.now(),
+        },
+        ...current,
+      ].slice(0, 200);
+      AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    setListeningStats((current) => {
+      const next = { ...current, playCount: current.playCount + 1 };
+      AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const clearHistory = useCallback(async () => {
+    setHistory([]);
+    await AsyncStorage.removeItem(HISTORY_KEY);
+  }, []);
 
   const persistSettings = useCallback((nextRate: number, nextQuality: StreamQuality) => {
     AsyncStorage.setItem(
@@ -175,6 +224,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       restoredPosition.current = 0;
       pendingSeek.current = startPosition > 0 ? startPosition : null;
       setLockScreenMetadata(resolved.song);
+      recordHistory(resolved.song);
 
       if (autoplay) player.play();
     } catch (cause: any) {
@@ -183,7 +233,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     } finally {
       setIsLoadingTrack(false);
     }
-  }, [getOfflineUri, player, setLockScreenMetadata]);
+  }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
@@ -261,10 +311,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     (async () => {
       try {
-        const [snapshotRaw, settingsRaw] = await Promise.all([
+        const [snapshotRaw, settingsRaw, historyRaw, statsRaw] = await Promise.all([
           AsyncStorage.getItem(PLAYBACK_SNAPSHOT_KEY),
           AsyncStorage.getItem(PLAYER_SETTINGS_KEY),
+          AsyncStorage.getItem(HISTORY_KEY),
+          AsyncStorage.getItem(LISTENING_STATS_KEY),
         ]);
+
+        if (historyRaw) {
+          const parsedHistory = JSON.parse(historyRaw);
+          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 200));
+        }
+
+        if (statsRaw) {
+          const parsedStats = JSON.parse(statsRaw);
+          setListeningStats({
+            totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
+            playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
+            trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
+              ? parsedStats.trackCounts
+              : {},
+          });
+        }
 
         if (settingsRaw) {
           const settings = JSON.parse(settingsRaw);
@@ -344,6 +412,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [player, setSleepTimer, sleepTimer]);
 
   useEffect(() => {
+    if (!status.playing || !currentSong?.id) return;
+
+    const interval = setInterval(() => {
+      setListeningStats((current) => {
+        const id = String(currentSong.id);
+        const next: ListeningStats = {
+          totalSeconds: current.totalSeconds + 10,
+          playCount: current.playCount,
+          trackCounts: {
+            ...current.trackCounts,
+            [id]: (current.trackCounts[id] || 0) + 10,
+          },
+        };
+        AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    }, 10_000);
+
+    return () => clearInterval(interval);
+  }, [currentSong?.id, status.playing]);
+
+  useEffect(() => {
     if (!queue.length || currentIndex < 0) return;
     const wholeSecond = Math.floor(status.currentTime || restoredPosition.current || 0);
     if (Math.abs(wholeSecond - lastPersistedSecond.current) < 3 && status.playing) return;
@@ -377,6 +467,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     streamQuality,
     sleepTimer,
     sleepRemaining,
+    history,
+    listeningStats,
+    clearHistory,
     playSong,
     playAt,
     togglePlayback,
@@ -401,6 +494,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     streamQuality,
     sleepTimer,
     sleepRemaining,
+    history,
+    listeningStats,
+    clearHistory,
     playSong,
     playAt,
     togglePlayback,
