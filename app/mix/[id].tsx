@@ -37,16 +37,19 @@ export default function MixScreen() {
       setMix(null);
       setSongs([]);
       setLoading(false);
-      if (token && !id) setError('Mix ID is missing');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setMix(null);
+    setSongs([]);
+
     try {
       const mixes = await fetchRecommendedMixes(token);
       const found = mixes.find((item) => String(item._mixId || item.id || '') === id) || null;
       if (!found) throw new Error('This mix is no longer available');
+
       const nextSongs = await fetchSongs((found.songIds || []).slice(0, 100));
       if (generation !== loadGenerationRef.current) return;
 
@@ -61,15 +64,7 @@ export default function MixScreen() {
     }
   };
 
-  useEffect(() => {
-    setMix(null);
-    setSongs([]);
-    setActionSong(null);
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [id, token]);
+  useEffect(() => { void load(); }, [id, token]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;
