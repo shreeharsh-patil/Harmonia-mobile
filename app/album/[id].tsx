@@ -45,12 +45,13 @@ export default function AlbumScreen() {
     if (!id) {
       setAlbum(null);
       setLoading(false);
-      setError('Album ID is missing');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setAlbum(null);
+
     try {
       const nextAlbum = await fetchAlbum(id);
       if (generation !== loadGenerationRef.current) return;
@@ -64,14 +65,7 @@ export default function AlbumScreen() {
     }
   };
 
-  useEffect(() => {
-    setAlbum(null);
-    setActionSong(null);
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [id]);
+  useEffect(() => { void load(); }, [id]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;
