@@ -7,6 +7,7 @@ import type {
   LibraryPayload,
   MusicSection,
   Playlist,
+  RecommendedMix,
   SearchPayload,
   Song,
 } from '@/src/types';
@@ -76,11 +77,29 @@ export async function fetchMe(token: string) {
   return requestJson<{ success: true; user: HarmoniaUser }>('/api/mobile/me', { token });
 }
 
-export async function fetchLibrary(token: string) {
-  const payload = await requestJson<{ success: true; data: LibraryPayload }>('/api/mobile/library', { token });
+export async function fetchLibrary(token: string): Promise<LibraryPayload> {
+  const payload = await requestJson<{ success: true; data: any }>('/api/mobile/library', { token });
+  const data = payload.data || {};
   return {
-    ...payload.data,
-    likedSongs: (payload.data.likedSongs || []).map((song) => normalizeSong(song as any)),
+    playlists: Array.isArray(data.playlists) ? data.playlists : [],
+    likedSongs: (data.likedSongs || []).map((song: any) => normalizeSong(song)),
+    likedPlaylists: (data.likedPlaylists || []).map((item: any) => ({
+      id: String(item.playlistId || item.id || ''),
+      name: String(item.playlistName || item.name || 'Playlist'),
+      owner: item.owner || 'Harmonia',
+      description: item.description || '',
+      image: item.image || [],
+      songCount: Number(item.songCount || 0),
+      source: item.source || 'jiosaavn',
+    })),
+    likedAlbums: (data.likedAlbums || []).map((item: any) => ({
+      ...(item.albumData || {}),
+      id: String(item.albumId || item.albumData?.id || ''),
+    })),
+    likedArtists: (data.likedArtists || []).map((item: any) => ({
+      ...(item.artistData || {}),
+      id: String(item.artistId || item.artistData?.id || ''),
+    })),
   };
 }
 
@@ -88,6 +107,108 @@ export async function toggleLikedSong(token: string, song: Song) {
   return requestJson<{ success: true; liked: boolean; message?: string }>(
     '/api/mobile/liked/songs',
     { method: 'POST', token, body: JSON.stringify({ songData: song }) }
+  );
+}
+
+export async function toggleLikedEntity(
+  token: string,
+  type: 'albums' | 'artists' | 'playlists',
+  itemData: HarmoniaAlbum | HarmoniaArtistEntity | Playlist
+) {
+  return requestJson<{ success: true; liked: boolean; message?: string }>(
+    `/api/mobile/liked/${type}`,
+    { method: 'POST', token, body: JSON.stringify({ itemData }) }
+  );
+}
+
+export async function fetchRecommendedMixes(token: string): Promise<RecommendedMix[]> {
+  const payload = await requestJson<{ success: true; data: any[] }>(
+    '/api/mobile/recommendations',
+    { token }
+  );
+  return (payload.data || []).map((mix: any) => ({
+    id: String(mix._id || mix.id || `mix-${mix.mixIndex ?? ''}`),
+    _mixId: String(mix._id || mix.id || ''),
+    name: String(mix.title || 'Your Mix'),
+    title: String(mix.title || 'Your Mix'),
+    image: mix.coverImage ? [{ quality: 'default', url: mix.coverImage }] : [],
+    songIds: Array.isArray(mix.songIds) ? mix.songIds.map(String) : [],
+    songCount: Array.isArray(mix.songIds) ? mix.songIds.length : 0,
+    source: 'mix',
+    mixIndex: mix.mixIndex,
+    sourceType: mix.sourceType,
+    sourceId: mix.sourceId || null,
+    generatedAt: mix.generatedAt,
+    expiresAt: mix.expiresAt,
+  }));
+}
+
+export async function refreshRecommendedMixes(token: string): Promise<RecommendedMix[]> {
+  const payload = await requestJson<{ success: true; data: any[] }>(
+    '/api/mobile/recommendations',
+    { method: 'DELETE', token }
+  );
+  return (payload.data || []).map((mix: any) => ({
+    id: String(mix._id || mix.id || `mix-${mix.mixIndex ?? ''}`),
+    _mixId: String(mix._id || mix.id || ''),
+    name: String(mix.title || 'Your Mix'),
+    title: String(mix.title || 'Your Mix'),
+    image: mix.coverImage ? [{ quality: 'default', url: mix.coverImage }] : [],
+    songIds: Array.isArray(mix.songIds) ? mix.songIds.map(String) : [],
+    songCount: Array.isArray(mix.songIds) ? mix.songIds.length : 0,
+    source: 'mix',
+    mixIndex: mix.mixIndex,
+    sourceType: mix.sourceType,
+    sourceId: mix.sourceId || null,
+    generatedAt: mix.generatedAt,
+    expiresAt: mix.expiresAt,
+  }));
+}
+
+export async function fetchRecentlyPlayedPlaylists(token: string): Promise<Playlist[]> {
+  const payload = await requestJson<{ success: true; data: any[] }>(
+    '/api/mobile/recently-played-playlists',
+    { token }
+  );
+  return (payload.data || []).map((item: any) => ({
+    id: String(item.playlistId || ''),
+    name: String(item.playlistName || 'Playlist'),
+    image: item.image || [],
+    songCount: Number(item.songCount || 0),
+    source: item.source || 'jiosaavn',
+    owner: item.owner || '',
+    catalogSource: item.catalogSource || '',
+    playedAt: item.playedAt,
+  }));
+}
+
+export async function trackRecentlyPlayedPlaylist(token: string, playlist: Playlist) {
+  const id = String(playlist.id || playlist._id || '');
+  if (!id) return;
+  return requestJson<{ success: true }>(
+    '/api/mobile/recently-played-playlists',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify({
+        playlistData: {
+          id,
+          name: playlist.name || playlist.title || 'Playlist',
+          image: playlist.image || [],
+          songCount: playlist.songCount || playlist.songIds?.length || playlist.tracks?.length || 0,
+          source: playlist.source || 'jiosaavn',
+          catalogSource: String((playlist as any).catalogSource || ''),
+          owner: typeof playlist.owner === 'string' ? playlist.owner : String(playlist.subtitle || ''),
+        },
+      }),
+    }
+  );
+}
+
+export async function clearRecentlyPlayedPlaylists(token: string) {
+  return requestJson<{ success: true }>(
+    '/api/mobile/recently-played-playlists',
+    { method: 'DELETE', token }
   );
 }
 
