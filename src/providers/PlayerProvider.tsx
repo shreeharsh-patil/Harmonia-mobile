@@ -36,6 +36,11 @@ const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
 const LISTENING_STATS_KEY = 'harmonia.mobile.listening-stats.v1';
 
+function localDayKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 type PlaybackSnapshot = {
   queue: Song[];
   index: number;
@@ -63,6 +68,7 @@ export type ListeningStats = {
   totalSeconds: number;
   playCount: number;
   trackCounts: Record<string, number>;
+  dailySeconds: Record<string, number>;
 };
 
 export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
@@ -130,6 +136,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     totalSeconds: 0,
     playCount: 0,
     trackCounts: {},
+    dailySeconds: {},
   });
 
   const loadedTrackId = useRef<string | null>(null);
@@ -149,6 +156,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
   const recoveryInFlightRef = useRef(false);
+  const qualityReloadRef = useRef<() => Promise<void>>(async () => {});
   const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
     trackId: null,
     attempts: 0,
@@ -169,7 +177,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           playedAt: Date.now(),
         },
         ...current,
-      ].slice(0, 200);
+      ].slice(0, 500);
       AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -211,9 +219,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [persistSettings, player]);
 
   const setStreamQuality = useCallback((quality: StreamQuality) => {
+    if (quality === qualityRef.current) return;
     qualityRef.current = quality;
     setStreamQualityState(quality);
     persistSettings(rateRef.current, quality);
+    void qualityReloadRef.current();
   }, [persistSettings]);
 
   const toggleRepeat = useCallback(() => {
@@ -367,6 +377,26 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setIsLoadingTrack(false);
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
+
+  useEffect(() => {
+    qualityReloadRef.current = async () => {
+      const index = indexRef.current;
+      const target = queueRef.current[index];
+      if (!target) return;
+
+      const stable = normalizeSong(target as any);
+      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+      const offlineUri = getOfflineUri(stable.id);
+      if (localUri || offlineUri) return;
+
+      const resumeAt = Math.max(
+        0,
+        Number(status.currentTime || lastKnownPositionRef.current || 0)
+      );
+      const shouldResume = Boolean(status.playing || playbackIntentRef.current);
+      await loadIndex(index, shouldResume, resumeAt, { recordHistory: false });
+    };
+  }, [getOfflineUri, loadIndex, status.currentTime, status.playing]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
@@ -539,7 +569,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
         if (historyRaw) {
           const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 200));
+          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 500));
         }
 
         if (statsRaw) {
@@ -549,6 +579,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
             trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
               ? parsedStats.trackCounts
+              : {},
+            dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+              ? parsedStats.dailySeconds
               : {},
           });
         }
@@ -668,6 +701,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const interval = setInterval(() => {
       setListeningStats((current) => {
         const id = String(currentSong.id);
+        const day = localDayKey();
+        const dailySeconds = {
+          ...(current.dailySeconds || {}),
+          [day]: ((current.dailySeconds || {})[day] || 0) + 10,
+        };
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 35);
+        const cutoffKey = localDayKey(cutoff);
+        for (const key of Object.keys(dailySeconds)) {
+          if (key < cutoffKey) delete dailySeconds[key];
+        }
+
         const next: ListeningStats = {
           totalSeconds: current.totalSeconds + 10,
           playCount: current.playCount,
@@ -675,6 +720,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             ...current.trackCounts,
             [id]: (current.trackCounts[id] || 0) + 10,
           },
+          dailySeconds,
         };
         AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
         return next;
