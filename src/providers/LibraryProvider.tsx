@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -53,8 +54,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async (manual = false) => {
+    const generation = ++loadGenerationRef.current;
+
     if (!token) {
       setPlaylists([]);
       setLikedSongs([]);
@@ -71,16 +75,24 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       const library = await fetchLibrary(token);
+      if (generation !== loadGenerationRef.current) return;
+
       setPlaylists(library.playlists || []);
-      setLikedSongs((library.likedSongs || []).map((song) => persistenceSafeSong(normalizeSong(song as any))));
+      // Keep ephemeral embedded playback candidates in memory. They are stripped
+      // only when data is persisted or sent to account storage.
+      setLikedSongs((library.likedSongs || []).map((song) => normalizeSong(song as any)));
       setLikedPlaylists(library.likedPlaylists || []);
       setLikedAlbums(library.likedAlbums || []);
       setLikedArtists(library.likedArtists || []);
     } catch (cause: any) {
-      setError(cause?.message || 'Unable to sync your library');
+      if (generation === loadGenerationRef.current) {
+        setError(cause?.message || 'Unable to sync your library');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [token]);
 
@@ -92,8 +104,9 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
   const toggleLike = useCallback(async (song: Song) => {
     if (!token) return null;
-    const normalized = persistenceSafeSong(normalizeSong(song as any));
+    const normalized = normalizeSong(song as any);
     if (!normalized.id) return null;
+    const accountSafeSong = persistenceSafeSong(normalized);
 
     const previouslyLiked = likedIds.has(normalized.id);
     setLikedSongs((current) => previouslyLiked
@@ -102,7 +115,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     );
 
     try {
-      const result = await toggleLikedSong(token, normalized);
+      const result = await toggleLikedSong(token, accountSafeSong);
       Haptics.selectionAsync().catch(() => {});
       if (result.liked !== !previouslyLiked) {
         await load(true);
