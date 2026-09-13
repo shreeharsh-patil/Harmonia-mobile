@@ -40,6 +40,12 @@ type PlaybackSnapshot = {
   savedAt: number;
 };
 
+type LoadTrackOptions = {
+  recordHistory?: boolean;
+  bypassOffline?: boolean;
+  recovery?: boolean;
+};
+
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -130,6 +136,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const repeatModeRef = useRef<RepeatMode>('off');
   const shuffleRef = useRef(false);
   const unshuffledQueueRef = useRef<Song[]>([]);
+  const playbackIntentRef = useRef(false);
+  const lastKnownPositionRef = useRef(0);
+  const recoveryInFlightRef = useRef(false);
+  const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
+    trackId: null,
+    attempts: 0,
+  });
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -268,20 +281,33 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     );
   }, [player]);
 
-  const loadIndex = useCallback(async (index: number, autoplay = true, startPosition = 0) => {
+  const loadIndex = useCallback(async (
+    index: number,
+    autoplay = true,
+    startPosition = 0,
+    options: LoadTrackOptions = {}
+  ) => {
     const target = queueRef.current[index];
-    if (!target) return;
+    if (!target) return false;
 
     const stable = normalizeSong(target as any);
+    const shouldRecordHistory = options.recordHistory !== false;
+    const bypassOffline = options.bypassOffline === true;
+
     setCurrentIndex(index);
     indexRef.current = index;
+    playbackIntentRef.current = autoplay;
     setIsLoadingTrack(true);
     setError(null);
+
+    if (!options.recovery) {
+      recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
+    }
 
     try {
       player.pause();
       const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
-      const offlineUri = getOfflineUri(stable.id);
+      const offlineUri = bypassOffline ? null : getOfflineUri(stable.id);
       const resolved = localUri || offlineUri
         ? { song: stable, url: localUri || offlineUri! }
         : await resolvePlayableSong(stable, qualityRef.current);
@@ -294,14 +320,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       player.setPlaybackRate(rateRef.current);
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
+      lastKnownPositionRef.current = Math.max(0, startPosition);
       pendingSeek.current = startPosition > 0 ? startPosition : null;
       setLockScreenMetadata(resolved.song);
-      recordHistory(resolved.song);
+      if (shouldRecordHistory) recordHistory(resolved.song);
 
       if (autoplay) player.play();
+      return true;
     } catch (cause: any) {
       loadedTrackId.current = null;
       setError(cause?.message || 'Unable to play this track');
+      return false;
     } finally {
       setIsLoadingTrack(false);
     }
@@ -407,6 +436,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         await loadIndex(0, true, 0);
         return;
       }
+      playbackIntentRef.current = false;
       player.pause();
       await player.seekTo(0).catch(() => {});
       return;
@@ -431,18 +461,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const song = queueRef.current[indexRef.current];
     if (!song) return;
 
-    if (loadedTrackId.current !== song.id || !status.isLoaded) {
-      await loadIndex(indexRef.current, true, restoredPosition.current);
+    if (loadedTrackId.current !== song.id || !status.isLoaded || Boolean(status.error)) {
+      playbackIntentRef.current = true;
+      recoveryStateRef.current = { trackId: song.id, attempts: 0 };
+      const resumeAt = Math.max(restoredPosition.current, lastKnownPositionRef.current);
+      await loadIndex(indexRef.current, true, resumeAt);
       return;
     }
 
-    if (status.playing) player.pause();
-    else player.play();
-  }, [loadIndex, player, status.isLoaded, status.playing]);
+    if (status.playing) {
+      playbackIntentRef.current = false;
+      player.pause();
+    } else {
+      playbackIntentRef.current = true;
+      player.play();
+    }
+  }, [loadIndex, player, status.error, status.isLoaded, status.playing]);
 
   const seek = useCallback(async (seconds: number) => {
     const max = status.duration || currentSong?.duration || seconds;
-    await player.seekTo(Math.max(0, Math.min(seconds, max)));
+    const target = Math.max(0, Math.min(seconds, max));
+    lastKnownPositionRef.current = target;
+    await player.seekTo(target);
   }, [currentSong?.duration, player, status.duration]);
 
   useEffect(() => {
@@ -515,6 +555,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         queueRef.current = restoredQueue;
         indexRef.current = restoredIndex;
         restoredPosition.current = Math.max(0, Number(snapshot.position || 0));
+        lastKnownPositionRef.current = restoredPosition.current;
         setQueue(restoredQueue);
         setCurrentIndex(restoredIndex);
       } catch {
@@ -524,9 +565,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [player]);
 
   useEffect(() => {
+    const current = Number(status.currentTime || 0);
+    if (
+      status.isLoaded &&
+      pendingSeek.current == null &&
+      Number.isFinite(current) &&
+      current >= 0
+    ) {
+      lastKnownPositionRef.current = current;
+    }
+  }, [status.currentTime, status.isLoaded]);
+
+  useEffect(() => {
     if (!status.isLoaded || pendingSeek.current == null) return;
     const target = pendingSeek.current;
     pendingSeek.current = null;
+    lastKnownPositionRef.current = target;
     player.seekTo(target).catch(() => {});
   }, [player, status.isLoaded]);
 
@@ -534,6 +588,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (status.didJustFinish && !finishing.current) {
       finishing.current = true;
       if (sleepTimerRef.current === 'track') {
+        playbackIntentRef.current = false;
         player.pause();
         setSleepTimer('off');
         player.seekTo(0).catch(() => {});
@@ -565,6 +620,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setSleepRemaining(remaining);
       if (remaining <= 0) {
+        playbackIntentRef.current = false;
         player.pause();
         setSleepTimer('off');
       }
@@ -613,8 +669,68 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [currentIndex, queue, status.currentTime, status.playing]);
 
   useEffect(() => {
-    if (status.error) setError(status.error);
-  }, [status.error]);
+    if (!status.error || !currentSong?.id || recoveryInFlightRef.current) return;
+
+    const trackId = currentSong.id;
+    if (recoveryStateRef.current.trackId !== trackId) {
+      recoveryStateRef.current = { trackId, attempts: 0 };
+    }
+    if (recoveryStateRef.current.attempts >= 3) {
+      setError('Playback failed after multiple recovery attempts. Tap play to retry.');
+      return;
+    }
+
+    let cancelled = false;
+
+    const recover = async () => {
+      recoveryInFlightRef.current = true;
+      try {
+        let recovered = false;
+
+        while (
+          !cancelled &&
+          recoveryStateRef.current.trackId === trackId &&
+          recoveryStateRef.current.attempts < 3 &&
+          !recovered
+        ) {
+          recoveryStateRef.current.attempts += 1;
+          const attempt = recoveryStateRef.current.attempts;
+          if (attempt > 1) {
+            await new Promise((resolve) => setTimeout(resolve, attempt === 2 ? 500 : 1500));
+          }
+          if (cancelled) return;
+
+          const resumeAt = Math.max(
+            0,
+            lastKnownPositionRef.current,
+            restoredPosition.current
+          );
+          recovered = await loadIndex(
+            indexRef.current,
+            playbackIntentRef.current,
+            resumeAt,
+            {
+              recordHistory: false,
+              bypassOffline: attempt > 1,
+              recovery: true,
+            }
+          );
+        }
+
+        if (!cancelled && !recovered && recoveryStateRef.current.attempts >= 3) {
+          setError('Playback failed after multiple recovery attempts. Tap play to retry.');
+        }
+      } finally {
+        recoveryInFlightRef.current = false;
+      }
+    };
+
+    void recover();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSong?.id, loadIndex, status.error]);
 
   const value = useMemo<PlayerContextValue>(() => ({
     currentSong,
