@@ -6,6 +6,7 @@ import {
   clearPreloadedSource,
   useAudioPlayer,
   useAudioPlayerStatus,
+  type AudioSource,
 } from 'expo-audio';
 import { Platform } from 'react-native';
 import {
@@ -57,6 +58,22 @@ import {
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
 const HISTORY_KEY = 'harmonia.mobile.history.v1';
 const LISTENING_STATS_KEY = 'harmonia.mobile.listening-stats.v1';
+
+function nativeAudioSource(
+  url: string,
+  headers?: Record<string, string> | null
+): AudioSource {
+  return headers && Object.keys(headers).length
+    ? { uri: url, headers }
+    : url;
+}
+
+function audioSourceKey(url: string, headers?: Record<string, string> | null) {
+  const normalizedHeaders = headers
+    ? Object.entries(headers).sort(([a], [b]) => a.localeCompare(b))
+    : [];
+  return `${url}|${JSON.stringify(normalizedHeaders)}`;
+}
 
 function localDayKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -228,7 +245,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastKnownPositionRef = useRef(0);
   const recoveryInFlightRef = useRef(false);
   const qualityReloadRef = useRef<() => Promise<void>>(async () => {});
-  const preloadedSourceRef = useRef<string | null>(null);
+  const preloadedSourceRef = useRef<{ key: string; source: AudioSource } | null>(null);
   const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
     trackId: null,
     attempts: 0,
@@ -452,6 +469,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         song: Song;
         url: string;
         diagnostics: ResolvedStreamDiagnostics | null;
+        headers: Record<string, string> | null;
       };
       let promotion: Promise<PipelineResolvedStream | null> = Promise.resolve(null);
 
@@ -460,6 +478,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           song: stable,
           url: immediate.url,
           diagnostics: null,
+          headers: null,
         };
         setAdaptivePipelineStatus('idle');
       } else if (
@@ -502,6 +521,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           song: direct.track,
           url: direct.url,
           diagnostics: direct.diagnostics,
+          headers: direct.headers,
         };
         setPipelineStartQuality(effectiveQualityRef.current);
         setPipelineTargetQuality(effectiveQualityRef.current);
@@ -517,7 +537,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       queueRef.current = nextQueue;
       setQueue(nextQueue);
 
-      player.replace(resolved.url);
+      player.replace(nativeAudioSource(resolved.url, resolved.headers));
       player.setPlaybackRate(rateRef.current);
       setPlaybackState('LOADING');
 
@@ -591,7 +611,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             const shouldResume = playbackIntentRef.current;
 
             player.pause();
-            player.replace(candidate.url);
+            player.replace(nativeAudioSource(candidate.url, candidate.headers));
             player.setPlaybackRate(rateRef.current);
             pendingSeek.current = resumeAt;
             restoredPosition.current = resumeAt;
@@ -1013,38 +1033,37 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const stable = normalizeSong(upcoming as any);
       const offlineUri = getOfflineUri(stable.id);
       const immediate = getImmediateLocalSource(stable, offlineUri);
-      let source = immediate?.url || null;
+      let url = immediate?.url || null;
+      let headers: Record<string, string> | null = null;
 
-      if (!source) {
+      if (!url) {
         try {
           const resolved = await resolveTrackStream(stable, {
             quality: effectiveQualityRef.current,
             signal: controller.signal,
             priority: 'medium',
           });
-          source = resolved.url;
+          url = resolved.url;
+          headers = resolved.headers;
         } catch {
           return;
         }
       }
 
-      if (
-        cancelled ||
-        controller.signal.aborted ||
-        !source ||
-        source === preloadedSourceRef.current
-      ) {
-        return;
-      }
+      if (cancelled || controller.signal.aborted || !url) return;
 
+      const key = audioSourceKey(url, headers);
+      if (preloadedSourceRef.current?.key === key) return;
+
+      const source = nativeAudioSource(url, headers);
       const previous = preloadedSourceRef.current;
-      preloadedSourceRef.current = source;
+      preloadedSourceRef.current = { key, source };
       if (previous) {
-        clearPreloadedSource(previous).catch(() => {});
+        clearPreloadedSource(previous.source).catch(() => {});
       }
 
       preload(source, { preferredForwardBufferDuration: 12 }).catch(() => {
-        if (preloadedSourceRef.current === source) preloadedSourceRef.current = null;
+        if (preloadedSourceRef.current?.key === key) preloadedSourceRef.current = null;
       });
 
       // Warm one additional resolver entry, but do not ask the native decoder
