@@ -2,10 +2,19 @@ import { gunzipSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-const DEFAULT_SOURCE =
-  'https://raw.githubusercontent.com/shreeharsh-patil/Harmonia-Spotify-Downloader/main/web-app/harmonia-webclient/data/music-feed-static.json.gz';
+const OWNER = 'shreeharsh-patil';
+const REPO = 'Harmonia-Spotify-Downloader';
+const REF = process.env.HARMONIA_CATALOG_GITHUB_REF || 'main';
+const CATALOG_PATH = 'web-app/harmonia-webclient/data/music-feed-static.json.gz';
+const DEFAULT_PUBLIC_SOURCE =
+  `https://raw.githubusercontent.com/${OWNER}/${REPO}/${REF}/${CATALOG_PATH}`;
+const DEFAULT_PRIVATE_SOURCE =
+  `https://api.github.com/repos/${OWNER}/${REPO}/contents/${CATALOG_PATH}?ref=${encodeURIComponent(REF)}`;
 
-const sourceUrl = process.env.HARMONIA_CATALOG_SOURCE_URL || DEFAULT_SOURCE;
+const token = String(process.env.HARMONIA_CATALOG_GITHUB_TOKEN || '').trim();
+const sourceUrl = process.env.HARMONIA_CATALOG_SOURCE_URL ||
+  (token ? DEFAULT_PRIVATE_SOURCE : DEFAULT_PUBLIC_SOURCE);
+const required = process.argv.includes('--required');
 const outputPath = path.join(process.cwd(), 'assets', 'catalog', 'harmonia-catalog.json');
 
 function text(value) {
@@ -85,12 +94,20 @@ function spotifyId(value) {
 
 const response = await fetch(sourceUrl, {
   headers: {
-    Accept: 'application/octet-stream',
+    Accept: token ? 'application/vnd.github.raw+json' : 'application/octet-stream',
     'User-Agent': 'Harmonia-Mobile-Catalog-Sync/1.0',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   },
 });
+
 if (!response.ok) {
-  throw new Error(`Catalog download failed: HTTP ${response.status}`);
+  const hint = response.status === 404 && !token
+    ? ' The source repository is private; configure HARMONIA_CATALOG_GITHUB_TOKEN with read-only Contents access.'
+    : '';
+  const message = `Catalog download failed: HTTP ${response.status}.${hint}`;
+  if (required) throw new Error(message);
+  console.warn(`[catalog] ${message} Keeping the checked-in catalog asset.`);
+  process.exit(0);
 }
 
 const compressed = Buffer.from(await response.arrayBuffer());
