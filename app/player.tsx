@@ -80,6 +80,12 @@ export default function PlayerScreen() {
     playbackRate,
     streamQuality,
     playbackDiagnostics,
+    adaptivePipelineEnabled,
+    adaptivePipelineStatus,
+    pipelineStartQuality,
+    pipelineTargetQuality,
+    pipelineInitialResolveMs,
+    pipelinePromotionResolveMs,
     sleepTimer,
     sleepRemaining,
     repeatMode,
@@ -490,6 +496,21 @@ export default function PlayerScreen() {
                 <View style={styles.diagnosticsList}>
                   <DiagnosticsRow label="Provider" value={playbackDiagnostics?.provider || 'Not reported'} />
                   <DiagnosticsRow label="Source" value={playbackDiagnostics?.source || 'Not loaded'} />
+                  <DiagnosticsRow label="Adaptive pipeline" value={adaptivePipelineEnabled ? adaptivePipelineStatus : 'disabled'} />
+                  <DiagnosticsRow
+                    label="Pipeline quality"
+                    value={pipelineStartQuality && pipelineTargetQuality
+                      ? `${pipelineStartQuality} → ${pipelineTargetQuality}`
+                      : 'Not active'}
+                  />
+                  <DiagnosticsRow
+                    label="Fast resolve"
+                    value={pipelineInitialResolveMs != null ? `${pipelineInitialResolveMs} ms` : 'Not measured'}
+                  />
+                  <DiagnosticsRow
+                    label="Upgrade resolve"
+                    value={pipelinePromotionResolveMs != null ? `${pipelinePromotionResolveMs} ms` : 'Not measured'}
+                  />
                   <DiagnosticsRow label="Codec" value={playbackDiagnostics?.codec || 'Not reported'} />
                   <DiagnosticsRow label="Bitrate" value={formatBitrate(playbackDiagnostics?.bitrate)} />
                   <DiagnosticsRow label="Resolved quality" value={playbackDiagnostics?.quality || 'Not reported'} />
