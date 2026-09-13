@@ -40,6 +40,21 @@ const TIMER_OPTIONS: Array<{ value: SleepTimerMode; label: string }> = [
   { value: 'off', label: 'Off' },
 ];
 
+function formatBitrate(value?: number | null) {
+  if (!value) return 'Not reported';
+  const kbps = value >= 1000 ? Math.round(value / 1000) : Math.round(value);
+  return `${kbps} kbps`;
+}
+
+function DiagnosticsRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.diagnosticsRow}>
+      <Text style={styles.diagnosticsKey}>{label}</Text>
+      <Text numberOfLines={1} style={styles.diagnosticsValue}>{value}</Text>
+    </View>
+  );
+}
+
 export default function PlayerScreen() {
   const { token } = useAuth();
   const { isLiked, toggleLike } = useLibrary();
@@ -56,6 +71,7 @@ export default function PlayerScreen() {
     error,
     playbackRate,
     streamQuality,
+    playbackDiagnostics,
     sleepTimer,
     sleepRemaining,
     repeatMode,
@@ -79,6 +95,7 @@ export default function PlayerScreen() {
   const [panel, setPanel] = useState<Panel>('none');
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
 
   const cover = artworkUrl(currentSong);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
@@ -405,6 +422,47 @@ export default function PlayerScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
+
+              <View style={styles.diagnosticsDivider} />
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setDiagnosticsExpanded((value) => !value);
+                }}
+                style={styles.diagnosticsHeader}
+              >
+                <View style={styles.diagnosticsHeaderCopy}>
+                  <Text style={styles.toolLabel}>ADVANCED</Text>
+                  <Text style={styles.diagnosticsTitle}>Playback diagnostics</Text>
+                  <Text style={styles.diagnosticsSubtitle}>Technical stream details for troubleshooting</Text>
+                </View>
+                <Text style={styles.diagnosticsToggle}>{diagnosticsExpanded ? '−' : '+'}</Text>
+              </Pressable>
+
+              {diagnosticsExpanded && (
+                <View style={styles.diagnosticsList}>
+                  <DiagnosticsRow label="Provider" value={playbackDiagnostics?.provider || 'Not reported'} />
+                  <DiagnosticsRow label="Source" value={playbackDiagnostics?.source || 'Not loaded'} />
+                  <DiagnosticsRow label="Codec" value={playbackDiagnostics?.codec || 'Not reported'} />
+                  <DiagnosticsRow label="Bitrate" value={formatBitrate(playbackDiagnostics?.bitrate)} />
+                  <DiagnosticsRow label="Resolved quality" value={playbackDiagnostics?.quality || 'Not reported'} />
+                  <DiagnosticsRow label="Quality preference" value={streamQuality} />
+                  <DiagnosticsRow label="Stream host" value={playbackDiagnostics?.streamHost || 'Not loaded'} />
+                  <DiagnosticsRow
+                    label="Playback state"
+                    value={isBuffering ? 'Buffering' : isPlaying ? 'Playing' : 'Paused'}
+                  />
+                  <DiagnosticsRow label="Duration" value={durationLabel(duration)} />
+                  <DiagnosticsRow label="Playback rate" value={`${playbackRate}×`} />
+                  <DiagnosticsRow
+                    label="Queue position"
+                    value={queue.length ? `${currentIndex + 1} of ${queue.length}` : 'Not queued'}
+                  />
+                  <Text style={styles.diagnosticsPrivacy}>
+                    Harmonia shows the stream hostname only. Signed URLs, query parameters and session tokens are never displayed here.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -539,6 +597,17 @@ const styles = StyleSheet.create({
   optionActive: { backgroundColor: '#EFEFEF' },
   optionText: { color: '#A1A1A1', fontSize: 11, fontWeight: '700' },
   optionTextActive: { color: '#080808' },
+  diagnosticsDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.09)', marginTop: 2, marginBottom: 14 },
+  diagnosticsHeader: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  diagnosticsHeaderCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
+  diagnosticsTitle: { color: '#E2E2E2', fontSize: 14, fontWeight: '750' as any, marginTop: -4 },
+  diagnosticsSubtitle: { color: '#6E6E6E', fontSize: 11, lineHeight: 16, marginTop: 3 },
+  diagnosticsToggle: { width: 30, textAlign: 'center', color: '#BDBDBD', fontSize: 23, fontWeight: '400' },
+  diagnosticsList: { marginTop: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.08)', paddingTop: 5 },
+  diagnosticsRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  diagnosticsKey: { color: '#737373', fontSize: 11 },
+  diagnosticsValue: { color: '#C7C7C7', fontSize: 11, fontWeight: '650' as any, flexShrink: 1, textAlign: 'right' },
+  diagnosticsPrivacy: { color: '#555', fontSize: 9, lineHeight: 14, marginTop: 9 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6 },
   secondary: { width: 46, height: 38, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#A0A0A0', fontWeight: '700', fontSize: 13 },
