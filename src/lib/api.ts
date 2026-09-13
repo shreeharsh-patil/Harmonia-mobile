@@ -10,6 +10,7 @@ import {
   fetchDirectJioSaavnTracks,
   searchDirectJioSaavn,
   searchDirectJioSaavnPlaylists,
+  type DirectSaavnSearchTrack,
   type DirectSaavnTrack,
 } from '@/src/lib/playback/jiosaavnDirect';
 import {
@@ -50,7 +51,7 @@ export class ApiError extends Error {
 export const DEFAULT_API_TIMEOUT_MS = 15_000;
 
 
-function directTrackToSong(track: DirectSaavnTrack): Song {
+function directTrackToSong(track: DirectSaavnTrack | DirectSaavnSearchTrack): Song {
   return normalizeSong({
     id: track.id,
     songId: track.id,
@@ -63,7 +64,7 @@ function directTrackToSong(track: DirectSaavnTrack): Song {
     album: track.album || undefined,
     duration: track.duration || undefined,
     image: track.image ? [{ quality: '500x500', url: track.image }] : [],
-    downloadUrl: track.candidates,
+    downloadUrl: 'candidates' in track ? track.candidates : [],
     source: 'jiosaavn',
     provider: 'jiosaavn',
   } as any);
@@ -572,7 +573,7 @@ export async function fetchArtistAlbums(id: string, limit = 30): Promise<Harmoni
   }
 
   const direct = await fetchDirectJioSaavnArtistAlbums(id, { limit });
-  return direct.map((album) => ({
+  return direct.map((album: { id: string; title: string; year: string | null; image: string | null }) => ({
     id: album.id,
     name: album.title,
     title: album.title,
