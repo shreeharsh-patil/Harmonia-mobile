@@ -9,10 +9,13 @@ import {
 } from '@/src/lib/playback/playbackErrors';
 import { providerHealth, type ProviderHealthManager } from '@/src/lib/playback/providerHealth';
 import {
-  MetadataMemoryCache,
   ResolvedStreamMemoryCache,
   getStreamExpiresAt,
 } from '@/src/lib/playback/streamCache';
+import {
+  fetchDirectJioSaavnTrack,
+  findDirectJioSaavnTrack,
+} from '@/src/lib/playback/jiosaavnDirect';
 
 export { isResolvedStreamFresh } from '@/src/lib/playback/streamCache';
 import { streamHostname } from '@/src/lib/playback/streamDiagnostics';
@@ -98,7 +101,7 @@ const TEMPORARY_PAGE_PATTERNS = [
 
 function absoluteUrl(value: string, base = HARMONIA_API_URL) {
   try {
-    return new URL(value, base).href;
+    return base ? new URL(value, base).href : new URL(value).href;
   } catch {
     return value;
   }
@@ -291,16 +294,21 @@ function youtubeIdOf(track: Song) {
     : null;
 }
 
-function isSpotifyMetadata(track: Song) {
+function jioSaavnIdOf(track: Song) {
   const source = String((track as any).source || (track as any).provider || '').toLowerCase();
-  return source.includes('spotify');
+  if (!source.includes('saavn') && !source.includes('jio')) return null;
+  const id = String(track.id || (track as any).songId || '').trim();
+  return id || null;
 }
 
-function isJioSaavnTrack(track: Song) {
+function canResolveWithDirectJioSaavn(track: Song) {
   const source = String((track as any).source || (track as any).provider || '').toLowerCase();
-  if (source.includes('spotify') || source.includes('youtube')) return false;
-  if (source.includes('saavn') || source.includes('jio')) return true;
-  return Boolean(track.id && !youtubeIdOf(track));
+  if (source.includes('youtube') || source.includes('podcast')) return false;
+  if (jioSaavnIdOf(track)) return true;
+
+  const title = String(track.name || track.title || '').trim();
+  const artists = artistNames(track).trim();
+  return Boolean(title && artists && artists !== 'Unknown artist');
 }
 
 async function fetchJson(
@@ -367,8 +375,6 @@ export function createHarmoniaProviders({
   apiBase?: string;
   streamApiBase?: string;
 } = {}): StreamProvider[] {
-  const metadataCache = new MetadataMemoryCache<Song>();
-
   return [
     {
       id: 'embedded',
@@ -399,7 +405,7 @@ export function createHarmoniaProviders({
     {
       id: 'youtube',
       canResolve(track) {
-        return Boolean(youtubeIdOf(track));
+        return Boolean(apiBase && youtubeIdOf(track));
       },
       async resolve(track) {
         const videoId = youtubeIdOf(track);
@@ -425,57 +431,56 @@ export function createHarmoniaProviders({
     {
       id: 'jiosaavn',
       canResolve(track) {
-        return isJioSaavnTrack(track);
+        return canResolveWithDirectJioSaavn(track);
       },
       async resolve(track, options) {
-        const id = String(track.id || (track as any).songId || '').trim();
-        if (!id) {
+        const directId = jioSaavnIdOf(track);
+        const title = String(track.name || track.title || '').trim();
+        const artists = artistNames(track).trim();
+
+        const direct = directId
+          ? await fetchDirectJioSaavnTrack(directId, {
+              fetchImpl,
+              signal: options.signal,
+            })
+          : await findDirectJioSaavnTrack({
+              title,
+              artist: artists,
+              duration: Number(track.duration || 0) || null,
+            }, {
+              fetchImpl,
+              signal: options.signal,
+            });
+
+        if (!direct) {
           throw new PlaybackPipelineError(
             PlaybackErrorType.TRACK_UNAVAILABLE,
-            'JioSaavn track is missing a stable id.',
+            'JioSaavn could not match this recording directly.',
             { provider: 'jiosaavn' }
           );
         }
 
-        if (options.forceFresh) metadataCache.invalidate(id);
-
-        const detailed = await metadataCache.getOrLoad(id, async () => {
-          let payload: any;
-          try {
-            payload = await fetchJson(
-              fetchImpl,
-              `${apiBase}/api/songs?ids=${encodeURIComponent(id)}`,
-              { method: 'GET', headers: { Accept: 'application/json' } },
-              options.signal
-            );
-          } catch (error) {
-            const typed = classifyPlaybackError(error);
-            if (typed.status !== 404) throw typed;
-            payload = await fetchJson(
-              fetchImpl,
-              `${apiBase}/api/songs/${encodeURIComponent(id)}`,
-              { method: 'GET', headers: { Accept: 'application/json' } },
-              options.signal
-            );
-          }
-
-          const value = firstSongFromPayload(payload);
-          if (!value) {
-            throw new PlaybackPipelineError(
-              PlaybackErrorType.TRACK_UNAVAILABLE,
-              'JioSaavn returned no track details.',
-              { provider: 'jiosaavn' }
-            );
-          }
-          return normalizeSong(value as any);
-        });
+        const detailed = normalizeSong({
+          ...track,
+          id: direct.id,
+          songId: direct.id,
+          name: direct.title || track.name,
+          title: direct.title || track.title || track.name,
+          artist: direct.artists.join(', ') || (track as any).artist,
+          duration: direct.duration || track.duration,
+          image: direct.image
+            ? [{ quality: '500x500', url: direct.image }]
+            : track.image,
+          source: 'jiosaavn',
+          provider: 'jiosaavn',
+          downloadUrl: direct.candidates,
+        } as any);
 
         const candidate = getAudioCandidates(detailed, options.quality || 'automatic')[0];
         if (!candidate) {
-          metadataCache.invalidate(id);
           throw new PlaybackPipelineError(
             PlaybackErrorType.INVALID_STREAM_URL,
-            'Fresh JioSaavn metadata contained no playable audio stream.',
+            'Direct JioSaavn metadata contained no playable audio stream.',
             { provider: 'jiosaavn' }
           );
         }
@@ -543,9 +548,10 @@ function sourceOrderForTrack(track: Song, providers: StreamProvider[]) {
   const map = new Map(providers.map((provider) => [provider.id, provider]));
   const order: StreamResolverProviderId[] = ['embedded'];
 
-  // Harmonia catalog playback is Saavn-first after embedded metadata.
-  // YouTube/server extraction remains a fallback, not the normal catalog path.
-  if (!isSpotifyMetadata(track) && isJioSaavnTrack(track)) order.push('jiosaavn');
+  // Resolve on-device with JioSaavn before any optional server fallback.
+  // This also lets metadata-only imports (for example Spotify playlist rows)
+  // match a playable JioSaavn recording without a Harmonia deployment.
+  if (canResolveWithDirectJioSaavn(track)) order.push('jiosaavn');
 
   if (youtubeIdOf(track)) order.push('youtube');
 
