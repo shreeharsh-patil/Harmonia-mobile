@@ -247,7 +247,6 @@ export default function LibraryScreen() {
                 <Text style={styles.emptyBody}>Create one here and it will also appear in Harmonia Web.</Text>
               </View>
             )}
-            )}
           </ScrollView>
         )
       )}
