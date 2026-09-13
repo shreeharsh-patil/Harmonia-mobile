@@ -34,6 +34,7 @@ import {
   type PlaybackErrorTypeValue,
 } from '@/src/lib/playback/playbackErrors';
 import {
+  captureRecoveryPosition,
   getPlaybackRecoveryPolicy,
   MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
 } from '@/src/lib/playback/recoveryPolicy';
@@ -1207,9 +1208,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
           invalidateResolvedStream(trackId);
 
-          const resumeAt = Math.max(
-            0,
-            Number(status.currentTime || 0),
+          const resumeAt = captureRecoveryPosition(
+            status.currentTime,
             lastKnownPositionRef.current,
             restoredPosition.current
           );
