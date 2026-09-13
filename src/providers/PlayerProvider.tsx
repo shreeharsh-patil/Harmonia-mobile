@@ -1065,7 +1065,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [status.currentTime, status.isLoaded]);
 
   useEffect(() => {
-    if (!status.isLoaded || status.error) return;
+    if (!status.playing || status.error) return;
     const pending = pendingHistoryRef.current;
     if (!pending) return;
 
@@ -1079,7 +1079,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     pendingHistoryRef.current = null;
     recordHistory(pending.song);
-  }, [recordHistory, status.error, status.isLoaded]);
+  }, [recordHistory, status.error, status.playing]);
 
   useEffect(() => {
     if (!status.isLoaded || pendingSeek.current == null) return;
