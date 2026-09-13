@@ -51,6 +51,10 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const [downloadFailures, setDownloadFailures] = useState<Record<string, string>>({});
   const downloadsRef = useRef<DownloadedTrack[]>([]);
   const activeDownloadsRef = useRef(new Set<string>());
+  const activeDownloadTasksRef = useRef(
+    new Map<string, ReturnType<typeof File.createDownloadTask>>()
+  );
+  const cancelledDownloadsRef = useRef(new Set<string>());
 
   downloadsRef.current = downloads;
 
@@ -111,6 +115,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     if (activeDownloadsRef.current.has(id)) return false;
 
     activeDownloadsRef.current.add(id);
+    cancelledDownloadsRef.current.delete(id);
     setDownloading((current) => ({ ...current, [id]: 0 }));
     setDownloadFailures((current) => {
       const next = { ...current };
@@ -124,6 +129,8 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       if (!DOWNLOAD_DIR.exists) DOWNLOAD_DIR.create();
 
       const resolved = await resolvePlayableSong(song, quality);
+      if (cancelledDownloadsRef.current.has(id)) return false;
+
       const extension = inferDownloadExtension(
         resolved.url,
         resolved.diagnostics?.mimeType,
@@ -135,12 +142,20 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
       const task = File.createDownloadTask(resolved.url, destination, {
         onProgress: ({ bytesWritten, totalBytes }) => {
+          if (cancelledDownloadsRef.current.has(id)) return;
           const progress = totalBytes > 0 ? bytesWritten / totalBytes : 0;
           setDownloading((current) => ({ ...current, [id]: progress }));
         },
       });
+      activeDownloadTasksRef.current.set(id, task);
 
       const output = await task.downloadAsync();
+      if (cancelledDownloadsRef.current.has(id)) {
+        try {
+          if (destination.exists) destination.delete();
+        } catch {}
+        return false;
+      }
       if (!output?.exists) throw new Error('Download did not complete');
 
       const entry: DownloadedTrack = {
@@ -162,13 +177,17 @@ export function OfflineProvider({ children }: PropsWithChildren) {
         if (destination?.exists) destination.delete();
       } catch {}
 
-      setDownloadFailures((current) => ({
-        ...current,
-        [id]: cause?.message || 'Download failed. Check your connection and try again.',
-      }));
+      if (!cancelledDownloadsRef.current.has(id)) {
+        setDownloadFailures((current) => ({
+          ...current,
+          [id]: cause?.message || 'Download failed. Check your connection and try again.',
+        }));
+      }
       return false;
     } finally {
       activeDownloadsRef.current.delete(id);
+      activeDownloadTasksRef.current.delete(id);
+      cancelledDownloadsRef.current.delete(id);
       setDownloading((current) => {
         const next = { ...current };
         delete next[id];
@@ -180,14 +199,20 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const removeDownload = useCallback(async (songId: string) => {
     const id = String(songId);
     const entry = byId.get(id);
-    if (!entry) return;
 
-    try {
-      const file = new File(entry.uri);
-      if (file.exists) file.delete();
-    } catch {}
+    if (activeDownloadsRef.current.has(id)) {
+      cancelledDownloadsRef.current.add(id);
+      activeDownloadTasksRef.current.get(id)?.cancel();
+    }
 
-    await persist(downloadsRef.current.filter((item) => item.song.id !== id));
+    if (entry) {
+      try {
+        const file = new File(entry.uri);
+        if (file.exists) file.delete();
+      } catch {}
+
+      await persist(downloadsRef.current.filter((item) => item.song.id !== id));
+    }
     setDownloadFailures((current) => {
       const next = { ...current };
       delete next[id];
@@ -197,12 +222,18 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   }, [byId, persist]);
 
   const clearDownloads = useCallback(async () => {
+    for (const id of activeDownloadsRef.current) {
+      cancelledDownloadsRef.current.add(id);
+      activeDownloadTasksRef.current.get(id)?.cancel();
+    }
+
     for (const entry of downloadsRef.current) {
       try {
         const file = new File(entry.uri);
         if (file.exists) file.delete();
       } catch {}
     }
+    setDownloading({});
     setDownloadFailures({});
     await persist([]);
     Haptics.selectionAsync().catch(() => {});
