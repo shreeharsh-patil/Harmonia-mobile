@@ -48,7 +48,7 @@ function decryptMediaUrl(encrypted: string) {
     const ciphertext = CryptoJS.enc.Base64.parse(encrypted);
     const key = CryptoJS.enc.Utf8.parse(DES_KEY);
     const result = CryptoJS.DES.decrypt(
-      { ciphertext } as CryptoJS.lib.CipherParams,
+      { ciphertext } as any,
       key,
       {
         mode: CryptoJS.mode.ECB,
