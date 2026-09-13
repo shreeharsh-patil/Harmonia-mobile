@@ -25,6 +25,11 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Validate catalog sync script
+        run: |
+          npm run sync:catalog
+          node -e "const c=require('./assets/catalog/harmonia-catalog.json'); console.log('[catalog-ci]', c.stats)"
+
       - name: TypeScript
         run: npm run typecheck
 
