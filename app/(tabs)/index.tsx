@@ -104,6 +104,21 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.discoveryLinks}>
+          <Pressable onPress={() => router.push('/explore')} style={styles.discoveryCard}>
+            <Text style={styles.discoveryKicker}>DISCOVER</Text>
+            <Text style={styles.discoveryTitle}>Explore</Text>
+            <Text numberOfLines={2} style={styles.discoveryBody}>Curated music, mixes and recent listening.</Text>
+            <Text style={styles.discoveryArrow}>↗</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/replay')} style={styles.discoveryCard}>
+            <Text style={styles.discoveryKicker}>YOUR LISTENING</Text>
+            <Text style={styles.discoveryTitle}>Replay</Text>
+            <Text numberOfLines={2} style={styles.discoveryBody}>Top songs, artists and weekly listening.</Text>
+            <Text style={styles.discoveryArrow}>↗</Text>
+          </Pressable>
+        </View>
+
         {currentSong && (
           <Pressable onPress={() => router.push('/player')} style={styles.resume}>
             <TrackArtwork song={currentSong} size={62} radius={12} />
@@ -240,12 +255,18 @@ function HomeSkeleton() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
   content: { paddingHorizontal: 18, paddingBottom: 160 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 26 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 20 },
   headerCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   eyebrow: { color: '#666', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   heading: { color: '#FFF', fontSize: 29, lineHeight: 33, fontWeight: '800', letterSpacing: -0.9, marginTop: 5, maxWidth: 290 },
   avatar: { width: 42, height: 42, borderRadius: 15, backgroundColor: '#EDEDED', alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#080808', fontSize: 18, fontWeight: '900' },
+  discoveryLinks: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  discoveryCard: { flex: 1, minHeight: 124, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#282828', backgroundColor: '#101010', padding: 14 },
+  discoveryKicker: { color: '#565656', fontSize: 8, fontWeight: '800', letterSpacing: 1.3 },
+  discoveryTitle: { color: '#F2F2F2', fontSize: 19, fontWeight: '850' as any, letterSpacing: -0.4, marginTop: 7 },
+  discoveryBody: { color: '#707070', fontSize: 11, lineHeight: 16, marginTop: 5, paddingRight: 14 },
+  discoveryArrow: { position: 'absolute', right: 12, bottom: 10, color: '#8A8A8A', fontSize: 16 },
   resume: { height: 82, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#292929', backgroundColor: '#111', padding: 10, flexDirection: 'row', alignItems: 'center', marginBottom: 28 },
   resumeCopy: { flex: 1, minWidth: 0, marginLeft: 12 },
   resumeLabel: { color: '#5F5F5F', fontSize: 8, fontWeight: '800', letterSpacing: 1.4 },
