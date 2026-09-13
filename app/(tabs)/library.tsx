@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
+import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchPlaylistSongs } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
@@ -60,6 +61,7 @@ export default function LibraryScreen() {
   const [newPlaylist, setNewPlaylist] = useState('');
   const [creating, setCreating] = useState(false);
   const [playingPlaylist, setPlayingPlaylist] = useState<string | null>(null);
+  const [actionSong, setActionSong] = useState<Song | null>(null);
 
   const playPlaylist = async (playlist: Playlist) => {
     const id = String(playlist._id || playlist.id || '');
@@ -117,6 +119,7 @@ export default function LibraryScreen() {
           song={item}
           active={currentSong?.id === item.id}
           onPress={() => void playSong(item, data)}
+          onMorePress={() => setActionSong(item)}
           trailing={trailing?.(item)}
         />
       )}
@@ -332,6 +335,7 @@ export default function LibraryScreen() {
           )}
         </View>
       )}
+      <SongActionsSheet song={actionSong} visible={actionSong != null} onClose={() => setActionSong(null)} />
     </SafeAreaView>
   );
 }

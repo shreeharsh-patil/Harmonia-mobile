@@ -8,11 +8,13 @@ export function SongRow({
   onPress,
   active = false,
   trailing,
+  onMorePress,
 }: {
   song: Song;
   onPress: () => void;
   active?: boolean;
   trailing?: React.ReactNode;
+  onMorePress?: () => void;
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
@@ -21,7 +23,21 @@ export function SongRow({
         <Text numberOfLines={1} style={[styles.title, active && styles.active]}>{song.name}</Text>
         <Text numberOfLines={1} style={styles.artist}>{artistNames(song)}</Text>
       </View>
-      {trailing ?? <Text style={styles.play}>›</Text>}
+      {trailing}
+      {onMorePress ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`More actions for ${song.name}`}
+          onPress={(event) => {
+            event.stopPropagation();
+            onMorePress();
+          }}
+          hitSlop={6}
+          style={styles.more}
+        >
+          <Text style={styles.moreText}>•••</Text>
+        </Pressable>
+      ) : trailing == null ? <Text style={styles.play}>›</Text> : null}
     </Pressable>
   );
 }
@@ -33,5 +49,7 @@ const styles = StyleSheet.create({
   active: { color: '#FFF' },
   artist: { color: '#777', fontSize: 13, marginTop: 4 },
   play: { color: '#676767', fontSize: 26, paddingHorizontal: 8 },
+  more: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' },
+  moreText: { color: '#888', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   pressed: { opacity: 0.65 },
 });
