@@ -76,6 +76,8 @@ export default function PlaylistScreen() {
 
     setLoading(true);
     setError(null);
+    setPlaylist(null);
+    setSongs([]);
     try {
       const detail = await fetchPlaylistDetails(id, token);
       const nextSongs = await fetchPlaylistSongs(detail);
