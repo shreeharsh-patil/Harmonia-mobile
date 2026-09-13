@@ -120,8 +120,6 @@ type PlayerContextValue = {
   isPlaying: boolean;
   isBuffering: boolean;
   isLoadingTrack: boolean;
-  position: number;
-  duration: number;
   error: string | null;
   playbackState: PlaybackEngineState;
   playbackErrorType: PlaybackErrorTypeValue | null;
@@ -163,7 +161,13 @@ type PlayerContextValue = {
   clearError: () => void;
 };
 
+type PlaybackProgressValue = {
+  position: number;
+  duration: number;
+};
+
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+const PlaybackProgressContext = createContext<PlaybackProgressValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOffline();
@@ -1042,6 +1046,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       preload(source, { preferredForwardBufferDuration: 12 }).catch(() => {
         if (preloadedSourceRef.current === source) preloadedSourceRef.current = null;
       });
+
+      // Warm one additional resolver entry, but do not ask the native decoder
+      // to buffer multiple tracks. This keeps next-next transitions responsive
+      // without turning prefetch into a battery/data heater.
+      const later = queueRef.current[indexRef.current + 2];
+      if (later?.id && later.id !== stable.id && !controller.signal.aborted) {
+        const laterStable = normalizeSong(later as any);
+        const laterOffline = getOfflineUri(laterStable.id);
+        if (!getImmediateLocalSource(laterStable, laterOffline)) {
+          resolveTrackStream(laterStable, {
+            quality: effectiveQualityRef.current,
+            signal: controller.signal,
+            priority: 'low',
+          }).catch(() => {});
+        }
+      }
     };
 
     void warmNextTrack();
@@ -1325,8 +1345,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     isPlaying: status.playing,
     isBuffering: status.isBuffering,
     isLoadingTrack,
-    position: status.currentTime || restoredPosition.current || 0,
-    duration: status.duration || currentSong?.duration || 0,
     error,
     playbackState,
     playbackErrorType,
@@ -1375,8 +1393,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     currentIndex,
     status.playing,
     status.isBuffering,
-    status.currentTime,
-    status.duration,
     isLoadingTrack,
     error,
     playbackState,
@@ -1418,11 +1434,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleAdaptivePipeline,
   ]);
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
+  const progressValue = useMemo<PlaybackProgressValue>(() => ({
+    position: status.currentTime || restoredPosition.current || 0,
+    duration: status.duration || currentSong?.duration || 0,
+  }), [currentSong?.duration, status.currentTime, status.duration]);
+
+  return (
+    <PlayerContext.Provider value={value}>
+      <PlaybackProgressContext.Provider value={progressValue}>
+        {children}
+      </PlaybackProgressContext.Provider>
+    </PlayerContext.Provider>
+  );
 }
 
 export function usePlayer() {
   const value = useContext(PlayerContext);
   if (!value) throw new Error('usePlayer must be used inside PlayerProvider');
+  return value;
+}
+
+export function usePlaybackProgress() {
+  const value = useContext(PlaybackProgressContext);
+  if (!value) throw new Error('usePlaybackProgress must be used inside PlayerProvider');
   return value;
 }
