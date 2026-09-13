@@ -15,16 +15,34 @@ type Props = {
 };
 
 const CANVAS_CACHE_LIMIT = 40;
-const canvasCache = new Map<string, string | null>();
+const NEGATIVE_CANVAS_CACHE_MS = 5 * 60_000;
+type CanvasCacheEntry = { url: string | null; expiresAt: number };
+const canvasCache = new Map<string, CanvasCacheEntry>();
 
 function cacheCanvas(key: string, url: string | null) {
   if (canvasCache.has(key)) canvasCache.delete(key);
-  canvasCache.set(key, url);
+  canvasCache.set(key, {
+    url,
+    expiresAt: url ? Number.POSITIVE_INFINITY : Date.now() + NEGATIVE_CANVAS_CACHE_MS,
+  });
   while (canvasCache.size > CANVAS_CACHE_LIMIT) {
     const oldest = canvasCache.keys().next().value;
     if (!oldest) break;
     canvasCache.delete(oldest);
   }
+}
+
+function readCanvasCache(key: string) {
+  const entry = canvasCache.get(key);
+  if (!entry) return { hit: false, url: null as string | null };
+  if (entry.expiresAt <= Date.now()) {
+    canvasCache.delete(key);
+    return { hit: false, url: null as string | null };
+  }
+  // Refresh insertion order for simple LRU behavior.
+  canvasCache.delete(key);
+  canvasCache.set(key, entry);
+  return { hit: true, url: entry.url };
 }
 
 function MotionCanvas({ url, active }: { url: string; active: boolean }) {
@@ -88,13 +106,17 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
       };
     }
 
-    if (canvasCache.has(canvasLookupKey)) {
-      setCanvasUrl(canvasCache.get(canvasLookupKey) || null);
+    const cached = readCanvasCache(canvasLookupKey);
+    if (cached.hit) {
+      setCanvasUrl(cached.url);
       return () => {
         active = false;
         controller.abort();
       };
     }
+
+    // Never display the previous track's Canvas while a new lookup is pending.
+    setCanvasUrl(null);
 
     fetchCanvasMedia(song, controller.signal)
       .then((media) => {
