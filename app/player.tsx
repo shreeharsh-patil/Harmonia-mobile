@@ -77,6 +77,8 @@ export default function PlayerScreen() {
     position,
     duration,
     error,
+    playbackState,
+    playbackErrorType,
     playbackRate,
     streamQuality,
     playbackDiagnostics,
@@ -514,12 +516,23 @@ export default function PlayerScreen() {
                   <DiagnosticsRow label="Codec" value={playbackDiagnostics?.codec || 'Not reported'} />
                   <DiagnosticsRow label="Bitrate" value={formatBitrate(playbackDiagnostics?.bitrate)} />
                   <DiagnosticsRow label="Resolved quality" value={playbackDiagnostics?.quality || 'Not reported'} />
+                  <DiagnosticsRow label="MIME type" value={playbackDiagnostics?.mimeType || 'Not reported'} />
                   <DiagnosticsRow label="Quality preference" value={streamQuality} />
                   <DiagnosticsRow label="Stream host" value={playbackDiagnostics?.streamHost || 'Not loaded'} />
                   <DiagnosticsRow
-                    label="Playback state"
-                    value={isBuffering ? 'Buffering' : isPlaying ? 'Playing' : 'Paused'}
+                    label="Resolution"
+                    value={playbackDiagnostics?.resolutionTimeMs != null
+                      ? `${playbackDiagnostics.resolutionTimeMs} ms · ${playbackDiagnostics.cache}`
+                      : 'Not measured'}
                   />
+                  <DiagnosticsRow
+                    label="Recovery attempt"
+                    value={playbackDiagnostics?.recoveryAttempt
+                      ? String(playbackDiagnostics.recoveryAttempt)
+                      : 'None'}
+                  />
+                  <DiagnosticsRow label="Playback state" value={playbackState} />
+                  <DiagnosticsRow label="Error type" value={playbackErrorType || 'None'} />
                   <DiagnosticsRow label="Duration" value={durationLabel(duration)} />
                   <DiagnosticsRow label="Playback rate" value={`${playbackRate}×`} />
                   <DiagnosticsRow

@@ -2,6 +2,12 @@ export const HARMONIA_API_URL = (
   process.env.EXPO_PUBLIC_HARMONIA_API_URL || 'https://jammify-music.vercel.app'
 ).replace(/\/$/, '');
 
+export const HARMONIA_STREAM_API_URL = (
+  process.env.EXPO_PUBLIC_HARMONIA_STREAM_API_URL ||
+  process.env.EXPO_PUBLIC_HARMONIA_BACKEND_URL ||
+  HARMONIA_API_URL
+).replace(/\/$/, '');
+
 export const APP_NAME = 'Harmonia';
 export const APP_VERSION = '0.3.0';
 export const ANDROID_BUILD_VERSION = '2';

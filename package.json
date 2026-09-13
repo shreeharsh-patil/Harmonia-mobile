@@ -14,7 +14,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "build:apk": "eas build -p android --profile preview",
-    "build:android": "eas build -p android --profile production"
+    "build:android": "eas build -p android --profile production",
+    "test": "tsx --test tests/playback/**/*.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
@@ -42,6 +43,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "tsx": "^4.20.5"
   }
 }
