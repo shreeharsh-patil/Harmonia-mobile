@@ -27,11 +27,14 @@ export type DownloadedTrack = {
 type OfflineContextValue = {
   downloads: DownloadedTrack[];
   downloading: Record<string, number>;
+  downloadFailures: Record<string, string>;
   totalBytes: number;
   isDownloaded: (songId: string) => boolean;
   getOfflineUri: (songId: string) => string | null;
   downloadSong: (song: Song, quality?: StreamQuality) => Promise<boolean>;
   removeDownload: (songId: string) => Promise<void>;
+  clearDownloads: () => Promise<void>;
+  clearDownloadFailure: (songId: string) => void;
 };
 
 const OfflineContext = createContext<OfflineContextValue | null>(null);
@@ -43,6 +46,7 @@ function safeName(value: string) {
 export function OfflineProvider({ children }: PropsWithChildren) {
   const [downloads, setDownloads] = useState<DownloadedTrack[]>([]);
   const [downloading, setDownloading] = useState<Record<string, number>>({});
+  const [downloadFailures, setDownloadFailures] = useState<Record<string, string>>({});
 
   const persist = useCallback(async (next: DownloadedTrack[]) => {
     setDownloads(next);
@@ -99,6 +103,11 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     if (downloading[id] != null) return false;
 
     setDownloading((current) => ({ ...current, [id]: 0 }));
+    setDownloadFailures((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
 
     try {
       if (!DOWNLOAD_DIR.exists) DOWNLOAD_DIR.create();
@@ -129,7 +138,11 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       await persist(next);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return true;
-    } catch {
+    } catch (cause: any) {
+      setDownloadFailures((current) => ({
+        ...current,
+        [id]: cause?.message || 'Download failed. Check your connection and try again.',
+      }));
       return false;
     } finally {
       setDownloading((current) => {
@@ -151,8 +164,34 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     } catch {}
 
     await persist(downloads.filter((item) => item.song.id !== id));
+    setDownloadFailures((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
     Haptics.selectionAsync().catch(() => {});
   }, [byId, downloads, persist]);
+
+  const clearDownloads = useCallback(async () => {
+    for (const entry of downloads) {
+      try {
+        const file = new File(entry.uri);
+        if (file.exists) file.delete();
+      } catch {}
+    }
+    setDownloadFailures({});
+    await persist([]);
+    Haptics.selectionAsync().catch(() => {});
+  }, [downloads, persist]);
+
+  const clearDownloadFailure = useCallback((songId: string) => {
+    const id = String(songId);
+    setDownloadFailures((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }, []);
 
   const totalBytes = useMemo(
     () => downloads.reduce((sum, item) => sum + Math.max(0, item.size || 0), 0),
@@ -162,19 +201,25 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const value = useMemo<OfflineContextValue>(() => ({
     downloads,
     downloading,
+    downloadFailures,
     totalBytes,
     isDownloaded,
     getOfflineUri,
     downloadSong,
     removeDownload,
+    clearDownloads,
+    clearDownloadFailure,
   }), [
     downloads,
     downloading,
+    downloadFailures,
     totalBytes,
     isDownloaded,
     getOfflineUri,
     downloadSong,
     removeDownload,
+    clearDownloads,
+    clearDownloadFailure,
   ]);
 
   return <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>;

@@ -32,7 +32,14 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
   const { token } = useAuth();
   const { playlists, isLiked, toggleLike, addToPlaylist } = useLibrary();
   const { playNext, addToQueue, streamQuality } = usePlayer();
-  const { isDownloaded, downloading, downloadSong, removeDownload } = useOffline();
+  const {
+    isDownloaded,
+    downloading,
+    downloadFailures,
+    downloadSong,
+    removeDownload,
+    clearDownloadFailure,
+  } = useOffline();
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [busyPlaylist, setBusyPlaylist] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -139,14 +146,23 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
                 }}
               />
               <Action
-                label={downloaded ? 'Remove download' : 'Download'}
-                detail={downloaded ? 'Delete the offline copy' : 'Save using your selected quality'}
+                label={downloaded ? 'Remove download' : downloadFailures[song.id] ? 'Retry download' : 'Download'}
+                detail={downloaded
+                  ? 'Delete the offline copy'
+                  : downloadFailures[song.id] || 'Save using your selected quality'}
                 glyph={downloaded ? '×' : '↓'}
                 busy={downloadProgress != null}
                 onPress={async () => {
-                  if (downloaded) await removeDownload(song.id);
-                  else await downloadSong(song, streamQuality);
-                  close();
+                  if (downloaded) {
+                    await removeDownload(song.id);
+                    close();
+                    return;
+                  }
+
+                  clearDownloadFailure(song.id);
+                  const ok = await downloadSong(song, streamQuality);
+                  if (ok) close();
+                  else setMessage('Download failed. Check your connection and retry.');
                 }}
               />
             </View>
