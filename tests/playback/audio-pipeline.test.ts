@@ -1031,3 +1031,59 @@ test('39 JioSaavn playback matching preserves Harmonia catalog identity', async 
   assert.equal(resolved.provider, 'jiosaavn');
   assert.match(resolved.url, /provider_160/);
 });
+
+
+test('40 stale JioSaavn ids fall back to recording matching', async () => {
+  let detailCalls = 0;
+  let searchCalls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('song.getDetails')) {
+        detailCalls += 1;
+        return json({});
+      }
+      if (url.includes('search.getResults')) {
+        searchCalls += 1;
+        return json({
+          results: [{
+            id: 'fresh-saavn-id',
+            title: 'Stale Source Song',
+            image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+            more_info: {
+              duration: '180',
+              encrypted_media_url: encryptedSaavnUrl(
+                'https://aac.saavncdn.com/001/fresh_96.mp4?Expires=9999999999'
+              ),
+              '320kbps': 'true',
+              artistMap: {
+                primary_artists: [{ id: 'artist-1', name: 'Source Artist' }],
+              },
+            },
+          }],
+        });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    },
+  });
+
+  const jio = providers.find((provider) => provider.id === 'jiosaavn');
+  assert.ok(jio);
+
+  const resolved = await jio!.resolve(song({
+    id: 'stale-catalog-id',
+    songId: 'stale-catalog-id',
+    name: 'Stale Source Song',
+    artist: 'Source Artist',
+    source: 'jiosaavn',
+    duration: 180,
+  }), { quality: 'normal' });
+
+  assert.equal(detailCalls, 1);
+  assert.equal(searchCalls, 1);
+  assert.equal(resolved.track.id, 'stale-catalog-id');
+  assert.equal((resolved.track as any).saavnId, 'fresh-saavn-id');
+  assert.match(resolved.url, /fresh_160/);
+});
