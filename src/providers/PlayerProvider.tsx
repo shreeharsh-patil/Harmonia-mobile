@@ -149,6 +149,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
   const recoveryInFlightRef = useRef(false);
+  const qualityReloadRef = useRef<() => Promise<void>>(async () => {});
   const recoveryStateRef = useRef<{ trackId: string | null; attempts: number }>({
     trackId: null,
     attempts: 0,
@@ -169,7 +170,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           playedAt: Date.now(),
         },
         ...current,
-      ].slice(0, 200);
+      ].slice(0, 500);
       AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -211,9 +212,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [persistSettings, player]);
 
   const setStreamQuality = useCallback((quality: StreamQuality) => {
+    if (quality === qualityRef.current) return;
     qualityRef.current = quality;
     setStreamQualityState(quality);
     persistSettings(rateRef.current, quality);
+    void qualityReloadRef.current();
   }, [persistSettings]);
 
   const toggleRepeat = useCallback(() => {
@@ -367,6 +370,26 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setIsLoadingTrack(false);
     }
   }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
+
+  useEffect(() => {
+    qualityReloadRef.current = async () => {
+      const index = indexRef.current;
+      const target = queueRef.current[index];
+      if (!target) return;
+
+      const stable = normalizeSong(target as any);
+      const localUri = typeof (stable as any).localUri === 'string' ? String((stable as any).localUri) : null;
+      const offlineUri = getOfflineUri(stable.id);
+      if (localUri || offlineUri) return;
+
+      const resumeAt = Math.max(
+        0,
+        Number(status.currentTime || lastKnownPositionRef.current || 0)
+      );
+      const shouldResume = Boolean(status.playing || playbackIntentRef.current);
+      await loadIndex(index, shouldResume, resumeAt, { recordHistory: false });
+    };
+  }, [getOfflineUri, loadIndex, status.currentTime, status.playing]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
@@ -539,7 +562,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
         if (historyRaw) {
           const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 200));
+          if (Array.isArray(parsedHistory)) setHistory(parsedHistory.slice(0, 500));
         }
 
         if (statsRaw) {
