@@ -46,3 +46,13 @@ export function getPlaybackRecoveryPolicy(
 
   return { action: 'fail' as const, delayMs: 0 };
 }
+
+export function captureRecoveryPosition(...values: Array<number | null | undefined>) {
+  return Math.max(
+    0,
+    ...values.map((value) => {
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? number : 0;
+    })
+  );
+}
