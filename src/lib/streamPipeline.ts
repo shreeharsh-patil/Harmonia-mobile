@@ -1,10 +1,10 @@
+import type { Song } from '@/src/types';
 import {
-  resolvePlayableSong,
+  resolveTrackStream,
+  type ResolveTrackOptions,
   type ResolvedStreamDiagnostics,
   type StreamQuality,
-} from '@/src/lib/api';
-import { HARMONIA_API_URL } from '@/src/config';
-import type { Song } from '@/src/types';
+} from '@/src/lib/playback/streamResolver';
 
 export type AdaptivePipelineStatus =
   | 'idle'
@@ -39,10 +39,11 @@ const QUALITY_RANK: Record<StreamQuality, number> = {
   maximum: 4,
 };
 
-function parseBitrate(value: number | null, quality: string | null) {
+function bitrate(value: number | null, quality: string | null) {
   if (value && Number.isFinite(value)) return value;
   const text = String(quality || '').toLowerCase();
-  const match = text.match(/(\d{2,4})\s*k(?:bps)?/);
+  if (/(lossless|flac|alac|wav)/.test(text)) return 10_000_000;
+  const match = text.match(/(\d{2,4})\s*k(?:bps)?/) || text.match(/(\d{2,4})/);
   return match ? Number(match[1]) * 1000 : 0;
 }
 
@@ -64,11 +65,11 @@ export function isMeaningfulPromotion(
 ) {
   if (initial.url === candidate.url) return false;
 
-  const initialBitrate = parseBitrate(
+  const initialBitrate = bitrate(
     initial.diagnostics.bitrate,
     initial.diagnostics.quality
   );
-  const candidateBitrate = parseBitrate(
+  const candidateBitrate = bitrate(
     candidate.diagnostics.bitrate,
     candidate.diagnostics.quality
   );
@@ -81,64 +82,42 @@ export function isMeaningfulPromotion(
     QUALITY_RANK[initial.requestedQuality];
 }
 
-function fallbackYoutubeId(song: Song) {
-  const raw = song as any;
-  const candidate = String(raw.videoId || raw.youtubeId || '').trim();
-  return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : null;
-}
-
-function hostOf(url: string) {
-  try {
-    return new URL(url, HARMONIA_API_URL).host || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
-async function resolveTimed(song: Song, quality: StreamQuality) {
+async function resolveTimed(
+  song: Song,
+  quality: StreamQuality,
+  options: Omit<ResolveTrackOptions, 'quality'> = {}
+): Promise<PipelineResolvedStream> {
   const started = Date.now();
-  try {
-    const resolved = await resolvePlayableSong(song, quality);
-    return {
-      ...resolved,
-      requestedQuality: quality,
-      resolvedAt: Date.now(),
-      resolveMs: Date.now() - started,
-    } satisfies PipelineResolvedStream;
-  } catch (primaryError) {
-    const youtubeId = fallbackYoutubeId(song);
-    if (!youtubeId) throw primaryError;
+  const resolved = await resolveTrackStream(song, {
+    ...options,
+    quality,
+  });
 
-    const url = `${HARMONIA_API_URL}/api/yt-stream?id=${encodeURIComponent(youtubeId)}`;
-    return {
-      song,
-      url,
-      diagnostics: {
-        provider: 'YouTube fallback',
-        source: 'proxy',
-        codec: null,
-        bitrate: null,
-        quality: quality === 'automatic' ? 'adaptive' : quality,
-        streamHost: hostOf(url),
-      },
-      requestedQuality: quality,
-      resolvedAt: Date.now(),
-      resolveMs: Date.now() - started,
-    } satisfies PipelineResolvedStream;
-  }
+  return {
+    song: resolved.track,
+    url: resolved.url,
+    diagnostics: resolved.diagnostics,
+    requestedQuality: quality,
+    resolvedAt: resolved.resolvedAt,
+    resolveMs: Date.now() - started,
+  };
 }
 
 export async function createAdaptivePipeline(
   song: Song,
-  targetQuality: StreamQuality
+  targetQuality: StreamQuality,
+  options: Omit<ResolveTrackOptions, 'quality'> = {}
 ): Promise<AdaptivePipelinePlan> {
   const startQuality = fastStartQuality(targetQuality);
-  const initial = await resolveTimed(song, startQuality);
+  const initial = await resolveTimed(song, startQuality, options);
 
   const promotion =
     startQuality === targetQuality
       ? Promise.resolve(null)
-      : resolveTimed(song, targetQuality)
+      : resolveTimed(song, targetQuality, {
+          ...options,
+          forceFresh: false,
+        })
           .then((candidate) =>
             isMeaningfulPromotion(initial, candidate) ? candidate : null
           )
