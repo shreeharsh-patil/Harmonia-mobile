@@ -18,6 +18,7 @@ import {
 } from 'react';
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
 import {
+  fetchSongSuggestions,
   resolvePlayableSong,
   type ResolvedStreamDiagnostics,
   type StreamQuality,
@@ -91,6 +92,7 @@ type PlayerContextValue = {
   sleepRemaining: number;
   repeatMode: RepeatMode;
   shuffleEnabled: boolean;
+  radioEnabled: boolean;
   history: PlaybackHistoryEntry[];
   listeningStats: ListeningStats;
   playbackDiagnostics: PlaybackDiagnostics | null;
@@ -111,6 +113,7 @@ type PlayerContextValue = {
   setSleepTimer: (mode: SleepTimerMode) => void;
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  toggleRadio: () => void;
   clearError: () => void;
 };
 
@@ -130,6 +133,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [sleepRemaining, setSleepRemaining] = useState(0);
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
   const [shuffleEnabled, setShuffleEnabledState] = useState(false);
+  const [radioEnabled, setRadioEnabledState] = useState(true);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
   const [listeningStats, setListeningStats] = useState<ListeningStats>({
@@ -152,6 +156,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const sleepDeadlineRef = useRef<number | null>(null);
   const repeatModeRef = useRef<RepeatMode>('off');
   const shuffleRef = useRef(false);
+  const radioRef = useRef(true);
   const unshuffledQueueRef = useRef<Song[]>([]);
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
@@ -197,7 +202,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     nextRate: number,
     nextQuality: StreamQuality,
     nextRepeat: RepeatMode = repeatModeRef.current,
-    nextShuffle: boolean = shuffleRef.current
+    nextShuffle: boolean = shuffleRef.current,
+    nextRadio: boolean = radioRef.current
   ) => {
     AsyncStorage.setItem(
       PLAYER_SETTINGS_KEY,
@@ -206,6 +212,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         streamQuality: nextQuality,
         repeatMode: nextRepeat,
         shuffleEnabled: nextShuffle,
+        radioEnabled: nextRadio,
       })
     ).catch(() => {});
   }, []);
@@ -271,6 +278,19 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     }
 
     persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+  }, [persistSettings]);
+
+  const toggleRadio = useCallback(() => {
+    const nextEnabled = !radioRef.current;
+    radioRef.current = nextEnabled;
+    setRadioEnabledState(nextEnabled);
+    persistSettings(
+      rateRef.current,
+      qualityRef.current,
+      repeatModeRef.current,
+      shuffleRef.current,
+      nextEnabled
+    );
   }, [persistSettings]);
 
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
@@ -498,6 +518,30 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         await loadIndex(0, true, 0);
         return;
       }
+
+      const seed = list[indexRef.current];
+      if (radioRef.current && seed?.id && !(seed as any).localUri) {
+        try {
+          const suggestions = await fetchSongSuggestions(seed.id, 20);
+          const existingIds = new Set(list.map((song) => String(song.id)));
+          const additions = suggestions
+            .map((song) => persistenceSafeSong(normalizeSong(song as any)))
+            .filter((song) => song.id && !existingIds.has(String(song.id)))
+            .slice(0, 12);
+
+          if (additions.length) {
+            const extended = [...list, ...additions];
+            queueRef.current = extended;
+            unshuffledQueueRef.current = extended;
+            setQueue(extended);
+            await loadIndex(indexRef.current + 1, true, 0);
+            return;
+          }
+        } catch {
+          // Radio is best-effort; a provider failure should never break playback.
+        }
+      }
+
       playbackIntentRef.current = false;
       player.pause();
       await player.seekTo(0).catch(() => {});
@@ -594,14 +638,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
           const nextRepeat = validRepeatModes.includes(settings.repeatMode) ? settings.repeatMode : 'off';
           const nextShuffle = Boolean(settings.shuffleEnabled);
+          const nextRadio = settings.radioEnabled !== false;
           rateRef.current = nextRate;
           qualityRef.current = nextQuality;
           repeatModeRef.current = nextRepeat;
           shuffleRef.current = nextShuffle;
+          radioRef.current = nextRadio;
           setPlaybackRateState(nextRate);
           setStreamQualityState(nextQuality);
           setRepeatModeState(nextRepeat);
           setShuffleEnabledState(nextShuffle);
+          setRadioEnabledState(nextRadio);
           player.setPlaybackRate(nextRate);
         }
 
@@ -826,6 +873,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     sleepRemaining,
     repeatMode,
     shuffleEnabled,
+    radioEnabled,
     history,
     listeningStats,
     playbackDiagnostics,
@@ -846,6 +894,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setSleepTimer,
     toggleRepeat,
     toggleShuffle,
+    toggleRadio,
     clearError: () => setError(null),
   }), [
     currentSong,
@@ -863,6 +912,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     sleepRemaining,
     repeatMode,
     shuffleEnabled,
+    radioEnabled,
     history,
     listeningStats,
     playbackDiagnostics,
@@ -883,6 +933,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     setSleepTimer,
     toggleRepeat,
     toggleShuffle,
+    toggleRadio,
   ]);
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
