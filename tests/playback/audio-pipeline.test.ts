@@ -22,7 +22,11 @@ import {
 import { PlaybackErrorType } from '../../src/lib/playback/playbackErrors';
 import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
 import { persistenceSafeSong } from '../../src/lib/song';
-import { searchDirectJioSaavn } from '../../src/lib/playback/jiosaavnDirect';
+import {
+  searchDirectJioSaavn,
+  searchDirectJioSaavnAlbums,
+  searchDirectJioSaavnArtists,
+} from '../../src/lib/playback/jiosaavnDirect';
 import type { Song } from '../../src/types';
 
 function song(overrides: Record<string, any> = {}): Song {
@@ -352,10 +356,12 @@ test('16 downloaded songs resolve immediately without a network provider', () =>
   });
 });
 
-test('17 next-track preloading stays bounded to one likely track and 12s buffer', async () => {
+test('17 native preloading stays on one track while resolver warms one extra candidate', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /queueRef\.current\[indexRef\.current \+ 1\]/);
+  assert.match(source, /queueRef\.current\[indexRef\.current \+ 2\]/);
   assert.match(source, /preferredForwardBufferDuration: 12/);
+  assert.match(source, /priority: 'low'/);
   assert.match(source, /clearPreloadedSource/);
 });
 
@@ -632,4 +638,61 @@ test('35 direct JioSaavn catalog search works without Harmonia API', async () =>
   assert.equal(results[0].title, 'Test Song');
   assert.deepEqual(results[0].artists, ['Test Artist']);
   assert.match(results[0].image || '', /500x500/);
+});
+
+
+test('36 direct JioSaavn album and artist search work without Harmonia API', async () => {
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('search.getAlbumResults')) {
+      return json({
+        results: [{
+          id: 'album-1',
+          title: 'Test Album',
+          year: '2026',
+          image: 'https://c.saavncdn.com/001/album-150x150.jpg',
+          more_info: {
+            artistMap: {
+              primary_artists: [{ id: 'artist-1', name: 'Test Artist' }],
+            },
+          },
+        }],
+      });
+    }
+    if (url.includes('search.getArtistResults')) {
+      return json({
+        results: [{
+          id: 'artist-1',
+          name: 'Test Artist',
+          role: 'Music',
+          image: 'https://c.saavncdn.com/001/artist-150x150.jpg',
+        }],
+      });
+    }
+    return json({}, 404);
+  };
+
+  const [albums, artists] = await Promise.all([
+    searchDirectJioSaavnAlbums('Test', { fetchImpl, limit: 5 }),
+    searchDirectJioSaavnArtists('Test', { fetchImpl, limit: 5 }),
+  ]);
+
+  assert.equal(albums[0]?.id, 'album-1');
+  assert.equal(albums[0]?.title, 'Test Album');
+  assert.deepEqual(albums[0]?.artists, ['Test Artist']);
+  assert.match(albums[0]?.image || '', /500x500/);
+
+  assert.equal(artists[0]?.id, 'artist-1');
+  assert.equal(artists[0]?.name, 'Test Artist');
+  assert.match(artists[0]?.image || '', /500x500/);
+});
+
+test('37 player progress is isolated from the main player context', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /const PlaybackProgressContext = createContext/);
+  assert.match(source, /export function usePlaybackProgress\(\)/);
+  assert.doesNotMatch(
+    source.match(/const value = useMemo<PlayerContextValue>[\s\S]*?const progressValue/)?.[0] || '',
+    /position: status\.currentTime/
+  );
 });
