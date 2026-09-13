@@ -17,7 +17,8 @@
     "build:android": "eas build -p android --profile production",
     "test": "tsx --test tests/playback/**/*.test.ts",
     "sync:catalog": "node scripts/sync-static-catalog.mjs",
-    "eas-build-post-install": "npm run sync:catalog"
+    "eas-build-post-install": "npm run sync:catalog:required",
+    "sync:catalog:required": "node scripts/sync-static-catalog.mjs --required"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
