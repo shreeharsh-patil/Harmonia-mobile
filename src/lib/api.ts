@@ -699,23 +699,56 @@ export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
   if (!title) return null;
 
   const params = new URLSearchParams({
-    endpoint: 'get',
     artist_name: artist,
     track_name: title,
   });
   if (song.duration) params.set('duration', String(Math.round(song.duration)));
 
-  try {
-    const exact = await requestJson<LyricsResult>(`/api/proxy/lyrics?${params.toString()}`);
-    if (exact?.syncedLyrics || exact?.plainLyrics) {
-      return { ...exact, lyricsProvider: 'LRCLib' };
+  const getLyrics = async () => {
+    if (HAS_HARMONIA_API) {
+      try {
+        const exact = await requestJson<LyricsResult>(
+          `/api/proxy/lyrics?endpoint=get&${params.toString()}`
+        );
+        if (exact?.syncedLyrics || exact?.plainLyrics) return exact;
+      } catch {}
     }
-  } catch {}
+
+    try {
+      const response = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
+        headers: { Accept: 'application/json', 'User-Agent': 'Harmonia Mobile' },
+      });
+      if (!response.ok) return null;
+      return await response.json() as LyricsResult;
+    } catch {
+      return null;
+    }
+  };
+
+  const exact = await getLyrics();
+  if (exact?.syncedLyrics || exact?.plainLyrics) {
+    return { ...exact, lyricsProvider: 'LRCLib' };
+  }
+
+  const q = encodeURIComponent(`${artist} ${title}`);
+  if (HAS_HARMONIA_API) {
+    try {
+      const search = await requestJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
+        `/api/proxy/lyrics?endpoint=search&q=${q}`
+      );
+      const best = Array.isArray(search)
+        ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
+        : null;
+      if (best) return { ...best, lyricsProvider: 'LRCLib' };
+    } catch {}
+  }
 
   try {
-    const search = await requestJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
-      `/api/proxy/lyrics?endpoint=search&q=${encodeURIComponent(`${artist} ${title}`)}`
-    );
+    const response = await fetch(`https://lrclib.net/api/search?q=${q}`, {
+      headers: { Accept: 'application/json', 'User-Agent': 'Harmonia Mobile' },
+    });
+    if (!response.ok) return null;
+    const search = await response.json() as Array<LyricsResult & { trackName?: string; artistName?: string }>;
     const best = Array.isArray(search)
       ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
       : null;
