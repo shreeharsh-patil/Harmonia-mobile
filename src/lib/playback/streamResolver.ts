@@ -623,7 +623,9 @@ export class StreamResolver {
 
       try {
         if (options.signal?.aborted) {
-          throw new DOMException('Playback resolution aborted', 'AbortError');
+          const aborted = new Error('Playback resolution aborted');
+          aborted.name = 'AbortError';
+          throw aborted;
         }
 
         const value = await provider.resolve(track, options);
