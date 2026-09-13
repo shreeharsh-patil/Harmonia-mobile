@@ -12,7 +12,6 @@ import {
   MetadataMemoryCache,
   ResolvedStreamMemoryCache,
   getStreamExpiresAt,
-  isResolvedStreamFresh,
 } from '@/src/lib/playback/streamCache';
 
 export { isResolvedStreamFresh } from '@/src/lib/playback/streamCache';
