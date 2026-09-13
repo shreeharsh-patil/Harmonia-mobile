@@ -777,10 +777,22 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const seed = list[indexRef.current];
+      const endGeneration = loadGenerationRef.current;
+      const endIndex = indexRef.current;
+      const seed = list[endIndex];
+      const seedId = String(seed?.id || '');
+
       if (radioRef.current && seed?.id && !(seed as any).localUri) {
         try {
           const suggestions = await fetchSongSuggestions(seed.id, 20);
+          if (
+            endGeneration !== loadGenerationRef.current ||
+            indexRef.current !== endIndex ||
+            String(queueRef.current[endIndex]?.id || '') !== seedId
+          ) {
+            return;
+          }
+
           const existingIds = new Set(list.map((song) => String(song.id)));
           const additions = suggestions
             .map((song) => normalizeSong(song as any))
@@ -792,12 +804,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             queueRef.current = extended;
             unshuffledQueueRef.current = extended;
             setQueue(extended);
-            await loadIndex(indexRef.current + 1, true, 0);
+            await loadIndex(endIndex + 1, true, 0);
             return;
           }
         } catch {
           // Radio is best-effort; a provider failure should never break playback.
         }
+      }
+
+      if (
+        endGeneration !== loadGenerationRef.current ||
+        indexRef.current !== endIndex ||
+        String(queueRef.current[endIndex]?.id || '') !== seedId
+      ) {
+        return;
       }
 
       playbackIntentRef.current = false;
@@ -856,6 +876,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [currentSong?.duration, player, status.duration]);
 
   useEffect(() => {
+    const restoreGeneration = loadGenerationRef.current;
+
     setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
@@ -930,7 +952,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           player.setPlaybackRate(nextRate);
         }
 
-        if (!snapshotRaw) return;
+        if (!snapshotRaw || loadGenerationRef.current !== restoreGeneration) return;
         const snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
         const restoredQueue = Array.isArray(snapshot.queue)
           ? snapshot.queue.map((song) => persistenceSafeSong(normalizeSong(song as any))).filter((song) => song.id)
