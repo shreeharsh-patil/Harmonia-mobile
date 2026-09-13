@@ -11,6 +11,15 @@ import type {
 
 export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
 
+export type ResolvedStreamDiagnostics = {
+  provider: string;
+  source: 'proxy' | 'catalog';
+  codec: string | null;
+  bitrate: number | null;
+  quality: string | null;
+  streamHost: string;
+};
+
 export type LyricsResult = {
   syncedLyrics?: string | null;
   plainLyrics?: string | null;
@@ -182,7 +191,13 @@ function qualityCeiling(quality: StreamQuality) {
 }
 
 function pickAudioCandidate(
-  candidates: Array<{ quality?: string; url: string; bitrate?: number }>,
+  candidates: Array<{
+    quality?: string;
+    url: string;
+    bitrate?: number;
+    codec?: string;
+    mimeType?: string;
+  }>,
   quality: StreamQuality
 ) {
   const available = [...candidates].filter((item) => item?.url);
@@ -195,18 +210,35 @@ function pickAudioCandidate(
   return ranked.find((item) => qualityScore(item) <= ceiling) || ranked[ranked.length - 1];
 }
 
+function streamHost(url: string) {
+  try {
+    return new URL(url, HARMONIA_API_URL).host || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export async function resolvePlayableSong(
   song: Song,
   quality: StreamQuality = 'automatic'
-): Promise<{ song: Song; url: string }> {
+): Promise<{ song: Song; url: string; diagnostics: ResolvedStreamDiagnostics }> {
   const stable = normalizeSong(song as any);
   const source = String(stable.source || stable.provider || '').toLowerCase();
   const youtubeId = String(stable.videoId || stable.youtubeId || (source.includes('youtube') ? stable.id : ''));
 
   if (/^[A-Za-z0-9_-]{11}$/.test(youtubeId) && source.includes('youtube')) {
+    const url = `${HARMONIA_API_URL}/api/yt-stream?id=${encodeURIComponent(youtubeId)}`;
     return {
       song: stable,
-      url: `${HARMONIA_API_URL}/api/yt-stream?id=${encodeURIComponent(youtubeId)}`,
+      url,
+      diagnostics: {
+        provider: String(stable.provider || stable.source || 'YouTube'),
+        source: 'proxy',
+        codec: null,
+        bitrate: null,
+        quality: quality === 'automatic' ? 'adaptive' : quality,
+        streamHost: streamHost(url),
+      },
     };
   }
 
@@ -220,7 +252,22 @@ export async function resolvePlayableSong(
     throw new ApiError('This track is currently unavailable');
   }
 
-  return { song: playable, url: candidate.url };
+  const codec = String(candidate.codec || candidate.mimeType?.split('/').pop() || '').trim() || null;
+  const bitrate = Number(candidate.bitrate || 0) || null;
+  const resolvedQuality = String(candidate.quality || '').trim() || null;
+
+  return {
+    song: playable,
+    url: candidate.url,
+    diagnostics: {
+      provider: String(playable.provider || playable.source || stable.provider || stable.source || 'Harmonia'),
+      source: 'catalog',
+      codec,
+      bitrate,
+      quality: resolvedQuality,
+      streamHost: streamHost(candidate.url),
+    },
+  };
 }
 
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
