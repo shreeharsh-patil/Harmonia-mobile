@@ -172,7 +172,7 @@ function deriveArtists(matchedSongs: Song[], query: string, limit: number): Harm
   const result: HarmoniaArtistEntity[] = [];
 
   for (const song of matchedSongs) {
-    const rawArtists = Array.isArray(song.artists)
+    const rawArtists: Array<{ id?: string; name: string; image?: any }> = Array.isArray(song.artists)
       ? song.artists
       : Array.isArray(song.artists?.primary)
         ? song.artists.primary
