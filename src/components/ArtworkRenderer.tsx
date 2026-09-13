@@ -14,6 +14,19 @@ type Props = {
   style?: StyleProp<ViewStyle>;
 };
 
+const CANVAS_CACHE_LIMIT = 40;
+const canvasCache = new Map<string, string | null>();
+
+function cacheCanvas(key: string, url: string | null) {
+  if (canvasCache.has(key)) canvasCache.delete(key);
+  canvasCache.set(key, url);
+  while (canvasCache.size > CANVAS_CACHE_LIMIT) {
+    const oldest = canvasCache.keys().next().value;
+    if (!oldest) break;
+    canvasCache.delete(oldest);
+  }
+}
+
 function MotionCanvas({ url, active }: { url: string; active: boolean }) {
   const player = useVideoPlayer(url, (instance) => {
     instance.loop = true;
@@ -67,17 +80,34 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    setCanvasUrl(null);
 
-    if (enableMotion && !batterySaver && !reduceMotion && foreground) {
-      fetchCanvasMedia(song, controller.signal)
-        .then((media) => {
-          if (active) setCanvasUrl(media?.url || null);
-        })
-        .catch((cause: any) => {
-          if (active && cause?.name !== 'AbortError') setCanvasUrl(null);
-        });
+    if (!enableMotion || batterySaver || reduceMotion || !foreground) {
+      return () => {
+        active = false;
+        controller.abort();
+      };
     }
+
+    if (canvasCache.has(canvasLookupKey)) {
+      setCanvasUrl(canvasCache.get(canvasLookupKey) || null);
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
+
+    fetchCanvasMedia(song, controller.signal)
+      .then((media) => {
+        if (!active) return;
+        const nextUrl = media?.url || null;
+        cacheCanvas(canvasLookupKey, nextUrl);
+        setCanvasUrl(nextUrl);
+      })
+      .catch((cause: any) => {
+        if (!active || cause?.name === 'AbortError') return;
+        cacheCanvas(canvasLookupKey, null);
+        setCanvasUrl(null);
+      });
 
     return () => {
       active = false;
