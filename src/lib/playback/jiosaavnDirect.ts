@@ -360,3 +360,171 @@ export async function searchDirectJioSaavn(
     return [];
   }
 }
+
+
+export type DirectSaavnPlaylistSearch = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  image: string | null;
+  songCount: number;
+};
+
+export type DirectSaavnPlaylist = DirectSaavnPlaylistSearch & {
+  tracks: DirectSaavnTrack[];
+};
+
+function payloadSongs(payload: any) {
+  if (Array.isArray(payload?.songs)) return payload.songs;
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    return Object.values(payload).filter((value: any) => value && typeof value === 'object' && value.id);
+  }
+  return [];
+}
+
+export async function fetchDirectJioSaavnTracks(
+  ids: string[],
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {}
+): Promise<DirectSaavnTrack[]> {
+  const cleanIds = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (!cleanIds.length) return [];
+
+  const chunks: string[][] = [];
+  for (let index = 0; index < cleanIds.length; index += 50) {
+    chunks.push(cleanIds.slice(index, index + 50));
+  }
+
+  const resolved = await Promise.all(chunks.map(async (chunk) => {
+    try {
+      const payload = await requestJson({
+        __call: 'song.getDetails',
+        _format: 'json',
+        _marker: '0',
+        api_version: '4',
+        ctx: 'android',
+        pids: chunk.join(','),
+      }, { fetchImpl, signal, timeoutMs });
+
+      return payloadSongs(payload)
+        .map((raw: any) => toDirectTrack(raw, String(raw?.id || '')))
+        .filter(Boolean) as DirectSaavnTrack[];
+    } catch (error: any) {
+      if (signal?.aborted || error?.name === 'AbortError') throw error;
+      return [];
+    }
+  }));
+
+  const byId = new Map<string, DirectSaavnTrack>();
+  for (const track of resolved.flat()) byId.set(String(track.id), track);
+  return cleanIds.map((id) => byId.get(id)).filter(Boolean) as DirectSaavnTrack[];
+}
+
+export async function searchDirectJioSaavnPlaylists(
+  query: string,
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+    limit = 20,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    limit?: number;
+  } = {}
+): Promise<DirectSaavnPlaylistSearch[]> {
+  const cleanQuery = String(query || '').trim();
+  if (!cleanQuery) return [];
+
+  try {
+    const payload = await requestJson({
+      __call: 'search.getPlaylistResults',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'android',
+      q: cleanQuery,
+      p: '0',
+      n: String(Math.max(1, Math.min(50, limit))),
+    }, { fetchImpl, signal, timeoutMs });
+
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    return results
+      .map((raw: any) => ({
+        id: String(raw?.id || raw?.listid || ''),
+        title: decodeHtml(raw?.title || raw?.listname || ''),
+        subtitle: raw?.subtitle || raw?.header_desc
+          ? decodeHtml(raw.subtitle || raw.header_desc)
+          : null,
+        image: typeof raw?.image === 'string'
+          ? raw.image.replace(/150x150|50x50/g, '500x500')
+          : null,
+        songCount: Number(raw?.list_count || raw?.song_count || 0) || 0,
+      }))
+      .filter((item: DirectSaavnPlaylistSearch) => Boolean(item.id && item.title))
+      .slice(0, limit);
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return [];
+  }
+}
+
+export async function fetchDirectJioSaavnPlaylist(
+  id: string,
+  {
+    fetchImpl = fetch,
+    signal,
+    timeoutMs = 8000,
+  }: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {}
+): Promise<DirectSaavnPlaylist | null> {
+  const cleanId = String(id || '').trim();
+  if (!cleanId) return null;
+
+  try {
+    const payload = await requestJson({
+      __call: 'playlist.getDetails',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'android',
+      listid: cleanId,
+    }, { fetchImpl, signal, timeoutMs });
+
+    if (!payload || typeof payload !== 'object') return null;
+    const tracks = payloadSongs(payload)
+      .map((raw: any) => toDirectTrack(raw, String(raw?.id || '')))
+      .filter(Boolean) as DirectSaavnTrack[];
+
+    const title = decodeHtml(payload?.title || payload?.listname || '');
+    if (!title && !tracks.length) return null;
+
+    return {
+      id: String(payload?.id || payload?.listid || cleanId),
+      title: title || 'Playlist',
+      subtitle: payload?.subtitle || payload?.header_desc
+        ? decodeHtml(payload.subtitle || payload.header_desc)
+        : null,
+      image: typeof payload?.image === 'string'
+        ? payload.image.replace(/150x150|50x50/g, '500x500')
+        : null,
+      songCount: Number(payload?.list_count || payload?.song_count || tracks.length || 0) || tracks.length,
+      tracks,
+    };
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return null;
+  }
+}
