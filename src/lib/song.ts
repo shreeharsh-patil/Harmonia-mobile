@@ -83,24 +83,64 @@ export function durationLabel(seconds?: number) {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-export function persistenceSafeSong(song: Song): Song {
-  const {
-    downloadUrl: _downloadUrl,
-    streamUrl: _streamUrl,
-    stream_url: _streamUrl2,
-    audioUrl: _audioUrl,
-    audio_url: _audioUrl2,
-    mediaUrl: _mediaUrl,
-    media_url: _mediaUrl2,
-    playbackUrl: _playbackUrl,
-    resolvedUrl: _resolvedUrl,
-    signedUrl: _signedUrl,
-    ...stable
-  } = song as Record<string, any>;
+const TEMPORARY_STREAM_FIELDS = new Set([
+  'downloadUrl',
+  'streamUrl',
+  'stream_url',
+  'audioUrl',
+  'audio_url',
+  'mediaUrl',
+  'media_url',
+  'playbackUrl',
+  'resolvedUrl',
+  'signedUrl',
+]);
 
-  if (typeof stable.url === 'string' && /(?:googlevideo|saavncdn|\/api\/(?:yt-stream|stream|proxy\/audio))/i.test(stable.url)) {
-    delete stable.url;
+const TEMPORARY_STREAM_HOSTS = ['googlevideo.com', 'saavncdn.com'];
+
+export function isTemporaryStreamUrl(value: unknown) {
+  if (typeof value !== 'string' || !value) return false;
+  if (/^(blob:|data:audio\/)/i.test(value)) return true;
+
+  try {
+    const parsed = new URL(value, 'https://harmonia.local');
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+
+    return TEMPORARY_STREAM_HOSTS.some(
+      (candidate) => host === candidate || host.endsWith(`.${candidate}`)
+    ) ||
+      /\.(mp3|m4a|mp4|aac|ogg|opus|webm|flac|wav)$/i.test(path) ||
+      path.includes('/api/yt-stream') ||
+      path.includes('/api/stream-track') ||
+      path.includes('/api/proxy/audio') ||
+      path.includes('/api/stream') ||
+      parsed.searchParams.has('expire') ||
+      parsed.searchParams.has('expires') ||
+      parsed.searchParams.has('expiresAt') ||
+      parsed.searchParams.has('signature') ||
+      parsed.searchParams.has('sig') ||
+      parsed.searchParams.has('token');
+  } catch {
+    return false;
+  }
+}
+
+export function persistenceSafeSong(song: Song): Song {
+  if (!song || typeof song !== 'object') return song;
+
+  const stable: Record<string, any> = {};
+  for (const [key, value] of Object.entries(song as Record<string, any>)) {
+    if (TEMPORARY_STREAM_FIELDS.has(key)) continue;
+    if (key === 'url' && isTemporaryStreamUrl(value)) continue;
+    stable[key] = value;
   }
 
   return stable as Song;
+}
+
+export function persistenceSafeQueue(queue: Song[]) {
+  return Array.isArray(queue)
+    ? queue.map(persistenceSafeSong).filter((song) => Boolean(song?.id))
+    : [];
 }
