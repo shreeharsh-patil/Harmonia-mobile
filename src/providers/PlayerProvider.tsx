@@ -38,6 +38,7 @@ import { usePreferences } from '@/src/providers/PreferencesProvider';
 import {
   createAdaptivePipeline,
   type AdaptivePipelineStatus,
+  type PipelineResolvedStream,
 } from '@/src/lib/streamPipeline';
 
 const PLAYER_SETTINGS_KEY = 'harmonia.mobile.player-settings.v1';
@@ -403,9 +404,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         url: string;
         diagnostics: ResolvedStreamDiagnostics | null;
       };
-      let promotion: ReturnType<typeof createAdaptivePipeline> extends Promise<infer T>
-        ? T['promotion']
-        : Promise<never> = Promise.resolve(null as never);
+      let promotion: Promise<PipelineResolvedStream | null> = Promise.resolve(null);
 
       if (localUri || offlineUri) {
         resolved = { song: stable, url: localUri || offlineUri!, diagnostics: null };
