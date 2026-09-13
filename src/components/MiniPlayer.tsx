@@ -34,7 +34,7 @@ export function MiniPlayer() {
       </View>
       <View style={styles.row}>
         <Pressable onPress={() => router.push('/player')} style={styles.info}>
-          <TrackArtwork song={currentSong} size={46} radius={9} />
+          <TrackArtwork song={currentSong} size={46} radius={11} />
           <View style={styles.copy}>
             <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
             <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
@@ -62,20 +62,25 @@ export function MiniPlayer() {
 const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
-    backgroundColor: '#151515',
-    borderRadius: 14,
+    backgroundColor: 'rgba(20,20,20,0.97)',
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#2A2A2A',
+    borderColor: 'rgba(255,255,255,0.13)',
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
   },
-  progressTrack: { height: 2, backgroundColor: '#252525' },
+  progressTrack: { height: 2, backgroundColor: 'rgba(255,255,255,0.08)' },
   progress: { height: 2, backgroundColor: '#F2F2F2' },
   row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   copy: { flex: 1, marginLeft: 10, minWidth: 0 },
   title: { color: '#F5F5F5', fontWeight: '700', fontSize: 14 },
   artist: { color: '#8D8D8D', fontSize: 12, marginTop: 2 },
-  control: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  controlText: { color: '#FFF', fontSize: 19, fontWeight: '900' },
+  control: { width: 42, height: 44, alignItems: 'center', justifyContent: 'center' },
+  controlText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   nextText: { color: '#FFF', fontSize: 20, fontWeight: '800', letterSpacing: -3 },
 });
