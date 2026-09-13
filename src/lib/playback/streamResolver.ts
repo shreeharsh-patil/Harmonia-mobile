@@ -315,7 +315,7 @@ function jioSaavnIdOf(track: Song) {
 
 function canResolveWithDirectJioSaavn(track: Song) {
   const source = String((track as any).source || (track as any).provider || '').toLowerCase();
-  if (source.includes('youtube') || source.includes('podcast')) return false;
+  if (source.includes('podcast') || (track as any).isVideo === true) return false;
   if (jioSaavnIdOf(track)) return true;
 
   const title = String(track.name || track.title || '').trim();
