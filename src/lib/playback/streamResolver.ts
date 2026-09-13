@@ -307,9 +307,16 @@ function youtubeIdOf(track: Song) {
 }
 
 function jioSaavnIdOf(track: Song) {
-  const source = String((track as any).source || (track as any).provider || '').toLowerCase();
+  const raw = track as any;
+  const explicit = String(
+    raw.saavnId || raw.jiosaavnId || raw.jioSaavnId || ''
+  ).trim();
+  if (explicit) return explicit;
+
+  const source = String(raw.source || raw.provider || '').toLowerCase();
   if (!source.includes('saavn') && !source.includes('jio')) return null;
-  const id = String(track.id || (track as any).songId || '').trim();
+
+  const id = String(raw.songId || raw.sourceId || track.id || '').trim();
   return id || null;
 }
 
@@ -563,19 +570,40 @@ export function createHarmoniaProviders({
           );
         }
 
+        const currentArtist = artistNames(track).trim();
+        const hasTrackArtwork =
+          (typeof track.image === 'string' && track.image.trim().length > 0) ||
+          (Array.isArray(track.image) && track.image.length > 0) ||
+          Boolean(track.cover) ||
+          (Array.isArray(track.spotifyImages) && track.spotifyImages.length > 0);
+        const canonicalId = String(
+          track.id || (track as any).songId || (track as any).sourceId || direct.id
+        ).trim();
+        const canonicalSongId = String((track as any).songId || canonicalId).trim();
+        const originalSource = String((track as any).source || '').trim();
+        const originalProvider = String((track as any).provider || '').trim();
+
         const detailed = normalizeSong({
           ...track,
-          id: direct.id,
-          songId: direct.id,
-          name: direct.title || track.name,
-          title: direct.title || track.title || track.name,
-          artist: direct.artists.join(', ') || (track as any).artist,
-          duration: direct.duration || track.duration,
-          image: direct.image
-            ? [{ quality: '500x500', url: direct.image }]
-            : track.image,
-          source: 'jiosaavn',
-          provider: 'jiosaavn',
+          id: canonicalId,
+          songId: canonicalSongId,
+          saavnId: direct.id,
+          jiosaavnId: direct.id,
+          playbackProvider: 'jiosaavn',
+          name: track.name || track.title || direct.title,
+          title: track.title || track.name || direct.title,
+          artist:
+            currentArtist && currentArtist !== 'Unknown artist'
+              ? ((track as any).artist || currentArtist)
+              : direct.artists.join(', '),
+          duration: track.duration || direct.duration,
+          image: hasTrackArtwork
+            ? track.image
+            : direct.image
+              ? [{ quality: '500x500', url: direct.image }]
+              : track.image,
+          source: originalSource || 'jiosaavn',
+          provider: originalProvider || originalSource || 'jiosaavn',
           downloadUrl: direct.candidates,
         } as any);
 
