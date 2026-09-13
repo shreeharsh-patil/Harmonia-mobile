@@ -12,16 +12,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_HARMONIA_API_URL": "https://jammify-music.vercel.app"
       }
     },
     "production": {
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_HARMONIA_API_URL": "https://jammify-music.vercel.app"
-      }
+      "autoIncrement": true
     }
   }
 }
