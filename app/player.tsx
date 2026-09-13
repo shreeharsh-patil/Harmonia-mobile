@@ -103,11 +103,14 @@ export default function PlayerScreen() {
     sleepRemaining,
     repeatMode,
     shuffleEnabled,
+    history,
     togglePlayback,
     previous,
     next,
     seek,
     playAt,
+    playNext,
+    addToQueue,
     removeQueueItem,
     moveQueueItem,
     clearUpcoming,
@@ -133,6 +136,19 @@ export default function PlayerScreen() {
     () => activeLyricWordIndex(syncedLines[activeLine], position),
     [activeLine, position, syncedLines]
   );
+  const recentQueueSuggestions = useMemo(() => {
+    const queued = new Set(queue.map((song) => String(song.id || '')));
+    const seen = new Set<string>();
+    return history
+      .map((entry) => entry.song)
+      .filter((song) => {
+        const id = String(song?.id || '');
+        if (!id || queued.has(id) || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+      .slice(0, 5);
+  }, [history, queue]);
 
   useEffect(() => {
     const requested = Array.isArray(params.panel) ? params.panel[0] : params.panel;
@@ -375,7 +391,7 @@ export default function PlayerScreen() {
                 )}
               </View>
               <View style={styles.queueList}>
-                {queue.slice(Math.max(0, currentIndex - 1), currentIndex + 12).map((song, localIndex) => {
+                {queue.slice(Math.max(0, currentIndex - 1)).map((song, localIndex) => {
                   const actualIndex = Math.max(0, currentIndex - 1) + localIndex;
                   const active = actualIndex === currentIndex;
                   return (
@@ -414,6 +430,41 @@ export default function PlayerScreen() {
                   );
                 })}
               </View>
+
+              {!!recentQueueSuggestions.length && (
+                <View style={styles.queueHistory}>
+                  <View style={styles.queueHistoryHead}>
+                    <Text style={styles.queueHistoryTitle}>Recently played</Text>
+                    <Text style={styles.queueHistoryMeta}>Add back to queue</Text>
+                  </View>
+                  {recentQueueSuggestions.map((song) => (
+                    <View key={`recent-${song.id}`} style={styles.queueHistoryRow}>
+                      <View style={styles.queueCopy}>
+                        <Text numberOfLines={1} style={styles.queueTitle}>{song.name}</Text>
+                        <Text numberOfLines={1} style={styles.queueArtist}>{artistNames(song)}</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          playNext(song);
+                        }}
+                        style={styles.queueHistoryButton}
+                      >
+                        <Text style={styles.queueHistoryButtonText}>Next</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          addToQueue(song);
+                        }}
+                        style={styles.queueHistoryAdd}
+                      >
+                        <Text style={styles.queueHistoryAddText}>+</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -695,6 +746,15 @@ const styles = StyleSheet.create({
   queueActionText: { color: '#AFAFAF', fontSize: 17, fontWeight: '700' },
   queueActionDisabled: { color: '#3E3E3E' },
   queueRemove: { color: '#B8B8B8', fontSize: 22, fontWeight: '400', marginTop: -2 },
+  queueHistory: { marginTop: 18, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#252525' },
+  queueHistoryHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 },
+  queueHistoryTitle: { color: '#DCDCDC', fontSize: 13, fontWeight: '800' },
+  queueHistoryMeta: { color: '#5E5E5E', fontSize: 9, fontWeight: '700' },
+  queueHistoryRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#1B1B1B' },
+  queueHistoryButton: { height: 32, borderRadius: 10, backgroundColor: '#1A1A1A', paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  queueHistoryButtonText: { color: '#BDBDBD', fontSize: 10, fontWeight: '800' },
+  queueHistoryAdd: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#EAEAEA', alignItems: 'center', justifyContent: 'center', marginLeft: 7 },
+  queueHistoryAddText: { color: '#080808', fontSize: 19, fontWeight: '800', lineHeight: 21 },
   downloadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 8 },
   downloadCopy: { flex: 1, minWidth: 0 },
   downloadTitle: { color: '#D7D7D7', fontSize: 13, lineHeight: 18, marginTop: -4 },
