@@ -2,17 +2,44 @@
   "expo": {
     "name": "Harmonia",
     "slug": "harmonia-mobile",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
-    "scheme": "harmonia",
+    "scheme": [
+      "harmonia",
+      "com.harmonia.app"
+    ],
     "userInterfaceStyle": "dark",
-    "plugins": ["expo-router"],
+    "backgroundColor": "#070707",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ]
+    ],
     "android": {
-      "package": "com.shreeharsh.harmonia"
+      "package": "com.harmonia.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#070707"
+      }
     },
     "ios": {
-      "bundleIdentifier": "com.shreeharsh.harmonia",
-      "supportsTablet": false
+      "bundleIdentifier": "com.harmonia.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "experiments": {
       "typedRoutes": true
