@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';\nimport AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   FlatList,
@@ -25,7 +25,7 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { Song } from '@/src/types';
 
-type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
+type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';\ntype LibraryViewMode = 'list' | 'grid';\n\nconst LIBRARY_VIEW_KEY = 'harmonia.mobile.library-view.v1';
 
 function formatBytes(bytes: number) {
   if (!bytes) return '0 MB';
@@ -126,11 +126,22 @@ export default function LibraryScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Your Library</Text>
-        {token && (
-          <Pressable onPress={() => void refresh()} style={styles.refresh} accessibilityLabel="Sync library">
-            {refreshing ? <ActivityIndicator color="#AAA" size="small" /> : <Ionicons name="refresh" size={20} color="#A0A0A0" />}
-          </Pressable>
-        )}
+        <View style={styles.headerActions}>
+          {tab === 'playlists' && (
+            <Pressable
+              onPress={toggleViewMode}
+              style={styles.refresh}
+              accessibilityLabel={viewMode === 'list' ? 'Use grid view' : 'Use list view'}
+            >
+              <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={19} color="#A0A0A0" />
+            </Pressable>
+          )}
+          {token && (
+            <Pressable onPress={() => void refresh()} style={styles.refresh} accessibilityLabel="Sync library">
+              {refreshing ? <ActivityIndicator color="#AAA" size="small" /> : <Ionicons name="refresh" size={20} color="#A0A0A0" />}
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroller}>
@@ -176,24 +187,50 @@ export default function LibraryScreen() {
 
             {!!error && <Text style={styles.error}>{error}</Text>}
 
-            {playlists.length ? playlists.map((playlist) => {
-              const id = String(playlist._id || playlist.id || '');
-              return (
-                <Pressable
-                  key={id || playlist.name}
-                  disabled={!id}
-                  onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                  style={({ pressed }) => [styles.playlistRow, pressed && styles.pressed]}
-                >
-                  <PlaylistArtwork playlist={playlist} size={68} radius={13} />
-                  <View style={styles.playlistCopy}>
-                    <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
-                    <Text numberOfLines={1} style={styles.playlistMeta}>{playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#585858" />
-                </Pressable>
-              );
-            }) : (
+            {playlists.length ? (
+              viewMode === 'grid' ? (
+                <View style={styles.playlistGrid}>
+                  {playlists.map((playlist) => {
+                    const id = String(playlist._id || playlist.id || '');
+                    return (
+                      <Pressable
+                        key={id || playlist.name}
+                        disabled={!id}
+                        onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
+                        style={({ pressed }) => [
+                          styles.playlistGridCard,
+                          { width: gridArtworkSize },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <PlaylistArtwork playlist={playlist} size={gridArtworkSize} radius={16} />
+                        <Text numberOfLines={1} style={styles.playlistGridName}>{playlist.name}</Text>
+                        <Text numberOfLines={1} style={styles.playlistGridMeta}>
+                          {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : playlists.map((playlist) => {
+                const id = String(playlist._id || playlist.id || '');
+                return (
+                  <Pressable
+                    key={id || playlist.name}
+                    disabled={!id}
+                    onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
+                    style={({ pressed }) => [styles.playlistRow, pressed && styles.pressed]}
+                  >
+                    <PlaylistArtwork playlist={playlist} size={68} radius={13} />
+                    <View style={styles.playlistCopy}>
+                      <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
+                      <Text numberOfLines={1} style={styles.playlistMeta}>{playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#585858" />
+                  </Pressable>
+                );
+              })
+            ) : (
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No playlists yet</Text>
                 <Text style={styles.emptyBody}>Create one here and it will also appear in Harmonia Web.</Text>
@@ -432,7 +469,7 @@ const styles = StyleSheet.create({
   createRow: { flexDirection: 'row', gap: 9 },
   input: { flex: 1, height: 46, borderRadius: 13, backgroundColor: '#181818', color: '#FFF', paddingHorizontal: 14, fontSize: 14 },
   createButton: { width: 46, height: 46, borderRadius: 13, backgroundColor: '#EFEFEF', alignItems: 'center', justifyContent: 'center' },
-  playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
+  playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },\n  playlistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },\n  playlistGridCard: { marginBottom: 8 },\n  playlistGridName: { color: '#F0F0F0', fontSize: 14, fontWeight: '750' as any, marginTop: 9 },\n  playlistGridMeta: { color: '#686868', fontSize: 11, marginTop: 3 },
   playlistCopy: { flex: 1, marginLeft: 13, minWidth: 0 },
   playlistName: { color: '#F0F0F0', fontSize: 15, fontWeight: '700' },
   playlistMeta: { color: '#6E6E6E', fontSize: 12, marginTop: 4 },
