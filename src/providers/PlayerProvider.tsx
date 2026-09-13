@@ -213,6 +213,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const radioRef = useRef(true);
   const adaptivePipelineRef = useRef(true);
   const loadGenerationRef = useRef(0);
+  const activeResolutionAbortRef = useRef<AbortController | null>(null);
+  const activeProviderRef = useRef<string | null>(null);
+  const lastPlaybackErrorRef = useRef<PlaybackPipelineError | null>(null);
+  const awaitingNetworkRecoveryRef = useRef(false);
   const unshuffledQueueRef = useRef<Song[]>([]);
   const playbackIntentRef = useRef(false);
   const lastKnownPositionRef = useRef(0);
