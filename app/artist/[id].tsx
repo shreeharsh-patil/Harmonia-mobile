@@ -16,12 +16,16 @@ import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchArtist, fetchArtistAlbums, fetchArtistSongs } from '@/src/lib/api';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import { useAuth } from '@/src/providers/AuthProvider';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Song } from '@/src/types';
 
 export default function ArtistScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const { token } = useAuth();
+  const { isArtistLiked, toggleArtistLike } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [artist, setArtist] = useState<HarmoniaArtistEntity | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
@@ -108,7 +112,22 @@ export default function ArtistScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View>
-            <View style={styles.top}><BackButton /></View>
+            <View style={styles.top}>
+              <BackButton />
+              <Pressable
+                onPress={() => {
+                  if (!token) {
+                    router.push('/login');
+                    return;
+                  }
+                  void toggleArtistLike(artist);
+                }}
+                style={styles.headerAction}
+                accessibilityLabel={isArtistLiked(String(artist.id || id || '')) ? 'Unfollow artist' : 'Follow artist'}
+              >
+                <Ionicons name={isArtistLiked(String(artist.id || id || '')) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
+              </Pressable>
+            </View>
             <View style={styles.hero}>
               {cover ? (
                 <Image source={{ uri: cover }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
@@ -193,8 +212,9 @@ function BackButton() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
   list: { paddingHorizontal: 18, paddingBottom: 150 },
-  top: { height: 54, justifyContent: 'center' },
+  top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
   avatar: { width: 208, height: 208, borderRadius: 104, backgroundColor: '#111' },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
