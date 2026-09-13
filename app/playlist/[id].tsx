@@ -70,12 +70,14 @@ export default function PlaylistScreen() {
       setPlaylist(null);
       setSongs([]);
       setLoading(false);
-      setError('Playlist ID is missing');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setPlaylist(null);
+    setSongs([]);
+
     try {
       const detail = await fetchPlaylistDetails(id, token);
       const nextSongs = await fetchPlaylistSongs(detail);
@@ -94,16 +96,7 @@ export default function PlaylistScreen() {
     }
   };
 
-  useEffect(() => {
-    setPlaylist(null);
-    setSongs([]);
-    setActionSong(null);
-    setEditing(false);
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [id, token]);
+  useEffect(() => { void load(); }, [id, token]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;
