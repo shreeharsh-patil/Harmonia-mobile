@@ -66,15 +66,23 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
     setCanvasUrl(null);
 
     if (enableMotion && !batterySaver && !reduceMotion && foreground) {
       fetchCanvasMedia(song, controller.signal)
-        .then((media) => setCanvasUrl(media?.url || null))
-        .catch(() => setCanvasUrl(null));
+        .then((media) => {
+          if (active) setCanvasUrl(media?.url || null);
+        })
+        .catch((cause: any) => {
+          if (active && cause?.name !== 'AbortError') setCanvasUrl(null);
+        });
     }
 
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion, song]);
 
   return (
