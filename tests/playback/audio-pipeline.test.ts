@@ -22,6 +22,7 @@ import {
 import { PlaybackErrorType } from '../../src/lib/playback/playbackErrors';
 import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
 import { persistenceSafeSong } from '../../src/lib/song';
+import { searchDirectJioSaavn } from '../../src/lib/playback/jiosaavnDirect';
 import type { Song } from '../../src/types';
 
 function song(overrides: Record<string, any> = {}): Song {
@@ -601,4 +602,34 @@ test('34 YouTube server fallback is disabled when no Harmonia API is configured'
     videoId: 'dQw4w9WgXcQ',
     source: 'youtube',
   }), {})), false);
+});
+
+
+test('35 direct JioSaavn catalog search works without Harmonia API', async () => {
+  const results = await searchDirectJioSaavn('Test Song', {
+    limit: 5,
+    fetchImpl: async (input) => {
+      assert.match(String(input), /jiosaavn\.com\/api\.php/);
+      return json({
+        results: [{
+          id: 'search-1',
+          title: 'Test Song',
+          image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+          more_info: {
+            album: 'Test Album',
+            duration: '210',
+            artistMap: {
+              primary_artists: [{ id: 'artist-1', name: 'Test Artist' }],
+            },
+          },
+        }],
+      });
+    },
+  });
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].id, 'search-1');
+  assert.equal(results[0].title, 'Test Song');
+  assert.deepEqual(results[0].artists, ['Test Artist']);
+  assert.match(results[0].image || '', /500x500/);
 });
