@@ -2,6 +2,10 @@ import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
 import {
+  fetchDirectJioSaavnAlbum,
+  fetchDirectJioSaavnArtist,
+  fetchDirectJioSaavnArtistAlbums,
+  fetchDirectJioSaavnArtistTracks,
   fetchDirectJioSaavnPlaylist,
   fetchDirectJioSaavnTracks,
   searchDirectJioSaavn,
@@ -477,41 +481,105 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
 }
 
 export async function fetchAlbum(id: string): Promise<HarmoniaAlbum> {
-  const payload = await requestJson<{ success: true; data: HarmoniaAlbum }>(
-    `/api/albums?id=${encodeURIComponent(id)}`
-  );
-  return payload.data;
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: HarmoniaAlbum }>(
+        `/api/albums?id=${encodeURIComponent(id)}`
+      );
+      if (payload.data) return payload.data;
+    } catch {}
+  }
+
+  const direct = await fetchDirectJioSaavnAlbum(id);
+  if (!direct) throw new ApiError('Album is unavailable.', 404);
+
+  return {
+    id: direct.id,
+    name: direct.title,
+    title: direct.title,
+    year: direct.year || undefined,
+    image: direct.image ? [{ quality: '500x500', url: direct.image }] : [],
+    primaryArtists: direct.artists.join(', '),
+    songs: direct.tracks.map(directTrackToSong),
+    songCount: direct.tracks.length,
+    type: 'album',
+  };
 }
 
 export async function fetchArtist(id: string): Promise<HarmoniaArtistEntity> {
-  const payload = await requestJson<{ success: true; data: HarmoniaArtistEntity }>(
-    `/api/artists?id=${encodeURIComponent(id)}`
-  );
-  return payload.data;
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: HarmoniaArtistEntity }>(
+        `/api/artists?id=${encodeURIComponent(id)}`
+      );
+      if (payload.data) return payload.data;
+    } catch {}
+  }
+
+  const direct = await fetchDirectJioSaavnArtist(id);
+  if (!direct) throw new ApiError('Artist is unavailable.', 404);
+
+  return {
+    id: direct.id,
+    name: direct.name,
+    title: direct.name,
+    image: direct.image ? [{ quality: '500x500', url: direct.image }] : [],
+    followerCount: direct.followerCount || undefined,
+    topSongs: direct.topTracks.map(directTrackToSong),
+    albums: direct.albums.map((album) => ({
+      id: album.id,
+      name: album.title,
+      title: album.title,
+      year: album.year || undefined,
+      image: album.image ? [{ quality: '500x500', url: album.image }] : [],
+      type: 'album',
+    })),
+    type: 'artist',
+  };
 }
 
 export async function fetchArtistSongs(id: string, limit = 40): Promise<Song[]> {
-  const payload = await requestJson<{ success: true; data: any }>(
-    `/api/artists/${encodeURIComponent(id)}/songs?page=0&limit=${limit}`
-  );
-  const raw = Array.isArray(payload.data)
-    ? payload.data
-    : Array.isArray(payload.data?.songs)
-      ? payload.data.songs
-      : Array.isArray(payload.data?.results)
-        ? payload.data.results
-        : [];
-  return raw.map((song: any) => normalizeSong(song));
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: any }>(
+        `/api/artists/${encodeURIComponent(id)}/songs?page=0&limit=${limit}`
+      );
+      const raw = Array.isArray(payload.data)
+        ? payload.data
+        : Array.isArray(payload.data?.songs)
+          ? payload.data.songs
+          : Array.isArray(payload.data?.results)
+            ? payload.data.results
+            : [];
+      if (raw.length) return raw.map((song: any) => normalizeSong(song));
+    } catch {}
+  }
+
+  const direct = await fetchDirectJioSaavnArtistTracks(id, { limit });
+  return direct.map(directTrackToSong);
 }
 
 export async function fetchArtistAlbums(id: string, limit = 30): Promise<HarmoniaAlbum[]> {
-  const payload = await requestJson<{ success: true; data: any }>(
-    `/api/artists/${encodeURIComponent(id)}/albums?page=0&limit=${limit}`
-  );
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.data?.albums)) return payload.data.albums;
-  if (Array.isArray(payload.data?.results)) return payload.data.results;
-  return [];
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: any }>(
+        `/api/artists/${encodeURIComponent(id)}/albums?page=0&limit=${limit}`
+      );
+      if (Array.isArray(payload.data) && payload.data.length) return payload.data;
+      if (Array.isArray(payload.data?.albums) && payload.data.albums.length) return payload.data.albums;
+      if (Array.isArray(payload.data?.results) && payload.data.results.length) return payload.data.results;
+    } catch {}
+  }
+
+  const direct = await fetchDirectJioSaavnArtistAlbums(id, { limit });
+  return direct.map((album) => ({
+    id: album.id,
+    name: album.title,
+    title: album.title,
+    year: album.year || undefined,
+    image: album.image ? [{ quality: '500x500', url: album.image }] : [],
+    type: 'album',
+  }));
 }
 
 export async function fetchPlaylistDetails(id: string, token?: string | null): Promise<Playlist> {
