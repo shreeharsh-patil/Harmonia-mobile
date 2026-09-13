@@ -19,6 +19,7 @@ export type PipelineResolvedStream = {
   song: Song;
   url: string;
   diagnostics: ResolvedStreamDiagnostics;
+  headers: Record<string, string> | null;
   requestedQuality: StreamQuality;
   resolvedAt: number;
   resolveMs: number;
@@ -97,6 +98,7 @@ async function resolveTimed(
     song: resolved.track,
     url: resolved.url,
     diagnostics: resolved.diagnostics,
+    headers: resolved.headers,
     requestedQuality: quality,
     resolvedAt: resolved.resolvedAt,
     resolveMs: Date.now() - started,
