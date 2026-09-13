@@ -28,7 +28,17 @@
       [
         "expo-media-library",
         {
-          "granularPermissions": ["audio"]
+          "granularPermissions": [
+            "audio"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Harmonia uses your photo library only when you choose a profile picture.",
+          "cameraPermission": "Harmonia uses your camera only when you choose to take a profile picture.",
+          "microphonePermission": false
         }
       ]
     ],
