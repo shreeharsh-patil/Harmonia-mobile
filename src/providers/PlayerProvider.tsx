@@ -1105,14 +1105,45 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [currentIndex, queue, status.currentTime, status.playing]);
 
   useEffect(() => {
+    if (error) {
+      if (!awaitingNetworkRecoveryRef.current) setPlaybackState('ERROR');
+      return;
+    }
+    if (isLoadingTrack) return;
+    if (status.error) return;
+
+    if (status.isBuffering) {
+      setPlaybackState('BUFFERING');
+      return;
+    }
+
+    if (status.isLoaded) {
+      setPlaybackState(status.playing ? 'PLAYING' : 'PAUSED');
+      return;
+    }
+
+    setPlaybackState(currentSong ? 'READY' : 'IDLE');
+  }, [
+    currentSong,
+    error,
+    isLoadingTrack,
+    status.error,
+    status.isBuffering,
+    status.isLoaded,
+    status.playing,
+  ]);
+
+  useEffect(() => {
     if (!status.error || !currentSong?.id || recoveryInFlightRef.current) return;
 
     const trackId = currentSong.id;
     if (recoveryStateRef.current.trackId !== trackId) {
       recoveryStateRef.current = { trackId, attempts: 0 };
     }
-    if (recoveryStateRef.current.attempts >= 3) {
-      setError('Playback failed after multiple recovery attempts. Tap play to retry.');
+
+    if (recoveryStateRef.current.attempts >= MAX_AUTOMATIC_RECOVERY_ATTEMPTS) {
+      setPlaybackState('ERROR');
+      setError('Harmonia could not recover this track after multiple attempts. Tap play to retry.');
       return;
     }
 
@@ -1120,41 +1151,96 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     const recover = async () => {
       recoveryInFlightRef.current = true;
-      try {
-        let recovered = false;
+      setPlaybackState('RECOVERING');
 
+      let failure = networkConnected
+        ? classifyPlaybackError(status.error)
+        : new PlaybackPipelineError(
+            PlaybackErrorType.NETWORK_ERROR,
+            'Device is offline.'
+          );
+
+      try {
         while (
           !cancelled &&
           recoveryStateRef.current.trackId === trackId &&
-          recoveryStateRef.current.attempts < 3 &&
-          !recovered
+          recoveryStateRef.current.attempts < MAX_AUTOMATIC_RECOVERY_ATTEMPTS
         ) {
-          recoveryStateRef.current.attempts += 1;
-          const attempt = recoveryStateRef.current.attempts;
-          if (attempt > 1) {
-            await new Promise((resolve) => setTimeout(resolve, attempt === 2 ? 500 : 1500));
+          const completedAttempts = recoveryStateRef.current.attempts;
+          const policy = getPlaybackRecoveryPolicy(failure.type, completedAttempts, {
+            online: networkConnected,
+          });
+
+          if (policy.action === 'ignore') return;
+          if (policy.action === 'await-user') {
+            playbackIntentRef.current = false;
+            setPlaybackErrorType(failure.type);
+            setPlaybackState('PAUSED');
+            return;
+          }
+          if (policy.action === 'await-online') {
+            awaitingNetworkRecoveryRef.current = true;
+            setPlaybackErrorType(PlaybackErrorType.NETWORK_ERROR);
+            setPlaybackState('RECOVERING');
+            setError('Waiting for an internet connection to resume playback…');
+            return;
+          }
+          if (policy.action === 'fail') break;
+
+          awaitingNetworkRecoveryRef.current = false;
+
+          if (policy.delayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, policy.delayMs));
           }
           if (cancelled) return;
 
+          recoveryStateRef.current.attempts += 1;
+          const attempt = recoveryStateRef.current.attempts;
+          const failedProvider = activeProviderRef.current;
+
+          invalidateResolvedStream(trackId);
+
           const resumeAt = Math.max(
             0,
+            Number(status.currentTime || 0),
             lastKnownPositionRef.current,
             restoredPosition.current
           );
-          recovered = await loadIndex(
+
+          const recovered = await loadIndex(
             indexRef.current,
             playbackIntentRef.current,
             resumeAt,
             {
               recordHistory: false,
-              bypassOffline: attempt > 1,
               recovery: true,
+              recoveryAttempt: attempt,
+              forceFresh: true,
+              skipAdaptive: true,
+              excludeProviders:
+                attempt >= 2 && failedProvider
+                  ? [failedProvider]
+                  : [],
             }
           );
+
+          if (cancelled) return;
+
+          if (recovered) {
+            lastPlaybackErrorRef.current = null;
+            setPlaybackErrorType(null);
+            setError(null);
+            awaitingNetworkRecoveryRef.current = false;
+            return;
+          }
+
+          failure = lastPlaybackErrorRef.current || failure;
         }
 
-        if (!cancelled && !recovered && recoveryStateRef.current.attempts >= 3) {
-          setError('Playback failed after multiple recovery attempts. Tap play to retry.');
+        if (!cancelled) {
+          setPlaybackErrorType(failure.type);
+          setPlaybackState('ERROR');
+          setError('Harmonia could not recover this track after multiple attempts. Tap play to retry.');
         }
       } finally {
         recoveryInFlightRef.current = false;
@@ -1166,7 +1252,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, [currentSong?.id, loadIndex, status.error]);
+  }, [
+    currentSong?.id,
+    loadIndex,
+    networkConnected,
+    status.currentTime,
+    status.error,
+  ]);
 
   const value = useMemo<PlayerContextValue>(() => ({
     currentSong,
@@ -1178,6 +1270,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     position: status.currentTime || restoredPosition.current || 0,
     duration: status.duration || currentSong?.duration || 0,
     error,
+    playbackState,
+    playbackErrorType,
     playbackRate,
     streamQuality,
     sleepTimer,
@@ -1213,7 +1307,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleShuffle,
     toggleRadio,
     toggleAdaptivePipeline,
-    clearError: () => setError(null),
+    clearError: () => {
+      setError(null);
+      setPlaybackErrorType(null);
+    },
   }), [
     currentSong,
     queue,
@@ -1224,6 +1321,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     status.duration,
     isLoadingTrack,
     error,
+    playbackState,
+    playbackErrorType,
     playbackRate,
     streamQuality,
     sleepTimer,
