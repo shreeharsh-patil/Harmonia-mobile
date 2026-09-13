@@ -475,6 +475,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: { paddingHorizontal: 18, paddingTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   refresh: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
   tabsScroller: { flexGrow: 0, marginTop: 14, marginBottom: 5 },
   tabs: { gap: 8, paddingHorizontal: 18, paddingVertical: 4 },
