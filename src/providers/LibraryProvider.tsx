@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -53,8 +54,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async (manual = false) => {
+    const generation = ++loadGenerationRef.current;
+
     if (!token) {
       setPlaylists([]);
       setLikedSongs([]);
@@ -71,6 +75,8 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       const library = await fetchLibrary(token);
+      if (generation !== loadGenerationRef.current) return;
+
       setPlaylists(library.playlists || []);
       // Keep ephemeral embedded playback candidates in memory. They are stripped
       // only when data is persisted or sent to account storage.
@@ -79,10 +85,14 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       setLikedAlbums(library.likedAlbums || []);
       setLikedArtists(library.likedArtists || []);
     } catch (cause: any) {
-      setError(cause?.message || 'Unable to sync your library');
+      if (generation === loadGenerationRef.current) {
+        setError(cause?.message || 'Unable to sync your library');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [token]);
 
