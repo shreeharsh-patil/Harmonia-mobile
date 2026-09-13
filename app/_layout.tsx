@@ -5,6 +5,7 @@ import { AuthProvider } from '@/src/providers/AuthProvider';
 import { LibraryProvider } from '@/src/providers/LibraryProvider';
 import { PlayerProvider } from '@/src/providers/PlayerProvider';
 import { OfflineProvider } from '@/src/providers/OfflineProvider';
+import { LocalMusicProvider } from '@/src/providers/LocalMusicProvider';
 
 export default function RootLayout() {
   return (
@@ -12,7 +13,8 @@ export default function RootLayout() {
       <AuthProvider>
         <LibraryProvider>
           <OfflineProvider>
-            <PlayerProvider>
+            <LocalMusicProvider>
+              <PlayerProvider>
             <StatusBar style="light" />
             <Stack
               screenOptions={{
@@ -27,6 +29,7 @@ export default function RootLayout() {
               <Stack.Screen name="player" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
             </Stack>
           </PlayerProvider>
+            </LocalMusicProvider>
           </OfflineProvider>
         </LibraryProvider>
       </AuthProvider>
