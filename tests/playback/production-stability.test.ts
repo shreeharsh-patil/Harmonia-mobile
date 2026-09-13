@@ -71,3 +71,51 @@ test('home feed does not let stale account requests overwrite newer state', asyn
   assert.match(source, /Promise\.allSettled/);
   assert.match(source, /generation !== loadGenerationRef\.current/);
 });
+
+test('OAuth deep links dedupe one-time mobile tickets', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+  assert.match(source, /activeTicketRef/);
+  assert.match(source, /completedTicketsRef/);
+  assert.match(source, /completedTicketsRef\.current\.has\(ticket\)/);
+  assert.match(source, /completedTicketsRef\.current\.add\(ticket\)/);
+});
+
+test('detail routes ignore stale navigation responses', async () => {
+  const paths = [
+    'app/album/[id].tsx',
+    'app/artist/[id].tsx',
+    'app/playlist/[id].tsx',
+    'app/mix/[id].tsx',
+  ];
+
+  for (const path of paths) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, /loadGenerationRef/);
+    assert.match(source, /loadGenerationRef\.current/);
+  }
+});
+
+test('Canvas lookup cleanup cannot clear newer artwork state', async () => {
+  const source = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
+  assert.match(source, /let active = true/);
+  assert.match(source, /if \(active\) setCanvasUrl/);
+  assert.match(source, /active = false/);
+  assert.match(source, /controller\.abort\(\)/);
+});
+
+test('clearing downloads cancels in-flight download tasks', async () => {
+  const source = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  assert.match(source, /activeDownloadTasksRef/);
+  assert.match(source, /cancelledDownloadsRef/);
+  assert.match(source, /activeDownloadTasksRef\.current\.get\(id\)\?\.cancel\(\)/);
+  assert.match(source, /cancelledDownloadsRef\.current\.has\(id\)/);
+});
+
+test('player hydration and radio continuation are generation guarded', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /restoreGeneration = loadGenerationRef\.current/);
+  assert.match(source, /loadGenerationRef\.current !== restoreGeneration/);
+  assert.match(source, /endGeneration = loadGenerationRef\.current/);
+  assert.match(source, /endGeneration !== loadGenerationRef\.current/);
+});
+
