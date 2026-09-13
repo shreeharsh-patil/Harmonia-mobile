@@ -18,7 +18,7 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 export default function ProfileScreen() {
   const { user, token, loading, signOut, refreshUser } = useAuth();
   const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
-  const { listeningStats } = require('@/src/providers/PlayerProvider').usePlayer();
+  const { listeningStats } = usePlayer();
 
   if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color="#FFF" /></View></SafeAreaView>;
