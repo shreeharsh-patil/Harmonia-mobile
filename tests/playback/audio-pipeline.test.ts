@@ -27,6 +27,10 @@ import {
   searchDirectJioSaavnAlbums,
   searchDirectJioSaavnArtists,
 } from '../../src/lib/playback/jiosaavnDirect';
+import {
+  resolveDirectYouTubeMusicTrack,
+  searchDirectYouTubeMusic,
+} from '../../src/lib/playback/youtubeMusicDirect';
 import type { Song } from '../../src/types';
 
 function song(overrides: Record<string, any> = {}): Song {
@@ -114,7 +118,7 @@ test('2 quality selection honors saver/normal/high/maximum ceilings', () => {
   assert.match(getAudioCandidates(track, 'maximum')[0].url, /lossless/);
 });
 
-test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () => {
+test('3 YouTube server fallback resolves to the Harmonia 307 redirect route', async () => {
   const providers = createHarmoniaProviders({
     apiBase: 'https://harmonia.test',
     streamApiBase: 'https://stream.test',
@@ -130,7 +134,8 @@ test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () 
   }));
 
   assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
-  assert.equal(result.provider, 'youtube');
+  assert.equal(result.provider, 'youtube-server');
+  assert.equal(result.source, 'youtube-server');
 });
 
 test('4 JioSaavn refresh resolves directly on-device at requested quality', async () => {
@@ -596,18 +601,23 @@ test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
 });
 
 
-test('34 YouTube server fallback is disabled when no Harmonia API is configured', async () => {
+test('34 direct YouTube Music remains available without a Harmonia API', async () => {
   const providers = createHarmoniaProviders({
     apiBase: '',
     streamApiBase: '',
-    fetchImpl: async () => { throw new Error('network must not be called'); },
+    fetchImpl: async () => { throw new Error('not resolving in this assertion'); },
   });
   const youtube = providers.find((provider) => provider.id === 'youtube');
-  assert.equal(Boolean(youtube?.canResolve(song({
+  const youtubeServer = providers.find((provider) => provider.id === 'youtube-server');
+
+  const target = song({
     id: 'dQw4w9WgXcQ',
     videoId: 'dQw4w9WgXcQ',
     source: 'youtube',
-  }), {})), false);
+  });
+
+  assert.equal(Boolean(youtube?.canResolve(target, {})), true);
+  assert.equal(Boolean(youtubeServer?.canResolve(target, {})), false);
 });
 
 
@@ -695,4 +705,266 @@ test('37 player progress is isolated from the main player context', async () => 
     source.match(/const value = useMemo<PlayerContextValue>[\s\S]*?const progressValue/)?.[0] || '',
     /position: status\.currentTime/
   );
+});
+
+
+test('38 direct YouTube Music player resolution keeps required media headers', async () => {
+  const calls: string[] = [];
+  const result = await resolveDirectYouTubeMusicTrack('dQw4w9WgXcQ', {
+    quality: 'normal',
+    fetchImpl: async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+
+      if (url.includes('sw.js_data')) {
+        return new Response(')]}\'\n["Cg' + 'A'.repeat(44) + '"]', { status: 200 });
+      }
+
+      if (url.includes('/youtubei/v1/player')) {
+        return json({
+          playabilityStatus: { status: 'OK' },
+          streamingData: {
+            adaptiveFormats: [{
+              url: 'https://rr1---sn.test.googlevideo.com/videoplayback?expire=9999999999&c=ANDROID_MUSIC&cver=8.39.42',
+              mimeType: 'audio/webm; codecs="opus"',
+              bitrate: 158000,
+            }],
+          },
+          videoDetails: {
+            videoId: 'dQw4w9WgXcQ',
+            title: 'Direct Track',
+            author: 'Direct Artist',
+            lengthSeconds: '212',
+            thumbnail: {
+              thumbnails: [{ url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg' }],
+            },
+          },
+        });
+      }
+
+      if (url.includes('googlevideo.com')) {
+        assert.equal((init?.headers as Record<string, string>)?.['User-Agent']?.includes('youtube.music'), true);
+        assert.equal((init?.headers as Record<string, string>)?.Range, 'bytes=0-131071');
+        return new Response('', { status: 206 });
+      }
+
+      return json({}, 404);
+    },
+  });
+
+  assert.ok(result);
+  assert.equal(result?.id, 'dQw4w9WgXcQ');
+  assert.equal(result?.codec, 'opus');
+  assert.equal(result?.mimeType, 'audio/webm');
+  assert.equal(result?.bitrate, 158000);
+  assert.ok(result?.headers['User-Agent']);
+  assert.ok(calls.some((url) => url.includes('/youtubei/v1/player')));
+  assert.ok(calls.some((url) => url.includes('googlevideo.com')));
+});
+
+test('39 direct YouTube Music search extracts playable track identity', async () => {
+  const results = await searchDirectYouTubeMusic('Test Artist Test Song', {
+    limit: 5,
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('sw.js_data')) {
+        return new Response(')]}\'\n["Cg' + 'B'.repeat(44) + '"]', { status: 200 });
+      }
+      assert.match(url, /music\.youtube\.com\/youtubei\/v1\/search/);
+      return json({
+        contents: {
+          sectionListRenderer: {
+            contents: [{
+              musicShelfRenderer: {
+                contents: [{
+                  musicResponsiveListItemRenderer: {
+                    playlistItemData: { videoId: 'abcdefghijk' },
+                    flexColumns: [
+                      {
+                        musicResponsiveListItemFlexColumnRenderer: {
+                          text: { runs: [{ text: 'Test Song' }] },
+                        },
+                      },
+                      {
+                        musicResponsiveListItemFlexColumnRenderer: {
+                          text: {
+                            runs: [{
+                              text: 'Test Artist',
+                              navigationEndpoint: {
+                                browseEndpoint: {
+                                  browseId: 'UC123456789',
+                                  browseEndpointContextSupportedConfigs: {
+                                    browseEndpointContextMusicConfig: {
+                                      pageType: 'MUSIC_PAGE_TYPE_ARTIST',
+                                    },
+                                  },
+                                },
+                              },
+                            }, { text: ' • ' }, { text: '3:30' }],
+                          },
+                        },
+                      },
+                    ],
+                    thumbnail: {
+                      musicThumbnailRenderer: {
+                        thumbnail: {
+                          thumbnails: [{ url: 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg' }],
+                        },
+                      },
+                    },
+                  },
+                }],
+              },
+            }],
+          },
+        },
+      });
+    },
+  });
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].id, 'abcdefghijk');
+  assert.equal(results[0].title, 'Test Song');
+  assert.deepEqual(results[0].artists, ['Test Artist']);
+  assert.equal(results[0].duration, 210);
+});
+
+test('40 resolver uses direct YouTube before the optional Harmonia YouTube server', async () => {
+  let directPlayerCalls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://harmonia.test',
+    streamApiBase: 'https://harmonia.test',
+    fetchImpl: async (input) => {
+      const url = String(input);
+
+      if (url.includes('jiosaavn.com/api.php')) return json({ results: [] });
+      if (url.includes('sw.js_data')) {
+        return new Response(')]}\'\n["Cg' + 'C'.repeat(44) + '"]', { status: 200 });
+      }
+      if (url.includes('/youtubei/v1/search')) {
+        return json({ contents: {} });
+      }
+      if (url.includes('/youtubei/v1/player')) {
+        directPlayerCalls += 1;
+        return json({
+          playabilityStatus: { status: 'OK' },
+          streamingData: {
+            adaptiveFormats: [{
+              url: 'https://rr2---sn.test.googlevideo.com/videoplayback?expire=9999999999&c=ANDROID_MUSIC',
+              mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+              bitrate: 128000,
+            }],
+          },
+          videoDetails: {
+            title: 'Test Song',
+            author: 'Test Artist',
+            lengthSeconds: '180',
+          },
+        });
+      }
+      if (url.includes('googlevideo.com')) return new Response('', { status: 206 });
+      throw new Error('server fallback must not be fetched');
+    },
+  });
+
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+  }), { quality: 'normal' });
+
+  assert.equal(result.source, 'youtube');
+  assert.equal(result.provider, 'youtube');
+  assert.equal(result.headers?.['User-Agent']?.includes('youtube.music'), true);
+  assert.equal(directPlayerCalls, 1);
+});
+
+test('41 direct YouTube refusal falls through to Harmonia server when configured', async () => {
+  const providers = createHarmoniaProviders({
+    apiBase: 'https://harmonia.test',
+    streamApiBase: 'https://harmonia.test',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('sw.js_data')) {
+        return new Response(')]}\'\n["Cg' + 'D'.repeat(44) + '"]', { status: 200 });
+      }
+      if (url.includes('/youtubei/v1/player')) {
+        return json({
+          playabilityStatus: {
+            status: 'LOGIN_REQUIRED',
+            reason: 'Sign in to confirm your age',
+          },
+        });
+      }
+      return json({}, 404);
+    },
+  });
+
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+  }));
+
+  assert.equal(result.source, 'youtube-server');
+  assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
+});
+
+
+test('42 YouTube-identified songs still prefer a JioSaavn metadata match', async () => {
+  let youtubeCalls = 0;
+  const providers = createHarmoniaProviders({
+    apiBase: '',
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('jiosaavn.com/api.php')) {
+        return json({
+          results: [{
+            id: 'jio-youtube-match',
+            title: 'Test Song',
+            image: 'https://c.saavncdn.com/001/cover-150x150.jpg',
+            more_info: {
+              album: 'Album',
+              duration: '180',
+              encrypted_media_url: encryptedSaavnUrl(
+                'https://aac.saavncdn.com/001/match_96.mp4?Expires=9999999999'
+              ),
+              '320kbps': 'true',
+              artistMap: {
+                primary_artists: [{ id: 'artist-1', name: 'Test Artist' }],
+              },
+            },
+          }],
+        });
+      }
+      if (url.includes('youtube')) youtubeCalls += 1;
+      return json({}, 404);
+    },
+  });
+
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'dQw4w9WgXcQ',
+    videoId: 'dQw4w9WgXcQ',
+    source: 'youtube',
+    name: 'Test Song',
+    title: 'Test Song',
+    artist: 'Test Artist',
+    duration: 180,
+  }), { quality: 'normal' });
+
+  assert.equal(result.source, 'jiosaavn');
+  assert.equal(youtubeCalls, 0);
 });
