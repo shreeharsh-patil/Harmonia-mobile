@@ -118,7 +118,7 @@ test('2 quality selection honors saver/normal/high/maximum ceilings', () => {
   assert.match(getAudioCandidates(track, 'maximum')[0].url, /lossless/);
 });
 
-test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () => {
+test('3 YouTube server fallback resolves to the Harmonia 307 redirect route', async () => {
   const providers = createHarmoniaProviders({
     apiBase: 'https://harmonia.test',
     streamApiBase: 'https://stream.test',
@@ -134,7 +134,8 @@ test('3 YouTube identity resolves to the Harmonia 307 redirect route', async () 
   }));
 
   assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
-  assert.equal(result.provider, 'youtube');
+  assert.equal(result.provider, 'youtube-server');
+  assert.equal(result.source, 'youtube-server');
 });
 
 test('4 JioSaavn refresh resolves directly on-device at requested quality', async () => {
