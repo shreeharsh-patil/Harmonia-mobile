@@ -20,6 +20,7 @@ import {
   fetchPlaylistDetails,
   fetchPlaylistSongs,
   removeSongFromPlaylist,
+  trackRecentlyPlayedPlaylist,
   updatePlaylist,
 } from '@/src/lib/api';
 import { playlistTitle } from '@/src/lib/entities';
@@ -36,7 +37,12 @@ export default function PlaylistScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
-  const { playlists: ownedPlaylists, refresh } = useLibrary();
+  const {
+    playlists: ownedPlaylists,
+    refresh,
+    isPlaylistLiked,
+    togglePlaylistLike,
+  } = useLibrary();
   const { currentSong, playSong } = usePlayer();
 
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -89,6 +95,9 @@ export default function PlaylistScreen() {
         selected = queue[0];
       }
       await playSong(selected, queue);
+      if (token && playlist) {
+        void trackRecentlyPlayedPlaylist(token, playlist).catch(() => {});
+      }
     } finally {
       setPlaying(false);
     }
@@ -190,11 +199,28 @@ export default function PlaylistScreen() {
           <View>
             <View style={styles.top}>
               <BackButton />
-              {owned && (
-                <Pressable onPress={() => setEditing((value) => !value)} style={styles.headerAction}>
-                  <Ionicons name={editing ? 'close' : 'create-outline'} size={20} color="#E8E8E8" />
-                </Pressable>
-              )}
+              <View style={styles.headerActions}>
+                {!owned && (
+                  <Pressable
+                    onPress={() => {
+                      if (!token) {
+                        router.push('/login');
+                        return;
+                      }
+                      void togglePlaylistLike(playlist);
+                    }}
+                    style={styles.headerAction}
+                    accessibilityLabel={isPlaylistLiked(id) ? 'Remove from library' : 'Save playlist'}
+                  >
+                    <Ionicons name={isPlaylistLiked(id) ? 'heart' : 'heart-outline'} size={20} color="#E8E8E8" />
+                  </Pressable>
+                )}
+                {owned && (
+                  <Pressable onPress={() => setEditing((value) => !value)} style={styles.headerAction}>
+                    <Ionicons name={editing ? 'close' : 'create-outline'} size={20} color="#E8E8E8" />
+                  </Pressable>
+                )}
+              </View>
             </View>
 
             <View style={styles.hero}>
@@ -306,6 +332,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 18, paddingBottom: 150 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', gap: 8 },
   headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
   kicker: { color: '#626262', fontSize: 9, fontWeight: '800', letterSpacing: 1.7, marginTop: 20 },
