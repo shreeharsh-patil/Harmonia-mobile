@@ -611,3 +611,25 @@ test('now playing backdrop uses a smaller source and lower blur cost', async () 
   assert.doesNotMatch(source, /artworkUrl\(currentSong, 720\)/);
   assert.doesNotMatch(source, /blurRadius=\{42\}/);
 });
+
+
+test('now playing uses responsive artwork and control spacing on narrow phones', async () => {
+  const source = await readFile('app/player.tsx', 'utf8');
+  assert.match(source, /useWindowDimensions/);
+  assert.match(source, /playerContentWidth = Math\.max\(0, width - 40\)/);
+  assert.match(source, /artworkSize = Math\.min\(compactArtwork \? 244 : 330, playerContentWidth\)/);
+  assert.match(source, /controlsFixedWidth = 42 \+ 52 \+ 74 \+ 52 \+ 42/);
+  assert.match(source, /Math\.min\(34, \(playerContentWidth - controlsFixedWidth\) \/ 4\)/);
+  assert.match(source, /style=\{\[styles\.controls, \{ gap: controlGap \}\]\}/);
+});
+
+test('sleep countdown no longer invalidates the core player context every second', async () => {
+  const provider = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+  const coreType = provider.match(/type PlayerContextValue = \{[\s\S]*?\n\};/)?.[0] || '';
+
+  assert.doesNotMatch(coreType, /sleepRemaining/);
+  assert.match(provider, /type PlaybackProgressValue = \{[\s\S]*?sleepRemaining: number/);
+  assert.match(provider, /sleepRemaining,[\s\S]*?\[currentSong\?\.duration, sleepRemaining, status\.currentTime, status\.duration\]/);
+  assert.match(player, /const \{ position, duration, sleepRemaining \} = usePlaybackProgress\(\)/);
+});
