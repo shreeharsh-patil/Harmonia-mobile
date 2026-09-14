@@ -1117,9 +1117,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       } catch {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
         if (!settingsHydratedRef.current) {
+          const pendingSettings = pendingSettingsRef.current;
           settingsHydratedRef.current = true;
           pendingSettingsRef.current = {};
-          writeSettingsSnapshot(currentSettingsSnapshot());
+          if (Object.keys(pendingSettings).length) {
+            writeSettingsSnapshot(currentSettingsSnapshot());
+          }
         }
       }
     })();
