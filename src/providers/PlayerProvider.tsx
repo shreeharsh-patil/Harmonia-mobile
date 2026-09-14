@@ -22,6 +22,7 @@ import {
 import { PLAYBACK_SNAPSHOT_KEY } from '@/src/config';
 import { fetchSongSuggestions } from '@/src/lib/api';
 import {
+  getAudioCandidates,
   getImmediateLocalSource,
   invalidateResolvedStream,
   resolveTrackStream,
@@ -99,6 +100,7 @@ type LoadTrackOptions = {
   excludeProviders?: string[];
   skipAdaptive?: boolean;
   skipEmbedded?: boolean;
+  embeddedCandidateIndex?: number;
 };
 
 export type SleepTimerMode = 'off' | 'track' | 15 | 30 | 45 | 60;
@@ -283,6 +285,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const loadGenerationRef = useRef(0);
   const activeResolutionAbortRef = useRef<AbortController | null>(null);
   const activeProviderRef = useRef<string | null>(null);
+  const activeSourceRef = useRef<PlaybackDiagnostics['source'] | null>(null);
   const lastPlaybackErrorRef = useRef<PlaybackPipelineError | null>(null);
   const awaitingNetworkRecoveryRef = useRef(false);
   const unshuffledQueueRef = useRef<Song[]>([]);
@@ -620,6 +623,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           excludeProviders: options.excludeProviders,
           recoveryAttempt: options.recoveryAttempt,
           skipEmbedded: options.skipEmbedded,
+          embeddedCandidateIndex: options.embeddedCandidateIndex,
         });
 
         if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
@@ -690,6 +694,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       setPlaybackDiagnostics(diagnostics);
       activeProviderRef.current = diagnostics.provider;
+      activeSourceRef.current = diagnostics.source;
       lastPlaybackErrorRef.current = null;
       loadedTrackId.current = stable.id;
       restoredPosition.current = 0;
@@ -756,6 +761,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             setQueue(upgradedQueue);
             setPlaybackDiagnostics(candidate.diagnostics);
             activeProviderRef.current = candidate.diagnostics.provider;
+            activeSourceRef.current = candidate.diagnostics.source;
             setPipelinePromotionResolveMs(candidate.resolveMs);
             setLockScreenMetadata(candidate.song);
             setAdaptivePipelineStatus('upgraded');
@@ -1586,8 +1592,17 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           recoveryStateRef.current.attempts < MAX_AUTOMATIC_RECOVERY_ATTEMPTS
         ) {
           const completedAttempts = recoveryStateRef.current.attempts;
+          const nextEmbeddedCandidateIndex = completedAttempts + 1;
+          const embeddedCandidates = getAudioCandidates(
+            currentSong,
+            effectiveQualityRef.current
+          );
+          const hasNextCandidate =
+            activeSourceRef.current === 'embedded' &&
+            embeddedCandidates.length > nextEmbeddedCandidateIndex;
           const policy = getPlaybackRecoveryPolicy(failure.type, completedAttempts, {
             online: networkConnected,
+            hasNextCandidate,
           });
 
           if (policy.action === 'ignore') return;
@@ -1636,9 +1651,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
               recoveryAttempt: attempt,
               forceFresh: true,
               skipAdaptive: true,
-              skipEmbedded: true,
+              skipEmbedded: policy.action !== 'next-candidate',
+              embeddedCandidateIndex:
+                policy.action === 'next-candidate'
+                  ? nextEmbeddedCandidateIndex
+                  : 0,
               excludeProviders:
-                attempt >= 3 && failedProvider
+                policy.action !== 'next-candidate' &&
+                attempt >= 3 &&
+                failedProvider
                   ? [failedProvider]
                   : [],
             }
