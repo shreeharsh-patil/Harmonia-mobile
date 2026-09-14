@@ -193,7 +193,6 @@ type PlayerContextValue = {
   playbackRate: number;
   streamQuality: StreamQuality;
   sleepTimer: SleepTimerMode;
-  sleepRemaining: number;
   repeatMode: RepeatMode;
   shuffleEnabled: boolean;
   radioEnabled: boolean;
@@ -228,6 +227,7 @@ type PlayerContextValue = {
 type PlaybackProgressValue = {
   position: number;
   duration: number;
+  sleepRemaining: number;
 };
 
 type PlaybackActivityValue = {
@@ -1754,7 +1754,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackRate,
     streamQuality,
     sleepTimer,
-    sleepRemaining,
     repeatMode,
     shuffleEnabled,
     radioEnabled,
@@ -1800,7 +1799,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackRate,
     streamQuality,
     sleepTimer,
-    sleepRemaining,
     repeatMode,
     shuffleEnabled,
     radioEnabled,
@@ -1840,7 +1838,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const progressValue = useMemo<PlaybackProgressValue>(() => ({
     position: status.currentTime || restoredPosition.current || 0,
     duration: status.duration || currentSong?.duration || 0,
-  }), [currentSong?.duration, status.currentTime, status.duration]);
+    sleepRemaining,
+  }), [currentSong?.duration, sleepRemaining, status.currentTime, status.duration]);
 
   return (
     <PlayerContext.Provider value={value}>
