@@ -283,3 +283,32 @@ test('app update checks cannot hang indefinitely', async () => {
   assert.match(source, /signal: controller\.signal/);
   assert.match(source, /clearTimeout\(timeout\)/);
 });
+
+
+test('player settings preserve live changes made before storage hydration finishes', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /settingsHydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingSettingsRef/);
+  assert.match(source, /const mergedSettings: PersistedPlayerSettings = \{[\s\S]*?\.\.\.restoredSettings,[\s\S]*?\.\.\.pendingSettings/);
+  assert.match(source, /persistSettings\(\{ playbackRate: normalized \}\)/);
+  assert.match(source, /persistSettings\(\{ streamQuality: quality \}\)/);
+  assert.match(source, /settingsWriteChainRef/);
+});
+
+test('player history and listening stats ignore stale hydration after live mutations', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /historyMutationRef = useRef\(0\)/);
+  assert.match(source, /statsMutationRef = useRef\(0\)/);
+  assert.match(source, /historyMutationRef\.current === historyGeneration/);
+  assert.match(source, /statsMutationRef\.current === statsGeneration/);
+  assert.match(source, /historyMutationRef\.current \+= 1/);
+  assert.match(source, /statsMutationRef\.current \+= 1/);
+});
+
+test('corrupt player persistence is repaired per key instead of aborting all hydration', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /AsyncStorage\.removeItem\(HISTORY_KEY\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(LISTENING_STATS_KEY\)/);
+  assert.match(source, /AsyncStorage\.removeItem\(PLAYER_SETTINGS_KEY\)/);
+  assert.match(source, /let snapshot: PlaybackSnapshot/);
+});
