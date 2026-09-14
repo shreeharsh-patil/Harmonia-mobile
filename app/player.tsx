@@ -214,7 +214,7 @@ export default function PlayerScreen() {
   const artworkSize = Math.min(compactArtwork ? 244 : 330, playerContentWidth);
   const controlsFixedWidth = 42 + 52 + 74 + 52 + 42;
   const controlGap = Math.max(
-    10,
+    4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
   );
   const onProgressLayout = (event: LayoutChangeEvent) => setProgressWidth(event.nativeEvent.layout.width);
