@@ -15,7 +15,7 @@ import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
 
 function localDayKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -26,7 +26,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, token, loading, signOut, refreshUser } = useAuth();
   const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
-  const { currentSong, listeningStats } = usePlayer();
+  const { currentSong } = usePlayer();
+  const { listeningStats } = usePlaybackActivity();
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   if (loading) {

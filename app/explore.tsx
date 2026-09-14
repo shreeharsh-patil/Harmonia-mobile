@@ -17,10 +17,10 @@ import {
   fetchRecommendedMixes,
 } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePlaybackActivity, usePlayer, type PlaybackHistoryEntry } from '@/src/providers/PlayerProvider';
 import type { MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
-function uniqueRecentSongs(history: ReturnType<typeof usePlayer>['history']) {
+function uniqueRecentSongs(history: PlaybackHistoryEntry[]) {
   const seen = new Set<string>();
   const songs: Song[] = [];
   for (const entry of history) {
@@ -35,7 +35,8 @@ function uniqueRecentSongs(history: ReturnType<typeof usePlayer>['history']) {
 
 export default function ExploreScreen() {
   const { token } = useAuth();
-  const { currentSong, history, playSong } = usePlayer();
+  const { currentSong, playSong } = usePlayer();
+  const { history } = usePlaybackActivity();
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [loading, setLoading] = useState(true);

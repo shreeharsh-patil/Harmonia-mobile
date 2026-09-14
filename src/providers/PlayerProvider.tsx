@@ -193,7 +193,6 @@ type PlayerContextValue = {
   playbackRate: number;
   streamQuality: StreamQuality;
   sleepTimer: SleepTimerMode;
-  sleepRemaining: number;
   repeatMode: RepeatMode;
   shuffleEnabled: boolean;
   radioEnabled: boolean;
@@ -203,10 +202,7 @@ type PlayerContextValue = {
   pipelineTargetQuality: StreamQuality | null;
   pipelineInitialResolveMs: number | null;
   pipelinePromotionResolveMs: number | null;
-  history: PlaybackHistoryEntry[];
-  listeningStats: ListeningStats;
   playbackDiagnostics: PlaybackDiagnostics | null;
-  clearHistory: () => Promise<void>;
   playSong: (song: Song, queue?: Song[]) => Promise<void>;
   playAt: (index: number) => Promise<void>;
   playNext: (song: Song) => void;
@@ -231,10 +227,18 @@ type PlayerContextValue = {
 type PlaybackProgressValue = {
   position: number;
   duration: number;
+  sleepRemaining: number;
+};
+
+type PlaybackActivityValue = {
+  history: PlaybackHistoryEntry[];
+  listeningStats: ListeningStats;
+  clearHistory: () => Promise<void>;
 };
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const PlaybackProgressContext = createContext<PlaybackProgressValue | null>(null);
+const PlaybackActivityContext = createContext<PlaybackActivityValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOffline();
@@ -310,6 +314,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const statsClearedBeforeHydrationRef = useRef(false);
   const historyWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const statsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const playbackSnapshotWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const lastStatsPersistedAtRef = useRef(0);
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -324,6 +330,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const writeListeningStatsSnapshot = useCallback((next: ListeningStats) => {
+    lastStatsPersistedAtRef.current = Date.now();
     statsWriteChainRef.current = statsWriteChainRef.current
       .catch(() => {})
       .then(() => AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)))
@@ -1326,7 +1333,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     };
 
     const warmNextTrack = async () => {
-      if (batterySaver || !networkConnected) {
+      if (batterySaver || !networkConnected || !status.playing) {
         releasePreloadedSource();
         return;
       }
@@ -1397,7 +1404,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       cancelled = true;
       controller.abort();
     };
-  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, streamQuality]);
+  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, status.playing, streamQuality]);
 
   useEffect(() => {
     return () => {
@@ -1478,7 +1485,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           if (key < cutoffKey) delete dailySeconds[key];
         }
         const trimmed = { ...next, dailySeconds };
-        if (statsHydratedRef.current) writeListeningStatsSnapshot(trimmed);
+        if (
+          statsHydratedRef.current &&
+          Date.now() - lastStatsPersistedAtRef.current >= 30_000
+        ) {
+          writeListeningStatsSnapshot(trimmed);
+        }
         return trimmed;
       });
     }, 10_000);
@@ -1502,7 +1514,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (
       !queueChanged &&
       status.playing &&
-      Math.abs(wholeSecond - lastPersistedSecond.current) < 10
+      Math.abs(wholeSecond - lastPersistedSecond.current) < 30
     ) {
       return;
     }
@@ -1535,10 +1547,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       wasPlaying: status.playing,
       savedAt: Date.now(),
     };
-    AsyncStorage.setItem(
-      PLAYBACK_SNAPSHOT_KEY,
-      JSON.stringify(snapshot)
-    ).catch(() => {});
+    playbackSnapshotWriteChainRef.current = playbackSnapshotWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(
+        PLAYBACK_SNAPSHOT_KEY,
+        JSON.stringify(snapshot)
+      ))
+      .catch(() => {});
   }, [currentIndex, queue, status.currentTime, status.playing]);
 
   useEffect(() => {
@@ -1739,7 +1754,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackRate,
     streamQuality,
     sleepTimer,
-    sleepRemaining,
     repeatMode,
     shuffleEnabled,
     radioEnabled,
@@ -1749,10 +1763,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     pipelineTargetQuality,
     pipelineInitialResolveMs,
     pipelinePromotionResolveMs,
-    history,
-    listeningStats,
     playbackDiagnostics,
-    clearHistory,
     playSong,
     playAt,
     playNext,
@@ -1788,7 +1799,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     playbackRate,
     streamQuality,
     sleepTimer,
-    sleepRemaining,
     repeatMode,
     shuffleEnabled,
     radioEnabled,
@@ -1798,10 +1808,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     pipelineTargetQuality,
     pipelineInitialResolveMs,
     pipelinePromotionResolveMs,
-    history,
-    listeningStats,
     playbackDiagnostics,
-    clearHistory,
     playSong,
     playAt,
     playNext,
@@ -1822,16 +1829,25 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleAdaptivePipeline,
   ]);
 
+  const activityValue = useMemo<PlaybackActivityValue>(() => ({
+    history,
+    listeningStats,
+    clearHistory,
+  }), [clearHistory, history, listeningStats]);
+
   const progressValue = useMemo<PlaybackProgressValue>(() => ({
     position: status.currentTime || restoredPosition.current || 0,
     duration: status.duration || currentSong?.duration || 0,
-  }), [currentSong?.duration, status.currentTime, status.duration]);
+    sleepRemaining,
+  }), [currentSong?.duration, sleepRemaining, status.currentTime, status.duration]);
 
   return (
     <PlayerContext.Provider value={value}>
-      <PlaybackProgressContext.Provider value={progressValue}>
-        {children}
-      </PlaybackProgressContext.Provider>
+      <PlaybackActivityContext.Provider value={activityValue}>
+        <PlaybackProgressContext.Provider value={progressValue}>
+          {children}
+        </PlaybackProgressContext.Provider>
+      </PlaybackActivityContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -1845,5 +1861,11 @@ export function usePlayer() {
 export function usePlaybackProgress() {
   const value = useContext(PlaybackProgressContext);
   if (!value) throw new Error('usePlaybackProgress must be used inside PlayerProvider');
+  return value;
+}
+
+export function usePlaybackActivity() {
+  const value = useContext(PlaybackActivityContext);
+  if (!value) throw new Error('usePlaybackActivity must be used inside PlayerProvider');
   return value;
 }
