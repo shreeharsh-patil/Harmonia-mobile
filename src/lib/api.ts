@@ -824,7 +824,39 @@ export async function fetchSongSuggestions(songId: string, limit = 20): Promise<
   return diversifySuggestions(seed, candidates, Math.max(1, limit));
 }
 
-export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
+const LYRICS_TIMEOUT_MS = 10_000;
+
+async function fetchLyricsJson<T>(url: string, parentSignal?: AbortSignal): Promise<T | null> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromParent = () => controller.abort();
+
+  if (parentSignal?.aborted) controller.abort();
+  else parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, LYRICS_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'Harmonia Mobile' },
+    });
+    if (!response.ok) return null;
+    return await response.json() as T;
+  } catch (cause: any) {
+    if (parentSignal?.aborted) throw cause;
+    if (timedOut || cause?.name === 'AbortError') return null;
+    return null;
+  } finally {
+    clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', abortFromParent);
+  }
+}
+
+export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<LyricsResult | null> {
   const artist = artistNames(song);
   const title = song.name || song.title || '';
   if (!title) return null;
@@ -839,21 +871,19 @@ export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
     if (HAS_HARMONIA_API) {
       try {
         const exact = await requestJson<LyricsResult>(
-          `/api/proxy/lyrics?endpoint=get&${params.toString()}`
+          `/api/proxy/lyrics?endpoint=get&${params.toString()}`,
+          { signal }
         );
         if (exact?.syncedLyrics || exact?.plainLyrics) return exact;
-      } catch {}
+      } catch (cause: any) {
+        if (signal?.aborted || cause?.name === 'AbortError') throw cause;
+      }
     }
 
-    try {
-      const response = await fetch(`https://lrclib.net/api/get?${params.toString()}`, {
-        headers: { Accept: 'application/json', 'User-Agent': 'Harmonia Mobile' },
-      });
-      if (!response.ok) return null;
-      return await response.json() as LyricsResult;
-    } catch {
-      return null;
-    }
+    return fetchLyricsJson<LyricsResult>(
+      `https://lrclib.net/api/get?${params.toString()}`,
+      signal
+    );
   };
 
   const exact = await getLyrics();
@@ -865,28 +895,26 @@ export async function fetchLyrics(song: Song): Promise<LyricsResult | null> {
   if (HAS_HARMONIA_API) {
     try {
       const search = await requestJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
-        `/api/proxy/lyrics?endpoint=search&q=${q}`
+        `/api/proxy/lyrics?endpoint=search&q=${q}`,
+        { signal }
       );
       const best = Array.isArray(search)
         ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
         : null;
       if (best) return { ...best, lyricsProvider: 'LRCLib' };
-    } catch {}
+    } catch (cause: any) {
+      if (signal?.aborted || cause?.name === 'AbortError') throw cause;
+    }
   }
 
-  try {
-    const response = await fetch(`https://lrclib.net/api/search?q=${q}`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'Harmonia Mobile' },
-    });
-    if (!response.ok) return null;
-    const search = await response.json() as Array<LyricsResult & { trackName?: string; artistName?: string }>;
-    const best = Array.isArray(search)
-      ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
-      : null;
-    return best ? { ...best, lyricsProvider: 'LRCLib' } : null;
-  } catch {
-    return null;
-  }
+  const search = await fetchLyricsJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
+    `https://lrclib.net/api/search?q=${q}`,
+    signal
+  );
+  const best = Array.isArray(search)
+    ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
+    : null;
+  return best ? { ...best, lyricsProvider: 'LRCLib' } : null;
 }
 
 export async function resolvePlayableSong(
