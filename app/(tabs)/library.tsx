@@ -21,12 +21,18 @@ import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import {
+  SONG_LIST_BATCHING_PERIOD_MS,
+  SONG_LIST_BATCH_SIZE,
+  SONG_LIST_INITIAL_RENDER,
+  SONG_LIST_WINDOW_SIZE,
+} from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
-import type { Song } from '@/src/types';
+import type { Playlist, Song } from '@/src/types';
 
 type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
 type LibraryViewMode = 'list' | 'grid';
@@ -135,6 +141,10 @@ export default function LibraryScreen() {
     <FlatList
       data={data}
       keyExtractor={(item, index) => item.id || String(index)}
+      initialNumToRender={SONG_LIST_INITIAL_RENDER}
+      maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+      updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+      windowSize={SONG_LIST_WINDOW_SIZE}
       contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
       ListEmptyComponent={
         <View style={styles.empty}>
@@ -160,115 +170,87 @@ export default function LibraryScreen() {
         <Text style={styles.title}>Your Library</Text>
         <View style={styles.headerActions}>
           {tab === 'playlists' && (
-            <Pressable
-              onPress={toggleViewMode}
-              style={styles.refresh}
-              accessibilityLabel={viewMode === 'list' ? 'Use grid view' : 'Use list view'}
-            >
-              <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={19} color="#A0A0A0" />
-            </Pressable>
-          )}
-          {token && (
-            <Pressable onPress={() => void refresh()} style={styles.refresh} accessibilityLabel="Sync library">
-              {refreshing ? <ActivityIndicator color="#AAA" size="small" /> : <Ionicons name="refresh" size={20} color="#A0A0A0" />}
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroller}>
-        {([
-          ['playlists', 'Playlists'],
-          ['saved', 'Saved'],
-          ['liked', 'Liked Songs'],
-          ['downloads', `Downloads · ${downloads.length}`],
-          ['local', 'On device'],
-          ['history', 'History'],
-        ] as Array<[LibraryTab, string]>).map(([value, label]) => (
-          <Pressable key={value} onPress={() => setTab(value)} style={[styles.chip, tab === value && styles.chipActive]}>
-            <Text style={[styles.chipText, tab === value && styles.chipTextActive]}>{label}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {tab === 'playlists' && (
         !token ? accountGate : loading ? (
           <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
         ) : (
-          <ScrollView
+          <FlatList<Playlist>
+            key={`playlists-${viewMode}`}
+            data={playlists}
+            numColumns={viewMode === 'grid' ? 2 : 1}
+            keyExtractor={(playlist, index) => String(playlist._id || playlist.id || `playlist-${index}`)}
+            initialNumToRender={SONG_LIST_INITIAL_RENDER}
+            maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+            updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+            windowSize={SONG_LIST_WINDOW_SIZE}
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
             contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomInset }]}
-          >
-            <View style={styles.createBox}>
-              <Text style={styles.createTitle}>NEW PLAYLIST</Text>
-              <View style={styles.createRow}>
-                <TextInput
-                  value={newPlaylist}
-                  onChangeText={setNewPlaylist}
-                  placeholder="Playlist name"
-                  placeholderTextColor="#5E5E5E"
-                  style={styles.input}
-                  onSubmitEditing={() => void submitPlaylist()}
-                />
-                <Pressable disabled={creating || !newPlaylist.trim()} onPress={() => void submitPlaylist()} style={styles.createButton}>
-                  {creating ? <ActivityIndicator color="#080808" size="small" /> : <Ionicons name="add" size={22} color="#080808" />}
-                </Pressable>
-              </View>
-            </View>
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            {playlists.length ? (
-              viewMode === 'grid' ? (
-                <View style={styles.playlistGrid}>
-                  {playlists.map((playlist) => {
-                    const id = String(playlist._id || playlist.id || '');
-                    return (
-                      <Pressable
-                        key={id || playlist.name}
-                        disabled={!id}
-                        onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                        style={({ pressed }) => [
-                          styles.playlistGridCard,
-                          { width: gridArtworkSize },
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <PlaylistArtwork playlist={playlist} size={gridArtworkSize} radius={16} />
-                        <Text numberOfLines={1} style={styles.playlistGridName}>{playlist.name}</Text>
-                        <Text numberOfLines={1} style={styles.playlistGridMeta}>
-                          {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+            columnWrapperStyle={viewMode === 'grid' ? styles.playlistGridRow : undefined}
+            ListHeaderComponent={
+              <>
+                <View style={styles.createBox}>
+                  <Text style={styles.createTitle}>NEW PLAYLIST</Text>
+                  <View style={styles.createRow}>
+                    <TextInput
+                      value={newPlaylist}
+                      onChangeText={setNewPlaylist}
+                      placeholder="Playlist name"
+                      placeholderTextColor="#5E5E5E"
+                      style={styles.input}
+                      onSubmitEditing={() => void submitPlaylist()}
+                    />
+                    <Pressable disabled={creating || !newPlaylist.trim()} onPress={() => void submitPlaylist()} style={styles.createButton}>
+                      {creating ? <ActivityIndicator color="#080808" size="small" /> : <Ionicons name="add" size={22} color="#080808" />}
+                    </Pressable>
+                  </View>
                 </View>
-              ) : playlists.map((playlist) => {
-                const id = String(playlist._id || playlist.id || '');
-                return (
-                  <Pressable
-                    key={id || playlist.name}
-                    disabled={!id}
-                    onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                    style={({ pressed }) => [styles.playlistRow, pressed && styles.pressed]}
-                  >
-                    <PlaylistArtwork playlist={playlist} size={68} radius={13} />
-                    <View style={styles.playlistCopy}>
-                      <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
-                      <Text numberOfLines={1} style={styles.playlistMeta}>{playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color="#585858" />
-                  </Pressable>
-                );
-              })
-            ) : (
+                {!!error && <Text style={styles.error}>{error}</Text>}
+              </>
+            }
+            ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No playlists yet</Text>
                 <Text style={styles.emptyBody}>Create one here and it will also appear in Harmonia Web.</Text>
               </View>
-            )}
-          </ScrollView>
+            }
+            renderItem={({ item: playlist }) => {
+              const id = String(playlist._id || playlist.id || '');
+              if (viewMode === 'grid') {
+                return (
+                  <Pressable
+                    disabled={!id}
+                    onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
+                    style={({ pressed }) => [
+                      styles.playlistGridCard,
+                      { width: gridArtworkSize },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <PlaylistArtwork playlist={playlist} size={gridArtworkSize} radius={16} />
+                    <Text numberOfLines={1} style={styles.playlistGridName}>{playlist.name}</Text>
+                    <Text numberOfLines={1} style={styles.playlistGridMeta}>
+                      {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
+                    </Text>
+                  </Pressable>
+                );
+              }
+
+              return (
+                <Pressable
+                  disabled={!id}
+                  onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
+                  style={({ pressed }) => [styles.playlistRow, pressed && styles.pressed]}
+                >
+                  <PlaylistArtwork playlist={playlist} size={68} radius={13} />
+                  <View style={styles.playlistCopy}>
+                    <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
+                    <Text numberOfLines={1} style={styles.playlistMeta}>{playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#585858" />
+                </Pressable>
+              );
+            }}
+          />
         )
       )}
 
@@ -407,6 +389,10 @@ export default function LibraryScreen() {
           <FlatList
             data={history}
             keyExtractor={(item) => item.entryId}
+            initialNumToRender={SONG_LIST_INITIAL_RENDER}
+            maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+            updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+            windowSize={SONG_LIST_WINDOW_SIZE}
             contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -503,7 +489,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, height: 46, borderRadius: 13, backgroundColor: '#181818', color: '#FFF', paddingHorizontal: 14, fontSize: 14 },
   createButton: { width: 46, height: 46, borderRadius: 13, backgroundColor: '#EFEFEF', alignItems: 'center', justifyContent: 'center' },
   playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
-  playlistGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  playlistGridRow: { gap: 12 },
   playlistGridCard: { marginBottom: 8 },
   playlistGridName: { color: '#F0F0F0', fontSize: 14, fontWeight: '750' as any, marginTop: 9 },
   playlistGridMeta: { color: '#686868', fontSize: 11, marginTop: 3 },
