@@ -25,8 +25,9 @@ test('live player queue preserves embedded audio while persisted snapshots sanit
 
 test('legacy playback history is sanitized during hydration', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /sanitizedHistory/);
+  assert.match(source, /storedHistory = parsedHistory/);
   assert.match(source, /persistenceSafeSong\(normalizeSong\(entry\.song as any\)\)/);
+  assert.match(source, /const mergedHistory = \[/);
 });
 
 test('auth keeps cached sessions on transient failures and clears rejected credentials', async () => {
