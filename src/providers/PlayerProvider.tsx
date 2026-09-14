@@ -623,7 +623,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           excludeProviders: options.excludeProviders,
           recoveryAttempt: options.recoveryAttempt,
           skipEmbedded: options.skipEmbedded,
-          embeddedCandidateIndex: options.embeddedCandidateIndex,
         });
 
         if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
@@ -645,6 +644,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           priority: 'high',
           recoveryAttempt: options.recoveryAttempt,
           skipEmbedded: options.skipEmbedded,
+          embeddedCandidateIndex: options.embeddedCandidateIndex,
         });
 
         if (generation !== loadGenerationRef.current || controller.signal.aborted) return false;
