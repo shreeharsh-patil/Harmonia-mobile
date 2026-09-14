@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
@@ -51,10 +51,10 @@ export default function SearchScreen() {
 
   recentSearchesRef.current = recentSearches;
 
-  const commitRecentSearches = (next: string[]) => {
+  const commitRecentSearches = useCallback((next: string[]) => {
     recentSearchesRef.current = next;
     setRecentSearches(next);
-  };
+  }, []);
 
   const persistRecentSearches = (next: string[]) => {
     recentWriteChainRef.current = recentWriteChainRef.current
@@ -68,20 +68,35 @@ export default function SearchScreen() {
 
   const trimmed = query.trim();
 
-  useEffect(() => {
-    const generation = recentMutationRef.current;
-    AsyncStorage.getItem(RECENT_SEARCHES_KEY)
-      .then((raw) => {
-        if (!raw || generation !== recentMutationRef.current) return;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const generation = recentMutationRef.current;
+
+      void recentWriteChainRef.current
+        .catch(() => {})
+        .then(() => AsyncStorage.getItem(RECENT_SEARCHES_KEY))
+        .then((raw) => {
+          if (!active || generation !== recentMutationRef.current) return;
+          if (!raw) {
+            commitRecentSearches([]);
+            return;
+          }
+
+          const parsed = JSON.parse(raw);
           commitRecentSearches(
-            parsed.filter((item) => typeof item === 'string').slice(0, MAX_RECENT_SEARCHES)
+            Array.isArray(parsed)
+              ? parsed.filter((item) => typeof item === 'string').slice(0, MAX_RECENT_SEARCHES)
+              : []
           );
-        }
-      })
-      .catch(() => {});
-  }, []);
+        })
+        .catch(() => {});
+
+      return () => {
+        active = false;
+      };
+    }, [commitRecentSearches])
+  );
 
   useEffect(() => {
     if (!trimmed) {
