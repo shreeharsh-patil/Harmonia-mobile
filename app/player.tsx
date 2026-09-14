@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-   LayoutChangeEvent,
+  LayoutChangeEvent,
   Pressable,
   ScrollView,
   Share,
