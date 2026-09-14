@@ -14,6 +14,12 @@ import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchRecommendedMixes, fetchSongs } from '@/src/lib/api';
+import {
+  SONG_LIST_BATCHING_PERIOD_MS,
+  SONG_LIST_BATCH_SIZE,
+  SONG_LIST_INITIAL_RENDER,
+  SONG_LIST_WINDOW_SIZE,
+} from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { RecommendedMix, Song } from '@/src/types';
@@ -133,6 +139,10 @@ export default function MixScreen() {
       <FlatList
         data={songs}
         keyExtractor={(item, index) => item.id || String(index)}
+        initialNumToRender={SONG_LIST_INITIAL_RENDER}
+        maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+        updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+        windowSize={SONG_LIST_WINDOW_SIZE}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 import { artworkUrl, bestArtworkUrl, normalizeArtworkUrl, normalizeSong } from '@/src/lib/song';
@@ -44,7 +45,7 @@ function playlistArtwork(playlist: Playlist, targetSize: number) {
   return '';
 }
 
-export function PlaylistArtwork({
+export const PlaylistArtwork = memo(function PlaylistArtwork({
   playlist,
   size,
   radius = 16,
@@ -69,9 +70,10 @@ export function PlaylistArtwork({
       contentFit="cover"
       transition={140}
       cachePolicy="memory-disk"
+      recyclingKey={String((playlist as any)._id || playlist.id || url)}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   fallback: {

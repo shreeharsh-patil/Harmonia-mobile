@@ -15,6 +15,12 @@ import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { fetchAlbum } from '@/src/lib/api';
 import { albumTitle, imageUrl } from '@/src/lib/entities';
+import {
+  SONG_LIST_BATCHING_PERIOD_MS,
+  SONG_LIST_BATCH_SIZE,
+  SONG_LIST_INITIAL_RENDER,
+  SONG_LIST_WINDOW_SIZE,
+} from '@/src/lib/listPerformance';
 import { shareAlbum } from '@/src/lib/share';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
@@ -124,6 +130,10 @@ export default function AlbumScreen() {
       <FlatList
         data={songs}
         keyExtractor={(item, index) => item.id || String(index)}
+        initialNumToRender={SONG_LIST_INITIAL_RENDER}
+        maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+        updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+        windowSize={SONG_LIST_WINDOW_SIZE}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
