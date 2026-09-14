@@ -17,7 +17,7 @@ type Props = {
 };
 
 export function TrackArtwork({ song, size, radius = 12, style }: Props) {
-  const url = artworkUrl(song);
+  const url = artworkUrl(song, size);
 
   if (!url) {
     return (

@@ -152,7 +152,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Ionicons name="chevron-back" size={23} color="#F2F2F2" />
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
   title: { color: '#F5F5F5', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   headerSpacer: { width: 42 },
-  content: { paddingHorizontal: 18, paddingBottom: 80 },
+  content: { paddingHorizontal: 18, paddingBottom: 32 },
   section: { marginTop: 22 },
   sectionTitle: { color: '#595959', fontSize: 9, fontWeight: '800', letterSpacing: 1.7, marginBottom: 8, paddingHorizontal: 4 },
   group: { borderRadius: 17, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', backgroundColor: '#0F0F0F', overflow: 'hidden' },

@@ -372,3 +372,71 @@ test('embedded CDN failure does not blacklist the fresh provider fallback', asyn
   assert.match(source, /activeSourceRef\.current !== 'embedded'/);
   assert.match(source, /\? \[failedProvider\]/);
 });
+
+
+test('tab screens share dynamic bottom insets with the floating mini player', async () => {
+  const mini = await readFile('src/components/MiniPlayer.tsx', 'utf8');
+  assert.match(mini, /export function getTabContentBottomInset/);
+  assert.match(mini, /TAB_BAR_HEIGHT/);
+  assert.match(mini, /MINI_PLAYER_HEIGHT/);
+
+  for (const path of [
+    'app/(tabs)/index.tsx',
+    'app/(tabs)/search.tsx',
+    'app/(tabs)/library.tsx',
+    'app/(tabs)/profile.tsx',
+  ]) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, /getTabContentBottomInset/);
+    assert.match(source, /useSafeAreaInsets/);
+  }
+});
+
+test('stack detail screens reserve the real bottom safe area instead of tab-player padding', async () => {
+  for (const path of [
+    'app/album/[id].tsx',
+    'app/artist/[id].tsx',
+    'app/playlist/[id].tsx',
+    'app/mix/[id].tsx',
+    'app/settings.tsx',
+  ]) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, /edges=\{\['top', 'bottom'\]\}/);
+  }
+
+  for (const path of [
+    'app/album/[id].tsx',
+    'app/artist/[id].tsx',
+    'app/playlist/[id].tsx',
+    'app/mix/[id].tsx',
+  ]) {
+    const source = await readFile(path, 'utf8');
+    assert.doesNotMatch(source, /paddingBottom: 150/);
+  }
+});
+
+test('song action sheet applies the device bottom inset', async () => {
+  const source = await readFile('src/components/SongActionsSheet.tsx', 'utf8');
+  assert.match(source, /useSafeAreaInsets/);
+  assert.match(source, /Math\.max\(28, insets\.bottom \+ 16\)/);
+});
+
+test('artwork rendering requests size-appropriate images', async () => {
+  const trackArtwork = await readFile('src/components/TrackArtwork.tsx', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+  const provider = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const entities = await readFile('src/lib/entities.ts', 'utf8');
+
+  assert.match(trackArtwork, /artworkUrl\(song, size\)/);
+  assert.match(player, /artworkUrl\(currentSong, 720\)/);
+  assert.match(provider, /artworkUrl\(song, 512\)/);
+  assert.match(entities, /bestArtworkUrl\(value, targetSize\)/);
+});
+
+test('library view hydration cannot overwrite an early user toggle', async () => {
+  const source = await readFile('app/(tabs)/library.tsx', 'utf8');
+  assert.match(source, /viewModeMutationRef/);
+  assert.match(source, /generation !== viewModeMutationRef\.current/);
+  assert.match(source, /viewModeMutationRef\.current \+= 1/);
+  assert.match(source, /finally \{[\s\S]*?setCreating\(false\)/);
+});

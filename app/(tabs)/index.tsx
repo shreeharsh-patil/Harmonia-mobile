@@ -9,9 +9,10 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
+import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
   fetchHomeSections,
   fetchRecentlyPlayedPlaylists,
@@ -24,6 +25,7 @@ import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { MusicSection, Playlist, RecommendedMix } from '@/src/types';
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const { token, user } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, togglePlayback, isPlaying, playSong } = usePlayer();
@@ -86,13 +88,14 @@ export default function HomeScreen() {
   };
 
   const hasContent = sections.some((section) => section.playlists?.length) || recentPlaylists.length || mixes.length;
+  const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor="#FFF" />}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
       >
         <View style={styles.header}>
           <View style={styles.headerCopy}>
@@ -254,7 +257,7 @@ function HomeSkeleton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
-  content: { paddingHorizontal: 18, paddingBottom: 160 },
+  content: { paddingHorizontal: 18 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, paddingBottom: 20 },
   headerCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   eyebrow: { color: '#666', fontSize: 10, fontWeight: '800', letterSpacing: 2 },

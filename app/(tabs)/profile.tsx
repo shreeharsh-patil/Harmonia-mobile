@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -22,9 +23,11 @@ function localDayKey(date = new Date()) {
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { user, token, loading, signOut, refreshUser } = useAuth();
   const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
-  const { listeningStats } = usePlayer();
+  const { currentSong, listeningStats } = usePlayer();
+  const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   if (loading) {
     return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color="#FFF" /></View></SafeAreaView>;
@@ -33,7 +36,7 @@ export default function ProfileScreen() {
   if (!token || !user) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.guest}>
+        <View style={[styles.guest, { paddingBottom: contentBottomInset }]}>
           <Text style={styles.kicker}>HARMONIA ACCOUNT</Text>
           <Text style={styles.guestTitle}>Keep your music in sync.</Text>
           <Text style={styles.body}>One account for your web player, phone library, liked songs and playlists.</Text>
@@ -65,7 +68,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void doRefresh()} tintColor="#FFF" />}
       >
         <View style={styles.pageHeader}>
@@ -156,7 +159,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#070707' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 165 },
+  content: { paddingHorizontal: 20, paddingTop: 14 },
   pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 },
   pageTitle: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
   settingsButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
@@ -189,7 +192,7 @@ const styles = StyleSheet.create({
   logout: { height: 50, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth, borderColor: '#352020', backgroundColor: '#130D0D', alignItems: 'center', justifyContent: 'center', marginTop: 20 },
   logoutText: { color: '#E78787', fontSize: 14, fontWeight: '750' as any },
   version: { color: '#3F3F3F', fontSize: 9, fontWeight: '700', textAlign: 'center', letterSpacing: 1.2, marginTop: 24 },
-  guest: { flex: 1, justifyContent: 'center', paddingHorizontal: 30, paddingBottom: 90 },
+  guest: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
   kicker: { color: '#555', fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
   guestTitle: { color: '#F4F4F4', fontSize: 30, lineHeight: 35, fontWeight: '800', letterSpacing: -0.9, marginTop: 8 },
   body: { color: '#777', fontSize: 15, lineHeight: 22, marginTop: 10 },

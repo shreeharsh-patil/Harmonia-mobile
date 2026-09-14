@@ -2,7 +2,12 @@ import { Tabs } from 'expo-router';
 import { ColorValue, Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MiniPlayer } from '@/src/components/MiniPlayer';
+import {
+  MiniPlayer,
+  TAB_BAR_HEIGHT,
+  TAB_BAR_MIN_BOTTOM,
+  TAB_BAR_TO_MINI_GAP,
+} from '@/src/components/MiniPlayer';
 import { colors } from '@/src/theme';
 
 type TabIconName = 'home' | 'search' | 'library' | 'person';
@@ -13,8 +18,8 @@ function TabIcon({ name, color, focused }: { name: TabIconName; color: ColorValu
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const barHeight = 58;
-  const bottom = Math.max(insets.bottom, 8);
+  const barHeight = TAB_BAR_HEIGHT;
+  const bottom = Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM);
 
   return (
     <View style={styles.root}>
@@ -52,7 +57,10 @@ export default function TabsLayout() {
         <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ color, focused }) => <TabIcon name="person" color={color} focused={focused} /> }} />
       </Tabs>
 
-      <View pointerEvents="box-none" style={[styles.miniWrap, { bottom: bottom + barHeight + 8 }]}>
+      <View
+        pointerEvents="box-none"
+        style={[styles.miniWrap, { bottom: bottom + barHeight + TAB_BAR_TO_MINI_GAP }]}
+      >
         <MiniPlayer />
       </View>
     </View>
