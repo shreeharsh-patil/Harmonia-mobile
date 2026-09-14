@@ -548,3 +548,13 @@ test('native next-track preload releases stale buffers when no longer useful', a
   assert.match(source, /preloadedSourceRef\.current = null/);
   assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
 });
+
+
+test('Search resyncs recent searches after Settings clears persisted history', async () => {
+  const source = await readFile('app/(tabs)/search.tsx', 'utf8');
+  assert.match(source, /useFocusEffect/);
+  assert.match(source, /recentWriteChainRef\.current/);
+  assert.match(source, /AsyncStorage\.getItem\(RECENT_SEARCHES_KEY\)/);
+  assert.match(source, /if \(!raw\) \{[\s\S]*?commitRecentSearches\(\[\]\)/);
+  assert.match(source, /generation !== recentMutationRef\.current/);
+});
