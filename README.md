@@ -171,16 +171,12 @@ flowchart TD
     EMBQ -- Yes --> EMB["3 · Embedded Audio"]
     EMBQ -- No / failed --> SAAVN["4 · Direct JioSaavn"]
     SAAVN -- unavailable --> YTM["5 · Direct YouTube Music"]
-    YTM -- unavailable --> YTS["6 · Harmonia YouTube Server Fallback"]
-    YTS -- unavailable --> BACK["7 · Harmonia Backend Search Fallback"]
 
     LOCAL --> PLAYER["expo-audio"]
     OFF --> PLAYER
     EMB --> PLAYER
     SAAVN --> PLAYER
     YTM --> PLAYER
-    YTS --> PLAYER
-    BACK --> PLAYER
 
     PLAYER --> MEDIA["Notification / Lock Screen / Background Audio"]
 ```
@@ -192,8 +188,6 @@ flowchart TD
 3. **Embedded playable URLs already attached to the track**
 4. **Fresh direct JioSaavn resolution**
 5. **Direct YouTube Music / Innertube**
-6. **Optional Harmonia `/api/yt-stream` fallback when a valid YouTube ID exists**
-7. **Optional Harmonia backend stream search**
 
 The resolver also maintains:
 
