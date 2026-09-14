@@ -5,6 +5,7 @@ import {
   LayoutChangeEvent,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -103,6 +104,7 @@ export default function PlayerScreen() {
     sleepRemaining,
     repeatMode,
     shuffleEnabled,
+    radioEnabled,
     history,
     togglePlayback,
     previous,
@@ -119,6 +121,7 @@ export default function PlayerScreen() {
     setSleepTimer,
     toggleRepeat,
     toggleShuffle,
+    toggleRadio,
   } = usePlayer();
   const { position, duration } = usePlaybackProgress();
 
@@ -223,6 +226,29 @@ export default function PlayerScreen() {
       : sleepRemaining > 0
         ? `${Math.floor(sleepRemaining / 60)}:${String(sleepRemaining % 60).padStart(2, '0')}`
         : `${sleepTimer}m`;
+
+  const shareDiagnostics = async () => {
+    const lines = [
+      'Harmonia playback diagnostics',
+      `Track: ${currentSong.name} — ${artistNames(currentSong)}`,
+      `Provider: ${playbackDiagnostics?.provider || 'Not reported'}`,
+      `Source: ${diagnosticSourceLabel(playbackDiagnostics?.source)}`,
+      `Codec: ${playbackDiagnostics?.codec || 'Not reported'}`,
+      `Bitrate: ${formatBitrate(playbackDiagnostics?.bitrate)}`,
+      `Quality: ${playbackDiagnostics?.quality || streamQuality}`,
+      `Adaptive pipeline: ${adaptivePipelineEnabled ? adaptivePipelineStatus : 'disabled'}`,
+      `Playback state: ${playbackState}`,
+      `Error type: ${playbackErrorType || 'None'}`,
+      `Queue: ${queue.length ? `${currentIndex + 1} of ${queue.length}` : 'Not queued'}`,
+      '',
+      'Private stream URLs and tokens are not included.',
+    ];
+
+    await Share.share({
+      title: 'Harmonia playback diagnostics',
+      message: lines.join('\n'),
+    });
+  };
 
   return (
     <View style={styles.root}>
@@ -559,6 +585,26 @@ export default function PlayerScreen() {
                 ))}
               </ScrollView>
 
+              <View style={styles.featureRow}>
+                <View style={styles.featureCopy}>
+                  <Text style={styles.toolLabel}>HARMONIA RADIO</Text>
+                  <Text style={styles.featureTitle}>Keep the music going</Text>
+                  <Text style={styles.featureDetail}>Automatically add related tracks when your queue reaches the end.</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    toggleRadio();
+                  }}
+                  style={[styles.featureButton, radioEnabled && styles.featureButtonActive]}
+                  accessibilityLabel={radioEnabled ? 'Turn Harmonia Radio off' : 'Turn Harmonia Radio on'}
+                >
+                  <Text style={[styles.featureButtonText, radioEnabled && styles.featureButtonTextActive]}>
+                    {radioEnabled ? 'On' : 'Off'}
+                  </Text>
+                </Pressable>
+              </View>
+
               <View style={styles.diagnosticsDivider} />
               <Pressable
                 onPress={() => {
@@ -623,6 +669,13 @@ export default function PlayerScreen() {
                   <Text style={styles.diagnosticsPrivacy}>
                     Harmonia shows the stream hostname only. Signed URLs, query parameters and session tokens are never displayed here.
                   </Text>
+                  <Pressable
+                    onPress={() => void shareDiagnostics()}
+                    style={styles.shareDiagnostics}
+                    accessibilityLabel="Share playback diagnostics"
+                  >
+                    <Text style={styles.shareDiagnosticsText}>Share diagnostics</Text>
+                  </Pressable>
                 </View>
               )}
             </View>
@@ -773,6 +826,14 @@ const styles = StyleSheet.create({
   optionActive: { backgroundColor: '#EFEFEF' },
   optionText: { color: '#A1A1A1', fontSize: 11, fontWeight: '700' },
   optionTextActive: { color: '#080808' },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 2, paddingBottom: 16 },
+  featureCopy: { flex: 1, minWidth: 0 },
+  featureTitle: { color: '#D7D7D7', fontSize: 13, fontWeight: '750' as any, marginTop: -4 },
+  featureDetail: { color: '#696969', fontSize: 10, lineHeight: 15, marginTop: 3 },
+  featureButton: { width: 52, height: 34, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.07)', alignItems: 'center', justifyContent: 'center' },
+  featureButtonActive: { backgroundColor: '#EFEFEF' },
+  featureButtonText: { color: '#999', fontSize: 11, fontWeight: '800' },
+  featureButtonTextActive: { color: '#080808' },
   diagnosticsDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.09)', marginTop: 2, marginBottom: 14 },
   diagnosticsHeader: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   diagnosticsHeaderCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
@@ -784,6 +845,8 @@ const styles = StyleSheet.create({
   diagnosticsKey: { color: '#737373', fontSize: 11 },
   diagnosticsValue: { color: '#C7C7C7', fontSize: 11, fontWeight: '650' as any, flexShrink: 1, textAlign: 'right' },
   diagnosticsPrivacy: { color: '#555', fontSize: 9, lineHeight: 14, marginTop: 9 },
+  shareDiagnostics: { height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  shareDiagnosticsText: { color: '#CFCFCF', fontSize: 11, fontWeight: '800' },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6 },
   secondary: { width: 46, height: 38, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#A0A0A0', fontWeight: '700', fontSize: 13 },
