@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
@@ -69,6 +69,8 @@ function MotionCanvas({ url, active }: { url: string; active: boolean }) {
 
 export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, style }: Props) {
   const { batterySaver } = usePreferences();
+  const songRef = useRef(song);
+  songRef.current = song;
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -118,7 +120,7 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
     // Never display the previous track's Canvas while a new lookup is pending.
     setCanvasUrl(null);
 
-    fetchCanvasMedia(song, controller.signal)
+    fetchCanvasMedia(songRef.current, controller.signal)
       .then((media) => {
         if (!active) return;
         const nextUrl = media?.url || null;
@@ -135,7 +137,7 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
       active = false;
       controller.abort();
     };
-  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion, song]);
+  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion]);
 
   return (
     <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
