@@ -117,7 +117,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // Restore a usable session immediately. A slow or unavailable network
         // must not sign a valid user out of the app.
         setToken(saved);
-        if (cachedUser) setUser(cachedUser);
+        if (cachedUser) {
+          setUser(cachedUser);
+          // A cached authenticated session is enough to render immediately.
+          // Refresh account details in the background instead of blocking cold start.
+          setLoading(false);
+        }
 
         try {
           const result = await fetchMe(saved);
