@@ -1319,10 +1319,23 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     let cancelled = false;
     const controller = new AbortController();
 
+    const releasePreloadedSource = () => {
+      const previous = preloadedSourceRef.current;
+      preloadedSourceRef.current = null;
+      if (previous) clearPreloadedSource(previous.source).catch(() => {});
+    };
+
     const warmNextTrack = async () => {
-      if (batterySaver || !networkConnected) return;
+      if (batterySaver || !networkConnected) {
+        releasePreloadedSource();
+        return;
+      }
+
       const upcoming = queueRef.current[indexRef.current + 1];
-      if (!upcoming?.id) return;
+      if (!upcoming?.id) {
+        releasePreloadedSource();
+        return;
+      }
 
       const stable = normalizeSong(upcoming as any);
       const offlineUri = getOfflineUri(stable.id);
@@ -1340,6 +1353,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           url = resolved.url;
           headers = resolved.headers;
         } catch {
+          if (!controller.signal.aborted) releasePreloadedSource();
           return;
         }
       }
@@ -1384,6 +1398,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       controller.abort();
     };
   }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, streamQuality]);
+
+  useEffect(() => {
+    return () => {
+      const previous = preloadedSourceRef.current;
+      preloadedSourceRef.current = null;
+      if (previous) clearPreloadedSource(previous.source).catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     if (status.didJustFinish && !finishing.current) {
