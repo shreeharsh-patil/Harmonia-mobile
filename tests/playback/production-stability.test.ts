@@ -312,3 +312,13 @@ test('corrupt player persistence is repaired per key instead of aborting all hyd
   assert.match(source, /AsyncStorage\.removeItem\(PLAYER_SETTINGS_KEY\)/);
   assert.match(source, /let snapshot: PlaybackSnapshot/);
 });
+
+
+test('offline index hydration cannot overwrite downloads started during app startup', async () => {
+  const source = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  assert.match(source, /downloadsMutationRef = useRef\(0\)/);
+  assert.match(source, /const hydrationGeneration = downloadsMutationRef\.current/);
+  assert.match(source, /downloadsMutationRef\.current !== hydrationGeneration/);
+  assert.match(source, /downloadsMutationRef\.current \+= 1/);
+  assert.match(source, /downloadsWriteChainRef/);
+});
