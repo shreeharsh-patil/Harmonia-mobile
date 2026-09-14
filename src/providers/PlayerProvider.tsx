@@ -128,6 +128,43 @@ export type ListeningStats = {
   dailySeconds: Record<string, number>;
 };
 
+function emptyListeningStats(): ListeningStats {
+  return {
+    totalSeconds: 0,
+    playCount: 0,
+    trackCounts: {},
+    dailySeconds: {},
+  };
+}
+
+function mergeListeningStats(base: ListeningStats, delta: ListeningStats): ListeningStats {
+  const trackCounts = { ...base.trackCounts };
+  for (const [id, seconds] of Object.entries(delta.trackCounts)) {
+    trackCounts[id] = (trackCounts[id] || 0) + Number(seconds || 0);
+  }
+
+  const dailySeconds = { ...base.dailySeconds };
+  for (const [day, seconds] of Object.entries(delta.dailySeconds)) {
+    dailySeconds[day] = (dailySeconds[day] || 0) + Number(seconds || 0);
+  }
+
+  return {
+    totalSeconds: base.totalSeconds + delta.totalSeconds,
+    playCount: base.playCount + delta.playCount,
+    trackCounts,
+    dailySeconds,
+  };
+}
+
+function hasListeningStatsDelta(stats: ListeningStats) {
+  return Boolean(
+    stats.totalSeconds ||
+    stats.playCount ||
+    Object.keys(stats.trackCounts).length ||
+    Object.keys(stats.dailySeconds).length
+  );
+}
+
 type PersistedPlayerSettings = {
   playbackRate: number;
   streamQuality: StreamQuality;
@@ -223,12 +260,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [pipelinePromotionResolveMs, setPipelinePromotionResolveMs] = useState<number | null>(null);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
-  const [listeningStats, setListeningStats] = useState<ListeningStats>({
-    totalSeconds: 0,
-    playCount: 0,
-    trackCounts: {},
-    dailySeconds: {},
-  });
+  const [listeningStats, setListeningStats] = useState<ListeningStats>(() => emptyListeningStats());
 
   const loadedTrackId = useRef<string | null>(null);
   const restoredPosition = useRef(0);
@@ -269,49 +301,109 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const settingsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const historyMutationRef = useRef(0);
   const statsMutationRef = useRef(0);
+  const historyHydratedRef = useRef(false);
+  const statsHydratedRef = useRef(false);
+  const pendingHistoryEntriesRef = useRef<PlaybackHistoryEntry[]>([]);
+  const pendingStatsDeltaRef = useRef<ListeningStats>(emptyListeningStats());
+  const historyClearedBeforeHydrationRef = useRef(false);
+  const statsClearedBeforeHydrationRef = useRef(false);
+  const historyWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const statsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
 
+  const writeHistorySnapshot = useCallback((next: PlaybackHistoryEntry[]) => {
+    historyWriteChainRef.current = historyWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)))
+      .catch(() => {});
+  }, []);
+
+  const writeListeningStatsSnapshot = useCallback((next: ListeningStats) => {
+    statsWriteChainRef.current = statsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)))
+      .catch(() => {});
+  }, []);
+
+  const addPendingStatsDelta = useCallback((delta: ListeningStats) => {
+    pendingStatsDeltaRef.current = mergeListeningStats(
+      pendingStatsDeltaRef.current,
+      delta
+    );
+  }, []);
+
   const recordHistory = useCallback((song: Song) => {
     const stable = persistenceSafeSong(song);
+    const now = Date.now();
+    const entry: PlaybackHistoryEntry = {
+      entryId: `${now}-${stable.id}`,
+      song: stable,
+      playedAt: now,
+    };
+
     historyMutationRef.current += 1;
     statsMutationRef.current += 1;
-    setHistory((current) => {
-      const next: PlaybackHistoryEntry[] = [
-        {
-          entryId: `${Date.now()}-${stable.id}`,
-          song: stable,
-          playedAt: Date.now(),
-        },
-        ...current,
+
+    if (!historyHydratedRef.current) {
+      pendingHistoryEntriesRef.current = [
+        entry,
+        ...pendingHistoryEntriesRef.current,
       ].slice(0, 500);
-      AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
+    }
+
+    setHistory((current) => {
+      const next = [entry, ...current].slice(0, 500);
+      if (historyHydratedRef.current) writeHistorySnapshot(next);
       return next;
     });
+
+    const playDelta: ListeningStats = {
+      totalSeconds: 0,
+      playCount: 1,
+      trackCounts: {},
+      dailySeconds: {},
+    };
+    if (!statsHydratedRef.current) addPendingStatsDelta(playDelta);
+
     setListeningStats((current) => {
-      const next = { ...current, playCount: current.playCount + 1 };
-      AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
+      const next = mergeListeningStats(current, playDelta);
+      if (statsHydratedRef.current) writeListeningStatsSnapshot(next);
       return next;
     });
-  }, []);
+  }, [addPendingStatsDelta, writeHistorySnapshot, writeListeningStatsSnapshot]);
 
   const clearHistory = useCallback(async () => {
     historyMutationRef.current += 1;
     statsMutationRef.current += 1;
-    const emptyStats: ListeningStats = {
-      totalSeconds: 0,
-      playCount: 0,
-      trackCounts: {},
-      dailySeconds: {},
-    };
+
+    if (!historyHydratedRef.current) {
+      historyClearedBeforeHydrationRef.current = true;
+      pendingHistoryEntriesRef.current = [];
+    }
+    if (!statsHydratedRef.current) {
+      statsClearedBeforeHydrationRef.current = true;
+      pendingStatsDeltaRef.current = emptyListeningStats();
+    }
+
     setHistory([]);
-    setListeningStats(emptyStats);
+    setListeningStats(emptyListeningStats());
+
+    historyWriteChainRef.current = historyWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.removeItem(HISTORY_KEY))
+      .catch(() => {});
+    statsWriteChainRef.current = statsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.removeItem(LISTENING_STATS_KEY))
+      .catch(() => {});
+
     await Promise.all([
-      AsyncStorage.removeItem(HISTORY_KEY),
-      AsyncStorage.removeItem(LISTENING_STATS_KEY),
+      historyWriteChainRef.current,
+      statsWriteChainRef.current,
     ]);
   }, []);
 
@@ -970,8 +1062,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const restoreGeneration = loadGenerationRef.current;
-    const historyGeneration = historyMutationRef.current;
-    const statsGeneration = statsMutationRef.current;
 
     setAudioModeAsync({
       playsInSilentMode: true,
@@ -992,11 +1082,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           AsyncStorage.getItem(LISTENING_STATS_KEY),
         ]);
 
-        if (historyRaw && historyMutationRef.current === historyGeneration) {
+        let storedHistory: PlaybackHistoryEntry[] = [];
+        let historyNeedsRepair = false;
+        if (historyRaw && !historyClearedBeforeHydrationRef.current) {
           try {
             const parsedHistory = JSON.parse(historyRaw);
             if (Array.isArray(parsedHistory)) {
-              const sanitizedHistory = parsedHistory
+              storedHistory = parsedHistory
                 .filter((entry: any) => entry?.song?.id)
                 .slice(0, 500)
                 .map((entry: any) => ({
@@ -1004,33 +1096,78 @@ export function PlayerProvider({ children }: PropsWithChildren) {
                   playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
                   song: persistenceSafeSong(normalizeSong(entry.song as any)),
                 }));
-              if (historyMutationRef.current === historyGeneration) {
-                setHistory(sanitizedHistory);
-                AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(sanitizedHistory)).catch(() => {});
-              }
+              historyNeedsRepair = storedHistory.length !== parsedHistory.length;
+            } else {
+              historyNeedsRepair = true;
             }
           } catch {
-            AsyncStorage.removeItem(HISTORY_KEY).catch(() => {});
+            historyNeedsRepair = true;
           }
         }
 
-        if (statsRaw && statsMutationRef.current === statsGeneration) {
+        const pendingHistory = pendingHistoryEntriesRef.current;
+        const pendingEntryIds = new Set(pendingHistory.map((entry) => entry.entryId));
+        const mergedHistory = [
+          ...pendingHistory,
+          ...storedHistory.filter((entry) => !pendingEntryIds.has(entry.entryId)),
+        ].slice(0, 500);
+        pendingHistoryEntriesRef.current = [];
+        historyHydratedRef.current = true;
+        setHistory(mergedHistory);
+
+        if (
+          historyClearedBeforeHydrationRef.current ||
+          historyNeedsRepair ||
+          pendingHistory.length
+        ) {
+          historyClearedBeforeHydrationRef.current = false;
+          if (mergedHistory.length) writeHistorySnapshot(mergedHistory);
+          else {
+            historyWriteChainRef.current = historyWriteChainRef.current
+              .catch(() => {})
+              .then(() => AsyncStorage.removeItem(HISTORY_KEY))
+              .catch(() => {});
+          }
+        }
+
+        let storedStats = emptyListeningStats();
+        let statsNeedsRepair = false;
+        if (statsRaw && !statsClearedBeforeHydrationRef.current) {
           try {
             const parsedStats = JSON.parse(statsRaw);
-            if (statsMutationRef.current === statsGeneration) {
-              setListeningStats({
-                totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
-                playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
-                trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
-                  ? parsedStats.trackCounts
-                  : {},
-                dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
-                  ? parsedStats.dailySeconds
-                  : {},
-              });
-            }
+            storedStats = {
+              totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
+              playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
+              trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
+                ? parsedStats.trackCounts
+                : {},
+              dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+                ? parsedStats.dailySeconds
+                : {},
+            };
           } catch {
-            AsyncStorage.removeItem(LISTENING_STATS_KEY).catch(() => {});
+            statsNeedsRepair = true;
+          }
+        }
+
+        const pendingStats = pendingStatsDeltaRef.current;
+        const mergedStats = mergeListeningStats(storedStats, pendingStats);
+        pendingStatsDeltaRef.current = emptyListeningStats();
+        statsHydratedRef.current = true;
+        setListeningStats(mergedStats);
+
+        if (
+          statsClearedBeforeHydrationRef.current ||
+          statsNeedsRepair ||
+          hasListeningStatsDelta(pendingStats)
+        ) {
+          statsClearedBeforeHydrationRef.current = false;
+          if (hasListeningStatsDelta(mergedStats)) writeListeningStatsSnapshot(mergedStats);
+          else {
+            statsWriteChainRef.current = statsWriteChainRef.current
+              .catch(() => {})
+              .then(() => AsyncStorage.removeItem(LISTENING_STATS_KEY))
+              .catch(() => {});
           }
         }
 
@@ -1116,6 +1253,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         setPlaybackState('READY');
       } catch {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
+        if (!historyHydratedRef.current) {
+          historyHydratedRef.current = true;
+          pendingHistoryEntriesRef.current = [];
+        }
+        if (!statsHydratedRef.current) {
+          statsHydratedRef.current = true;
+          pendingStatsDeltaRef.current = emptyListeningStats();
+        }
         if (!settingsHydratedRef.current) {
           const pendingSettings = pendingSettingsRef.current;
           settingsHydratedRef.current = true;
@@ -1126,7 +1271,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         }
       }
     })();
-  }, [currentSettingsSnapshot, player, writeSettingsSnapshot]);
+  }, [
+    currentSettingsSnapshot,
+    player,
+    writeHistorySnapshot,
+    writeListeningStatsSnapshot,
+    writeSettingsSnapshot,
+  ]);
 
   useEffect(() => {
     const current = Number(status.currentTime || 0);
@@ -1286,36 +1437,34 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     const interval = setInterval(() => {
       statsMutationRef.current += 1;
+      const id = String(currentSong.id);
+      const day = localDayKey();
+      const delta: ListeningStats = {
+        totalSeconds: 10,
+        playCount: 0,
+        trackCounts: { [id]: 10 },
+        dailySeconds: { [day]: 10 },
+      };
+
+      if (!statsHydratedRef.current) addPendingStatsDelta(delta);
+
       setListeningStats((current) => {
-        const id = String(currentSong.id);
-        const day = localDayKey();
-        const dailySeconds = {
-          ...(current.dailySeconds || {}),
-          [day]: ((current.dailySeconds || {})[day] || 0) + 10,
-        };
+        const next = mergeListeningStats(current, delta);
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 35);
         const cutoffKey = localDayKey(cutoff);
+        const dailySeconds = { ...next.dailySeconds };
         for (const key of Object.keys(dailySeconds)) {
           if (key < cutoffKey) delete dailySeconds[key];
         }
-
-        const next: ListeningStats = {
-          totalSeconds: current.totalSeconds + 10,
-          playCount: current.playCount,
-          trackCounts: {
-            ...current.trackCounts,
-            [id]: (current.trackCounts[id] || 0) + 10,
-          },
-          dailySeconds,
-        };
-        AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
-        return next;
+        const trimmed = { ...next, dailySeconds };
+        if (statsHydratedRef.current) writeListeningStatsSnapshot(trimmed);
+        return trimmed;
       });
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [currentSong?.id, status.playing]);
+  }, [addPendingStatsDelta, currentSong?.id, status.playing, writeListeningStatsSnapshot]);
 
   useEffect(() => {
     if (!queue.length || currentIndex < 0) return;
