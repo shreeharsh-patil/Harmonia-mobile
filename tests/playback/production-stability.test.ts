@@ -574,3 +574,37 @@ test('Spotify Canvas bypasses Harmonia backend and persists device-side results'
   assert.doesNotMatch(canvas, /api\/proxy\/spotify-canvas/);
   assert.doesNotMatch(canvas, /HARMONIA_API_URL/);
 });
+
+
+test('player persistence batches background-safe storage work instead of writing every few seconds', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /lastStatsPersistedAtRef/);
+  assert.match(source, /Date\.now\(\) - lastStatsPersistedAtRef\.current >= 30_000/);
+  assert.match(source, /Math\.abs\(wholeSecond - lastPersistedSecond\.current\) < 30/);
+  assert.match(source, /playbackSnapshotWriteChainRef\.current = playbackSnapshotWriteChainRef\.current/);
+});
+
+test('high-frequency listening activity is isolated from the core player context', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /type PlaybackActivityValue/);
+  assert.match(source, /PlaybackActivityContext/);
+  assert.match(source, /export function usePlaybackActivity\(\)/);
+
+  for (const path of [
+    'app/player.tsx',
+    'app/replay.tsx',
+    'app/(tabs)/library.tsx',
+    'app/(tabs)/profile.tsx',
+  ]) {
+    const consumer = await readFile(path, 'utf8');
+    assert.match(consumer, /usePlaybackActivity/);
+  }
+});
+
+test('now playing backdrop uses a smaller source and lower blur cost', async () => {
+  const source = await readFile('app/player.tsx', 'utf8');
+  assert.match(source, /artworkUrl\(currentSong, 360\)/);
+  assert.match(source, /blurRadius=\{28\}/);
+  assert.doesNotMatch(source, /artworkUrl\(currentSong, 720\)/);
+  assert.doesNotMatch(source, /blurRadius=\{42\}/);
+});
