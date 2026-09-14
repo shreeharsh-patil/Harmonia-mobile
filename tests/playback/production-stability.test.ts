@@ -295,14 +295,18 @@ test('player settings preserve live changes made before storage hydration finish
   assert.match(source, /settingsWriteChainRef/);
 });
 
-test('player history and listening stats ignore stale hydration after live mutations', async () => {
+test('player history and listening stats merge live activity over startup hydration', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /historyMutationRef = useRef\(0\)/);
-  assert.match(source, /statsMutationRef = useRef\(0\)/);
-  assert.match(source, /historyMutationRef\.current === historyGeneration/);
-  assert.match(source, /statsMutationRef\.current === statsGeneration/);
-  assert.match(source, /historyMutationRef\.current \+= 1/);
-  assert.match(source, /statsMutationRef\.current \+= 1/);
+  assert.match(source, /historyHydratedRef = useRef\(false\)/);
+  assert.match(source, /statsHydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingHistoryEntriesRef/);
+  assert.match(source, /pendingStatsDeltaRef/);
+  assert.match(source, /const mergedHistory = \[/);
+  assert.match(source, /const mergedStats = mergeListeningStats\(storedStats, pendingStats\)/);
+  assert.match(source, /historyClearedBeforeHydrationRef/);
+  assert.match(source, /statsClearedBeforeHydrationRef/);
+  assert.match(source, /historyWriteChainRef/);
+  assert.match(source, /statsWriteChainRef/);
 });
 
 test('corrupt player persistence is repaired per key instead of aborting all hydration', async () => {
