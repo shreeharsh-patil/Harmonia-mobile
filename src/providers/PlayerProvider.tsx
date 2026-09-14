@@ -267,6 +267,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const settingsHydratedRef = useRef(false);
   const pendingSettingsRef = useRef<Partial<PersistedPlayerSettings>>({});
   const settingsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const historyMutationRef = useRef(0);
+  const statsMutationRef = useRef(0);
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
@@ -275,6 +277,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   const recordHistory = useCallback((song: Song) => {
     const stable = persistenceSafeSong(song);
+    historyMutationRef.current += 1;
+    statsMutationRef.current += 1;
     setHistory((current) => {
       const next: PlaybackHistoryEntry[] = [
         {
@@ -295,6 +299,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const clearHistory = useCallback(async () => {
+    historyMutationRef.current += 1;
+    statsMutationRef.current += 1;
     const emptyStats: ListeningStats = {
       totalSeconds: 0,
       playCount: 0,
@@ -964,6 +970,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const restoreGeneration = loadGenerationRef.current;
+    const historyGeneration = historyMutationRef.current;
+    const statsGeneration = statsMutationRef.current;
 
     setAudioModeAsync({
       playsInSilentMode: true,
@@ -984,37 +992,56 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           AsyncStorage.getItem(LISTENING_STATS_KEY),
         ]);
 
-        if (historyRaw) {
-          const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) {
-            const sanitizedHistory = parsedHistory
-              .filter((entry: any) => entry?.song?.id)
-              .slice(0, 500)
-              .map((entry: any) => ({
-                entryId: String(entry.entryId || `${entry.playedAt || Date.now()}-${entry.song.id}`),
-                playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
-                song: persistenceSafeSong(normalizeSong(entry.song as any)),
-              }));
-            setHistory(sanitizedHistory);
-            AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(sanitizedHistory)).catch(() => {});
+        if (historyRaw && historyMutationRef.current === historyGeneration) {
+          try {
+            const parsedHistory = JSON.parse(historyRaw);
+            if (Array.isArray(parsedHistory)) {
+              const sanitizedHistory = parsedHistory
+                .filter((entry: any) => entry?.song?.id)
+                .slice(0, 500)
+                .map((entry: any) => ({
+                  entryId: String(entry.entryId || `${entry.playedAt || Date.now()}-${entry.song.id}`),
+                  playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
+                  song: persistenceSafeSong(normalizeSong(entry.song as any)),
+                }));
+              if (historyMutationRef.current === historyGeneration) {
+                setHistory(sanitizedHistory);
+                AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(sanitizedHistory)).catch(() => {});
+              }
+            }
+          } catch {
+            AsyncStorage.removeItem(HISTORY_KEY).catch(() => {});
           }
         }
 
-        if (statsRaw) {
-          const parsedStats = JSON.parse(statsRaw);
-          setListeningStats({
-            totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
-            playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
-            trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
-              ? parsedStats.trackCounts
-              : {},
-            dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
-              ? parsedStats.dailySeconds
-              : {},
-          });
+        if (statsRaw && statsMutationRef.current === statsGeneration) {
+          try {
+            const parsedStats = JSON.parse(statsRaw);
+            if (statsMutationRef.current === statsGeneration) {
+              setListeningStats({
+                totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
+                playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
+                trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
+                  ? parsedStats.trackCounts
+                  : {},
+                dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+                  ? parsedStats.dailySeconds
+                  : {},
+              });
+            }
+          } catch {
+            AsyncStorage.removeItem(LISTENING_STATS_KEY).catch(() => {});
+          }
         }
 
-        const rawSettings = settingsRaw ? JSON.parse(settingsRaw) : {};
+        let rawSettings: Record<string, any> = {};
+        if (settingsRaw) {
+          try {
+            rawSettings = JSON.parse(settingsRaw);
+          } catch {
+            AsyncStorage.removeItem(PLAYER_SETTINGS_KEY).catch(() => {});
+          }
+        }
         const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
         const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
         const restoredSettings: PersistedPlayerSettings = {
@@ -1056,7 +1083,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         }
 
         if (!snapshotRaw || loadGenerationRef.current !== restoreGeneration) return;
-        const snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
+        let snapshot: PlaybackSnapshot;
+        try {
+          snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
+        } catch {
+          await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
+          return;
+        }
         const restoredQueue = Array.isArray(snapshot.queue)
           ? snapshot.queue.map((song) => persistenceSafeSong(normalizeSong(song as any))).filter((song) => song.id)
           : [];
@@ -1083,9 +1116,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         setPlaybackState('READY');
       } catch {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
+        if (!settingsHydratedRef.current) {
+          settingsHydratedRef.current = true;
+          pendingSettingsRef.current = {};
+          writeSettingsSnapshot(currentSettingsSnapshot());
+        }
       }
     })();
-  }, [player, writeSettingsSnapshot]);
+  }, [currentSettingsSnapshot, player, writeSettingsSnapshot]);
 
   useEffect(() => {
     const current = Number(status.currentTime || 0);
@@ -1244,6 +1282,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!status.playing || !currentSong?.id) return;
 
     const interval = setInterval(() => {
+      statsMutationRef.current += 1;
       setListeningStats((current) => {
         const id = String(currentSong.id);
         const day = localDayKey();
