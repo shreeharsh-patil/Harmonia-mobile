@@ -19,7 +19,7 @@ import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyri
 import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePlaybackActivity, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
@@ -105,7 +105,6 @@ export default function PlayerScreen() {
     repeatMode,
     shuffleEnabled,
     radioEnabled,
-    history,
     togglePlayback,
     previous,
     next,
@@ -123,6 +122,7 @@ export default function PlayerScreen() {
     toggleShuffle,
     toggleRadio,
   } = usePlayer();
+  const { history } = usePlaybackActivity();
   const { position, duration } = usePlaybackProgress();
 
   const [progressWidth, setProgressWidth] = useState(1);
@@ -132,7 +132,7 @@ export default function PlayerScreen() {
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const lyricsScrollRef = useRef<ScrollView>(null);
 
-  const cover = artworkUrl(currentSong, 720);
+  const cover = artworkUrl(currentSong, 360);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
   const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
   const activeWord = useMemo(
@@ -260,7 +260,7 @@ export default function PlayerScreen() {
       {!!cover && (
         <Image
           source={{ uri: cover }}
-          blurRadius={42}
+          blurRadius={28}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
