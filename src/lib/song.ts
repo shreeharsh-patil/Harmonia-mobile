@@ -1,4 +1,4 @@
-import type { HarmoniaArtist, HarmoniaImage, Song } from '@/src/types';
+import type { HarmoniaArtist, Song } from '@/src/types';
 
 function decode(value: string) {
   return value
