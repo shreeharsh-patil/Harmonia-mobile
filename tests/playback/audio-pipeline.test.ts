@@ -87,7 +87,6 @@ function saavnDetails(id: string, url: string, options: { supports320?: boolean;
 test('1 embedded audio is selected without a network request', async () => {
   let requests = 0;
   const providers = createHarmoniaProviders({
-    apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async () => {
       requests += 1;
@@ -123,9 +122,8 @@ test('2 quality selection honors saver/normal/high/maximum ceilings', () => {
   assert.match(getAudioCandidates(track, 'maximum')[0].url, /lossless/);
 });
 
-test('3 YouTube server fallback resolves to the Harmonia 307 redirect route', async () => {
+test('3 dedicated stream fallback does not use the account backend', async () => {
   const providers = createHarmoniaProviders({
-    apiBase: 'https://harmonia.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async () => { throw new Error('unexpected fetch'); },
   });
@@ -138,7 +136,7 @@ test('3 YouTube server fallback resolves to the Harmonia 307 redirect route', as
     source: 'youtube',
   }));
 
-  assert.equal(result.url, 'https://harmonia.test/api/yt-stream?id=dQw4w9WgXcQ');
+  assert.equal(result.url, 'https://stream.test/api/yt-stream?id=dQw4w9WgXcQ');
   assert.equal(result.provider, 'youtube-server');
   assert.equal(result.source, 'youtube-server');
 });
@@ -146,7 +144,6 @@ test('3 YouTube server fallback resolves to the Harmonia 307 redirect route', as
 test('4 JioSaavn refresh resolves directly on-device at requested quality', async () => {
   const calls: string[] = [];
   const providers = createHarmoniaProviders({
-    apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -175,7 +172,6 @@ test('4 JioSaavn refresh resolves directly on-device at requested quality', asyn
 test('5 direct JioSaavn failure falls through to optional backend-search', async () => {
   const calls: string[] = [];
   const providers = createHarmoniaProviders({
-    apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -207,7 +203,6 @@ test('6 metadata-only Spotify tracks try direct JioSaavn before backend fallback
   let saavnSearchCalls = 0;
   let streamCalls = 0;
   const providers = createHarmoniaProviders({
-    apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -551,7 +546,6 @@ test('30 JioSaavn catalog resolution stays ahead of YouTube fallback', async () 
 test('31 forceFresh JioSaavn resolution requests a fresh direct stream', async () => {
   let calls = 0;
   const providers = createHarmoniaProviders({
-    apiBase: 'https://catalog.test',
     streamApiBase: 'https://stream.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -610,7 +604,6 @@ test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
 
 test('34 direct YouTube Music remains available without a Harmonia API', async () => {
   const providers = createHarmoniaProviders({
-    apiBase: '',
     streamApiBase: '',
     fetchImpl: async () => { throw new Error('not resolving in this assertion'); },
   });
@@ -839,7 +832,6 @@ test('39 direct YouTube Music search extracts playable track identity', async ()
 test('40 resolver uses direct YouTube before the optional Harmonia YouTube server', async () => {
   let directPlayerCalls = 0;
   const providers = createHarmoniaProviders({
-    apiBase: 'https://harmonia.test',
     streamApiBase: 'https://harmonia.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -892,7 +884,6 @@ test('40 resolver uses direct YouTube before the optional Harmonia YouTube serve
 
 test('41 direct YouTube refusal falls through to Harmonia server when configured', async () => {
   const providers = createHarmoniaProviders({
-    apiBase: 'https://harmonia.test',
     streamApiBase: 'https://harmonia.test',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -929,7 +920,6 @@ test('41 direct YouTube refusal falls through to Harmonia server when configured
 test('42 YouTube-identified songs still prefer a JioSaavn metadata match', async () => {
   let youtubeCalls = 0;
   const providers = createHarmoniaProviders({
-    apiBase: '',
     streamApiBase: '',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -979,7 +969,6 @@ test('42 YouTube-identified songs still prefer a JioSaavn metadata match', async
 
 test('39 JioSaavn playback matching preserves Harmonia catalog identity', async () => {
   const providers = createHarmoniaProviders({
-    apiBase: '',
     streamApiBase: '',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -1046,7 +1035,6 @@ test('40 stale JioSaavn ids fall back to recording matching', async () => {
   let detailCalls = 0;
   let searchCalls = 0;
   const providers = createHarmoniaProviders({
-    apiBase: '',
     streamApiBase: '',
     fetchImpl: async (input) => {
       const url = String(input);
@@ -1113,7 +1101,6 @@ test('43 decode failures prefer another embedded candidate like Harmonia Web', (
 
 test('44 resolver can select the next embedded candidate during recovery', async () => {
   const resolver = new StreamResolver(createHarmoniaProviders({
-    apiBase: '',
     streamApiBase: '',
     fetchImpl: async () => { throw new Error('network must not be called'); },
   }), { healthManager: new ProviderHealthManager() });
