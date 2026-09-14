@@ -3,6 +3,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { artworkUrl, bestArtworkUrl, normalizeArtworkUrl, normalizeSong } from '@/src/lib/song';
 import type { Playlist, Song } from '@/src/types';
 
+function isPlaceholderArtwork(url: string) {
+  const normalized = String(url || '').trim().toLowerCase();
+  return !normalized ||
+    normalized.endsWith('/default-playlist-image.png') ||
+    normalized.startsWith('data:image/svg+xml');
+}
+
 function playlistArtwork(playlist: Playlist, targetSize: number) {
   const raw = playlist as any;
   for (const field of [
@@ -18,7 +25,7 @@ function playlistArtwork(playlist: Playlist, targetSize: number) {
     raw.imageUrl,
   ]) {
     const url = bestArtworkUrl(field, targetSize);
-    if (url) return url;
+    if (url && !isPlaceholderArtwork(url)) return url;
   }
 
   // Web Harmonia derives a playlist cover from its tracks when the stored
