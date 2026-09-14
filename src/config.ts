@@ -12,8 +12,13 @@ export const HARMONIA_STREAM_API_URL = publicUrl(
   HARMONIA_API_URL
 );
 
+export const SPOTIFY_CANVAS_API_URL = publicUrl(
+  process.env.EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL
+);
+
 export const HAS_HARMONIA_API = Boolean(HARMONIA_API_URL);
 export const HAS_HARMONIA_STREAM_API = Boolean(HARMONIA_STREAM_API_URL);
+export const HAS_SPOTIFY_CANVAS_API = Boolean(SPOTIFY_CANVAS_API_URL);
 
 export const APP_NAME = 'Harmonia';
 export const APP_VERSION = '0.3.0';
