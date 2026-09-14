@@ -170,6 +170,38 @@ export default function LibraryScreen() {
         <Text style={styles.title}>Your Library</Text>
         <View style={styles.headerActions}>
           {tab === 'playlists' && (
+            <Pressable
+              onPress={toggleViewMode}
+              style={styles.refresh}
+              accessibilityLabel={viewMode === 'list' ? 'Use grid view' : 'Use list view'}
+            >
+              <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={19} color="#A0A0A0" />
+            </Pressable>
+          )}
+          {token && (
+            <Pressable onPress={() => void refresh()} style={styles.refresh} accessibilityLabel="Sync library">
+              {refreshing ? <ActivityIndicator color="#AAA" size="small" /> : <Ionicons name="refresh" size={20} color="#A0A0A0" />}
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroller}>
+        {([
+          ['playlists', 'Playlists'],
+          ['saved', 'Saved'],
+          ['liked', 'Liked Songs'],
+          ['downloads', `Downloads · ${downloads.length}`],
+          ['local', 'On device'],
+          ['history', 'History'],
+        ] as Array<[LibraryTab, string]>).map(([value, label]) => (
+          <Pressable key={value} onPress={() => setTab(value)} style={[styles.chip, tab === value && styles.chipActive]}>
+            <Text style={[styles.chipText, tab === value && styles.chipTextActive]}>{label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {tab === 'playlists' && (
         !token ? accountGate : loading ? (
           <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
         ) : (
@@ -244,7 +276,9 @@ export default function LibraryScreen() {
                   <PlaylistArtwork playlist={playlist} size={68} radius={13} />
                   <View style={styles.playlistCopy}>
                     <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
-                    <Text numberOfLines={1} style={styles.playlistMeta}>{playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}</Text>
+                    <Text numberOfLines={1} style={styles.playlistMeta}>
+                      {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
+                    </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="#585858" />
                 </Pressable>
