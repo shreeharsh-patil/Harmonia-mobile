@@ -40,7 +40,6 @@ The mobile app is designed to start playback quickly, prefer on-device/direct so
 - Embedded audio candidate playback
 - Direct **JioSaavn** resolution
 - Direct **YouTube Music / Innertube** fallback
-- Optional Harmonia server fallbacks
 - Spotify Canvas fetched directly by the APK from the configured Canvas service
 - Synced lyrics with seekable timed lines and words
 - Playlist, liked song, liked album and liked artist synchronization
@@ -385,7 +384,6 @@ Harmonia Mobile is intentionally **local/direct-first**, but account synchroniza
 - Spotify playlist import
 - cloud library sync
 - server recommendations where available
-- optional server stream fallbacks
 
 The app does **not** embed MongoDB credentials or database administration credentials inside the APK.
 
@@ -540,8 +538,6 @@ EXPO_PUBLIC_HARMONIA_API_URL=https://your-harmonia-api.example
 # Spotify Canvas service called directly by the APK (public URL, not a secret).
 EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL=https://spotify-canvas-one.vercel.app
 
-# Optional dedicated stream fallback backend.
-EXPO_PUBLIC_HARMONIA_STREAM_API_URL=https://your-harmonia-stream-backend.example
 ```
 
 For EAS/catalog builds, the following are build secrets rather than public app variables:
