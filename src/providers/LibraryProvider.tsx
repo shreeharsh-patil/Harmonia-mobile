@@ -56,6 +56,8 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
   const mutationKeysRef = useRef(new Set<string>());
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   const load = useCallback(async (manual = false) => {
     const generation = ++loadGenerationRef.current;
@@ -120,6 +122,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
     try {
       const result = await toggleLikedSong(token, accountSafeSong);
+      if (tokenRef.current !== token) return null;
       setLikedSongs((current) => result.liked
         ? [normalized, ...current.filter((item) => item.id !== normalized.id)]
         : current.filter((item) => item.id !== normalized.id)
@@ -127,6 +130,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return null;
       setLikedSongs((current) => previouslyLiked
         ? [normalized, ...current.filter((item) => item.id !== normalized.id)]
         : current.filter((item) => item.id !== normalized.id)
@@ -171,6 +175,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     );
     try {
       const result = await toggleLikedEntity(token, 'playlists', normalized);
+      if (tokenRef.current !== token) return null;
       setLikedPlaylists((current) => result.liked
         ? [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
         : current.filter((item) => String(item.id || item._id || '') !== id)
@@ -178,6 +183,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return null;
       setLikedPlaylists((current) => wasLiked
         ? [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
         : current.filter((item) => String(item.id || item._id || '') !== id)
@@ -205,6 +211,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     );
     try {
       const result = await toggleLikedEntity(token, 'albums', normalized);
+      if (tokenRef.current !== token) return null;
       setLikedAlbums((current) => result.liked
         ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
         : current.filter((item) => String(item.id || '') !== id)
@@ -212,6 +219,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return null;
       setLikedAlbums((current) => wasLiked
         ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
         : current.filter((item) => String(item.id || '') !== id)
@@ -239,6 +247,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     );
     try {
       const result = await toggleLikedEntity(token, 'artists', normalized);
+      if (tokenRef.current !== token) return null;
       setLikedArtists((current) => result.liked
         ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
         : current.filter((item) => String(item.id || '') !== id)
@@ -246,6 +255,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       Haptics.selectionAsync().catch(() => {});
       return result.liked;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return null;
       setLikedArtists((current) => wasLiked
         ? [normalized, ...current.filter((item) => String(item.id || '') !== id)]
         : current.filter((item) => String(item.id || '') !== id)
@@ -261,10 +271,12 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token || !name.trim()) return null;
     try {
       const playlist = await createPlaylistApi(token, name.trim());
+      if (tokenRef.current !== token) return null;
       setPlaylists((current) => [playlist, ...current]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return playlist;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return null;
       setError(cause?.message || 'Could not create playlist');
       return null;
     }
@@ -274,6 +286,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token) return false;
     try {
       await addSongToPlaylist(token, playlistId, songId);
+      if (tokenRef.current !== token) return false;
       setPlaylists((current) => current.map((playlist) => {
         const id = String(playlist._id || playlist.id || '');
         if (id !== playlistId) return playlist;
@@ -283,6 +296,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       Haptics.selectionAsync().catch(() => {});
       return true;
     } catch (cause: any) {
+      if (tokenRef.current !== token) return false;
       setError(cause?.message || 'Could not add song to playlist');
       return false;
     }
