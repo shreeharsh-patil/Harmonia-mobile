@@ -385,8 +385,6 @@ test('tab screens share dynamic bottom insets with the floating mini player', as
     'app/(tabs)/search.tsx',
     'app/(tabs)/library.tsx',
     'app/(tabs)/profile.tsx',
-    'app/settings.tsx',
-    'app/explore.tsx',
   ]) {
     const source = await readFile(path, 'utf8');
     assert.match(source, /getTabContentBottomInset/);
@@ -597,6 +595,8 @@ test('high-frequency listening activity is isolated from the core player context
     'app/replay.tsx',
     'app/(tabs)/library.tsx',
     'app/(tabs)/profile.tsx',
+    'app/settings.tsx',
+    'app/explore.tsx',
   ]) {
     const consumer = await readFile(path, 'utf8');
     assert.match(consumer, /usePlaybackActivity/);
