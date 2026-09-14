@@ -855,6 +855,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           const suggestions = await fetchSongSuggestions(seed.id, 20);
           if (
             endGeneration !== loadGenerationRef.current ||
+            queueRef.current !== list ||
             indexRef.current !== endIndex ||
             String(queueRef.current[endIndex]?.id || '') !== seedId
           ) {
@@ -882,6 +883,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       if (
         endGeneration !== loadGenerationRef.current ||
+        queueRef.current !== list ||
         indexRef.current !== endIndex ||
         String(queueRef.current[endIndex]?.id || '') !== seedId
       ) {
