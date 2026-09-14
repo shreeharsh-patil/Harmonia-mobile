@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
@@ -15,8 +15,9 @@ import {
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
+import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
@@ -38,6 +39,7 @@ function formatBytes(bytes: number) {
 }
 
 export default function LibraryScreen() {
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { token } = useAuth();
   const {
@@ -73,11 +75,15 @@ export default function LibraryScreen() {
   const [newPlaylist, setNewPlaylist] = useState('');
   const [creating, setCreating] = useState(false);
   const [actionSong, setActionSong] = useState<Song | null>(null);
+  const viewModeMutationRef = useRef(0);
   const gridArtworkSize = Math.max(132, Math.floor((width - 48) / 2));
+  const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   useEffect(() => {
+    const generation = viewModeMutationRef.current;
     AsyncStorage.getItem(LIBRARY_VIEW_KEY)
       .then((value) => {
+        if (generation !== viewModeMutationRef.current) return;
         if (value === 'list' || value === 'grid') setViewMode(value);
       })
       .catch(() => {});
@@ -85,6 +91,7 @@ export default function LibraryScreen() {
 
   const toggleViewMode = () => {
     const next: LibraryViewMode = viewMode === 'list' ? 'grid' : 'list';
+    viewModeMutationRef.current += 1;
     setViewMode(next);
     AsyncStorage.setItem(LIBRARY_VIEW_KEY, next).catch(() => {});
   };
@@ -96,13 +103,16 @@ export default function LibraryScreen() {
     }
     if (!newPlaylist.trim() || creating) return;
     setCreating(true);
-    const result = await createPlaylist(newPlaylist);
-    if (result) {
-      setNewPlaylist('');
-      const id = String(result._id || result.id || '');
-      if (id) router.push({ pathname: '/playlist/[id]', params: { id } });
+    try {
+      const result = await createPlaylist(newPlaylist);
+      if (result) {
+        setNewPlaylist('');
+        const id = String(result._id || result.id || '');
+        if (id) router.push({ pathname: '/playlist/[id]', params: { id } });
+      }
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const accountGate = (
@@ -125,7 +135,7 @@ export default function LibraryScreen() {
     <FlatList
       data={data}
       keyExtractor={(item, index) => item.id || String(index)}
-      contentContainerStyle={styles.songList}
+      contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
       ListEmptyComponent={
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>{emptyTitle}</Text>
@@ -188,7 +198,7 @@ export default function LibraryScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomInset }]}
           >
             <View style={styles.createBox}>
               <Text style={styles.createTitle}>NEW PLAYLIST</Text>
@@ -266,7 +276,7 @@ export default function LibraryScreen() {
         !token ? accountGate : loading ? (
           <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
         ) : (
-          <ScrollView contentContainerStyle={styles.savedContent} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.savedContent, { paddingBottom: contentBottomInset }]} showsVerticalScrollIndicator={false}>
             {!!error && <Text style={styles.error}>{error}</Text>}
 
             <SavedSection title="Saved playlists" count={likedPlaylists.length}>
@@ -293,7 +303,7 @@ export default function LibraryScreen() {
             <SavedSection title="Albums" count={likedAlbums.length}>
               {likedAlbums.length ? likedAlbums.map((album, index) => {
                 const id = String(album.id || '');
-                const cover = imageUrl(album.image as any);
+                const cover = imageUrl(album.image as any, 58);
                 return (
                   <Pressable
                     key={id || `album-${index}`}
@@ -315,7 +325,7 @@ export default function LibraryScreen() {
             <SavedSection title="Artists" count={likedArtists.length}>
               {likedArtists.length ? likedArtists.map((artist, index) => {
                 const id = String(artist.id || '');
-                const cover = imageUrl(artist.image as any);
+                const cover = imageUrl(artist.image as any, 58);
                 return (
                   <Pressable
                     key={id || `artist-${index}`}
@@ -397,7 +407,7 @@ export default function LibraryScreen() {
           <FlatList
             data={history}
             keyExtractor={(item) => item.entryId}
-            contentContainerStyle={styles.songList}
+            contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>No listening history yet</Text>
@@ -484,9 +494,9 @@ const styles = StyleSheet.create({
   chipText: { color: '#888', fontSize: 12, fontWeight: '700' },
   chipTextActive: { color: '#090909' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scrollContent: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 165 },
-  savedContent: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 165 },
-  songList: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 165, flexGrow: 1 },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 8 },
+  savedContent: { paddingHorizontal: 18, paddingTop: 10 },
+  songList: { paddingHorizontal: 18, paddingTop: 6, flexGrow: 1 },
   createBox: { backgroundColor: '#101010', borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', padding: 14, marginBottom: 18 },
   createTitle: { color: '#777', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 10 },
   createRow: { flexDirection: 'row', gap: 9 },
