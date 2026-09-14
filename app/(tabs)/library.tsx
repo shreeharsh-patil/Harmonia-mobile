@@ -31,7 +31,7 @@ import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
 import type { Playlist, Song } from '@/src/types';
 
 type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
@@ -71,10 +71,12 @@ export default function LibraryScreen() {
   const {
     currentSong,
     playSong,
+  } = usePlayer();
+  const {
     history,
     listeningStats,
     clearHistory,
-  } = usePlayer();
+  } = usePlaybackActivity();
 
   const [tab, setTab] = useState<LibraryTab>('playlists');
   const [viewMode, setViewMode] = useState<LibraryViewMode>('list');

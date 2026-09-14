@@ -23,7 +23,7 @@ import { checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
-import { usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePlaybackActivity, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
@@ -70,14 +70,13 @@ export default function SettingsScreen() {
     radioEnabled,
     adaptivePipelineEnabled,
     adaptivePipelineStatus,
-    history,
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
     toggleRadio,
     toggleAdaptivePipeline,
-    clearHistory,
   } = usePlayer();
+  const { history, clearHistory } = usePlaybackActivity();
 
   const clearRecentSearches = async () => {
     await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);

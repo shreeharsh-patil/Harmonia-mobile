@@ -428,7 +428,7 @@ test('artwork rendering requests size-appropriate images', async () => {
   const entities = await readFile('src/lib/entities.ts', 'utf8');
 
   assert.match(trackArtwork, /artworkUrl\(song, size\)/);
-  assert.match(player, /artworkUrl\(currentSong, 720\)/);
+  assert.match(player, /artworkUrl\(currentSong, 360\)/);
   assert.match(provider, /artworkUrl\(song, 512\)/);
   assert.match(entities, /bestArtworkUrl\(value, targetSize\)/);
 });
@@ -543,7 +543,7 @@ test('Spotify import cannot navigate backward after its screen has unmounted', a
 test('native next-track preload releases stale buffers when no longer useful', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /const releasePreloadedSource = \(\) =>/);
-  assert.match(source, /if \(batterySaver \|\| !networkConnected\) \{[\s\S]*?releasePreloadedSource\(\)/);
+  assert.match(source, /if \(batterySaver \|\| !networkConnected \|\| !status\.playing\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /if \(!upcoming\?\.id\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /preloadedSourceRef\.current = null/);
   assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
@@ -573,4 +573,62 @@ test('Spotify Canvas bypasses Harmonia backend and persists device-side results'
   assert.match(canvas, /\?trackId=/);
   assert.doesNotMatch(canvas, /api\/proxy\/spotify-canvas/);
   assert.doesNotMatch(canvas, /HARMONIA_API_URL/);
+});
+
+
+test('player persistence batches background-safe storage work instead of writing every few seconds', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /lastStatsPersistedAtRef/);
+  assert.match(source, /Date\.now\(\) - lastStatsPersistedAtRef\.current >= 30_000/);
+  assert.match(source, /Math\.abs\(wholeSecond - lastPersistedSecond\.current\) < 30/);
+  assert.match(source, /playbackSnapshotWriteChainRef\.current = playbackSnapshotWriteChainRef\.current/);
+});
+
+test('high-frequency listening activity is isolated from the core player context', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /type PlaybackActivityValue/);
+  assert.match(source, /PlaybackActivityContext/);
+  assert.match(source, /export function usePlaybackActivity\(\)/);
+
+  for (const path of [
+    'app/player.tsx',
+    'app/replay.tsx',
+    'app/(tabs)/library.tsx',
+    'app/(tabs)/profile.tsx',
+    'app/settings.tsx',
+    'app/explore.tsx',
+  ]) {
+    const consumer = await readFile(path, 'utf8');
+    assert.match(consumer, /usePlaybackActivity/);
+  }
+});
+
+test('now playing backdrop uses a smaller source and lower blur cost', async () => {
+  const source = await readFile('app/player.tsx', 'utf8');
+  assert.match(source, /artworkUrl\(currentSong, 360\)/);
+  assert.match(source, /blurRadius=\{28\}/);
+  assert.doesNotMatch(source, /artworkUrl\(currentSong, 720\)/);
+  assert.doesNotMatch(source, /blurRadius=\{42\}/);
+});
+
+
+test('now playing uses responsive artwork and control spacing on narrow phones', async () => {
+  const source = await readFile('app/player.tsx', 'utf8');
+  assert.match(source, /useWindowDimensions/);
+  assert.match(source, /playerContentWidth = Math\.max\(0, width - 40\)/);
+  assert.match(source, /artworkSize = Math\.min\(compactArtwork \? 244 : 330, playerContentWidth\)/);
+  assert.match(source, /controlsFixedWidth = 42 \+ 52 \+ 74 \+ 52 \+ 42/);
+  assert.match(source, /Math\.min\(34, \(playerContentWidth - controlsFixedWidth\) \/ 4\)/);
+  assert.match(source, /style=\{\[styles\.controls, \{ gap: controlGap \}\]\}/);
+});
+
+test('sleep countdown no longer invalidates the core player context every second', async () => {
+  const provider = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+  const coreType = provider.match(/type PlayerContextValue = \{[\s\S]*?\n\};/)?.[0] || '';
+
+  assert.doesNotMatch(coreType, /sleepRemaining/);
+  assert.match(provider, /type PlaybackProgressValue = \{[\s\S]*?sleepRemaining: number/);
+  assert.match(provider, /sleepRemaining,[\s\S]*?\[currentSong\?\.duration, sleepRemaining, status\.currentTime, status\.duration\]/);
+  assert.match(player, /const \{ position, duration, sleepRemaining \} = usePlaybackProgress\(\)/);
 });
