@@ -544,6 +544,7 @@ test('native next-track preload releases stale buffers when no longer useful', a
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /const releasePreloadedSource = \(\) =>/);
   assert.match(source, /if \(batterySaver \|\| !networkConnected\) \{[\s\S]*?releasePreloadedSource\(\)/);
+  assert.match(source, /batterySaver \|\| !networkConnected \|\| !status\.playing/);
   assert.match(source, /if \(!upcoming\?\.id\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /preloadedSourceRef\.current = null/);
   assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
