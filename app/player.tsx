@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -71,6 +72,7 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
 
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string }>();
+  const { width } = useWindowDimensions();
   const { token } = useAuth();
   const { isLiked, toggleLike } = useLibrary();
   const {
@@ -208,6 +210,13 @@ export default function PlayerScreen() {
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel !== 'none';
+  const playerContentWidth = Math.max(0, width - 40);
+  const artworkSize = Math.min(compactArtwork ? 244 : 330, playerContentWidth);
+  const controlsFixedWidth = 42 + 52 + 74 + 52 + 42;
+  const controlGap = Math.max(
+    10,
+    Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
+  );
   const onProgressLayout = (event: LayoutChangeEvent) => setProgressWidth(event.nativeEvent.layout.width);
 
   const togglePanel = (value: Panel) => {
@@ -293,7 +302,7 @@ export default function PlayerScreen() {
           <View style={[styles.artworkWrap, compactArtwork && styles.artworkWrapCompact]}>
             <ArtworkRenderer
               song={currentSong}
-              size={compactArtwork ? 244 : 330}
+              size={artworkSize}
               radius={compactArtwork ? 20 : 25}
               enableMotion={panel === 'none'}
               style={styles.artwork}
@@ -323,7 +332,7 @@ export default function PlayerScreen() {
 
           {!!error && <Text style={styles.error}>{error}</Text>}
 
-          <View style={styles.controls}>
+          <View style={[styles.controls, { gap: controlGap }]}>
             <Pressable onPress={toggleShuffle} style={styles.modeControl}>
               <Text style={[styles.modeText, shuffleEnabled && styles.modeTextActive]}>⇄</Text>
             </Pressable>
@@ -745,7 +754,7 @@ const styles = StyleSheet.create({
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 },
   time: { color: '#8A8A8A', fontSize: 11, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 34, paddingVertical: 24 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
   modeControl: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
   modeText: { color: '#686868', fontSize: 20, fontWeight: '800' },
   modeTextActive: { color: '#FFF' },
