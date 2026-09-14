@@ -505,3 +505,46 @@ test('lyrics use logarithmic timing lookup instead of rescanning each tick', asy
   assert.match(source, /lastTimedIndexAtOrBefore\(lines/);
   assert.match(source, /lastTimedIndexAtOrBefore\(words/);
 });
+
+
+test('Canvas fully unmounts when motion is disabled and proxy work is bounded', async () => {
+  const renderer = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
+  const canvas = await readFile('src/lib/canvas.ts', 'utf8');
+
+  assert.match(renderer, /!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion/);
+  assert.match(canvas, /CANVAS_TIMEOUT_MS = 10_000/);
+  assert.match(canvas, /const controller = new AbortController\(\)/);
+  assert.match(canvas, /signal: controller\.signal/);
+  assert.match(canvas, /clearTimeout\(timeout\)/);
+  assert.match(canvas, /removeEventListener\('abort', abortFromParent\)/);
+});
+
+test('lyrics requests abort when the panel or track changes and cannot hang forever', async () => {
+  const api = await readFile('src/lib/api.ts', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+
+  assert.match(api, /LYRICS_TIMEOUT_MS = 10_000/);
+  assert.match(api, /fetchLyricsJson<T>/);
+  assert.match(api, /fetchLyrics\(song: Song, signal\?: AbortSignal\)/);
+  assert.match(api, /parentSignal\?\.removeEventListener\('abort', abortFromParent\)/);
+  assert.match(player, /const controller = new AbortController\(\)/);
+  assert.match(player, /fetchLyrics\(currentSong, controller\.signal\)/);
+  assert.match(player, /controller\.abort\(\)/);
+});
+
+test('Spotify import cannot navigate backward after its screen has unmounted', async () => {
+  const source = await readFile('app/import-playlist.tsx', 'utf8');
+  assert.match(source, /navigationTimerRef/);
+  assert.match(source, /clearTimeout\(navigationTimerRef\.current\)/);
+  assert.match(source, /return \(\) => \{/);
+  assert.match(source, /navigationTimerRef\.current = setTimeout/);
+});
+
+test('native next-track preload releases stale buffers when no longer useful', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /const releasePreloadedSource = \(\) =>/);
+  assert.match(source, /if \(batterySaver \|\| !networkConnected\) \{[\s\S]*?releasePreloadedSource\(\)/);
+  assert.match(source, /if \(!upcoming\?\.id\) \{[\s\S]*?releasePreloadedSource\(\)/);
+  assert.match(source, /preloadedSourceRef\.current = null/);
+  assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
+});
