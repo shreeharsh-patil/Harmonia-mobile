@@ -110,7 +110,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     const normalized = normalizeSong(song as any);
     if (!normalized.id) return null;
     const accountSafeSong = persistenceSafeSong(normalized);
-    const mutationKey = `song:${normalized.id}`;
+    const mutationKey = `${token}:song:${normalized.id}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
@@ -163,7 +163,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token) return null;
     const id = String(playlist.id || playlist._id || '');
     if (!id) return null;
-    const mutationKey = `playlist:${id}`;
+    const mutationKey = `${token}:playlist:${id}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
@@ -199,7 +199,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token) return null;
     const id = String(album.id || '');
     if (!id) return null;
-    const mutationKey = `album:${id}`;
+    const mutationKey = `${token}:album:${id}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
@@ -235,7 +235,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     if (!token) return null;
     const id = String(artist.id || '');
     if (!id) return null;
-    const mutationKey = `artist:${id}`;
+    const mutationKey = `${token}:artist:${id}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
@@ -270,7 +270,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const createPlaylist = useCallback(async (name: string) => {
     if (!token || !name.trim()) return null;
     const cleanName = name.trim();
-    const mutationKey = `create-playlist:${cleanName.toLowerCase()}`;
+    const mutationKey = `${token}:create-playlist:${cleanName.toLowerCase()}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
@@ -291,7 +291,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
 
   const addToPlaylist = useCallback(async (playlistId: string, songId: string) => {
     if (!token) return false;
-    const mutationKey = `add-to-playlist:${playlistId}:${songId}`;
+    const mutationKey = `${token}:add-to-playlist:${playlistId}:${songId}`;
     if (mutationKeysRef.current.has(mutationKey)) return false;
     mutationKeysRef.current.add(mutationKey);
 

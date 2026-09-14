@@ -49,6 +49,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
   const activeTicketRef = useRef<string | null>(null);
   const completedTicketsRef = useRef(new Set<string>());
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   const adoptSession = useCallback(async (accessToken: string, nextUser: HarmoniaUser) => {
     await writeAccessToken(accessToken);
@@ -205,11 +207,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const refreshUser = useCallback(async () => {
     if (!token) return;
+    const refreshToken = token;
     try {
-      const result = await fetchMe(token);
+      const result = await fetchMe(refreshToken);
+      if (tokenRef.current !== refreshToken) return;
       setUser(result.user);
       await writeCachedUser(result.user).catch(() => {});
     } catch (cause) {
+      // A response from an older account must never clear or overwrite a
+      // session that became active while the refresh request was in flight.
+      if (tokenRef.current !== refreshToken) return;
       if (
         cause instanceof ApiError &&
         (cause.status === 401 || cause.status === 403)
@@ -218,8 +225,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           clearAccessToken().catch(() => {}),
           clearCachedUser().catch(() => {}),
         ]);
-        setToken(null);
-        setUser(null);
+        if (tokenRef.current === refreshToken) {
+          setToken(null);
+          setUser(null);
+        }
       }
       throw cause;
     }

@@ -59,19 +59,29 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   );
   const cancelledDownloadsRef = useRef(new Set<string>());
   const downloadEpochRef = useRef(0);
+  const downloadsMutationRef = useRef(0);
+  const downloadsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   downloadsRef.current = downloads;
 
   const persist = useCallback(async (next: DownloadedTrack[]) => {
+    downloadsMutationRef.current += 1;
     downloadsRef.current = next;
     setDownloads(next);
-    await AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(next));
+    downloadsWriteChainRef.current = downloadsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(next)));
+    await downloadsWriteChainRef.current;
   }, []);
 
   useEffect(() => {
+    const hydrationGeneration = downloadsMutationRef.current;
+    let active = true;
+
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(DOWNLOADS_KEY);
+        if (!active || downloadsMutationRef.current !== hydrationGeneration) return;
         if (!raw) return;
 
         const parsedValue = JSON.parse(raw);
@@ -86,19 +96,31 @@ export function OfflineProvider({ children }: PropsWithChildren) {
           }
         });
 
+        if (!active || downloadsMutationRef.current !== hydrationGeneration) return;
         downloadsRef.current = valid;
         setDownloads(valid);
         if (!Array.isArray(parsedValue) || valid.length !== parsed.length) {
-          await AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(valid));
+          downloadsWriteChainRef.current = downloadsWriteChainRef.current
+            .catch(() => {})
+            .then(() => AsyncStorage.setItem(DOWNLOADS_KEY, JSON.stringify(valid)));
+          await downloadsWriteChainRef.current;
         }
       } catch {
+        if (!active || downloadsMutationRef.current !== hydrationGeneration) return;
         downloadsRef.current = [];
         setDownloads([]);
         // A malformed index should be repaired once rather than reparsed and
         // rejected on every app launch.
-        await AsyncStorage.removeItem(DOWNLOADS_KEY).catch(() => {});
+        downloadsWriteChainRef.current = downloadsWriteChainRef.current
+          .catch(() => {})
+          .then(() => AsyncStorage.removeItem(DOWNLOADS_KEY));
+        await downloadsWriteChainRef.current.catch(() => {});
       }
     })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const byId = useMemo(

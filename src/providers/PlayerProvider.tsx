@@ -128,6 +128,52 @@ export type ListeningStats = {
   dailySeconds: Record<string, number>;
 };
 
+function emptyListeningStats(): ListeningStats {
+  return {
+    totalSeconds: 0,
+    playCount: 0,
+    trackCounts: {},
+    dailySeconds: {},
+  };
+}
+
+function mergeListeningStats(base: ListeningStats, delta: ListeningStats): ListeningStats {
+  const trackCounts = { ...base.trackCounts };
+  for (const [id, seconds] of Object.entries(delta.trackCounts)) {
+    trackCounts[id] = (trackCounts[id] || 0) + Number(seconds || 0);
+  }
+
+  const dailySeconds = { ...base.dailySeconds };
+  for (const [day, seconds] of Object.entries(delta.dailySeconds)) {
+    dailySeconds[day] = (dailySeconds[day] || 0) + Number(seconds || 0);
+  }
+
+  return {
+    totalSeconds: base.totalSeconds + delta.totalSeconds,
+    playCount: base.playCount + delta.playCount,
+    trackCounts,
+    dailySeconds,
+  };
+}
+
+function hasListeningStatsDelta(stats: ListeningStats) {
+  return Boolean(
+    stats.totalSeconds ||
+    stats.playCount ||
+    Object.keys(stats.trackCounts).length ||
+    Object.keys(stats.dailySeconds).length
+  );
+}
+
+type PersistedPlayerSettings = {
+  playbackRate: number;
+  streamQuality: StreamQuality;
+  repeatMode: RepeatMode;
+  shuffleEnabled: boolean;
+  radioEnabled: boolean;
+  adaptivePipelineEnabled: boolean;
+};
+
 export type PlaybackDiagnostics = Omit<ResolvedStreamDiagnostics, 'source'> & {
   source: ResolvedStreamDiagnostics['source'] | 'offline' | 'local';
 };
@@ -214,12 +260,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [pipelinePromotionResolveMs, setPipelinePromotionResolveMs] = useState<number | null>(null);
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
-  const [listeningStats, setListeningStats] = useState<ListeningStats>({
-    totalSeconds: 0,
-    playCount: 0,
-    trackCounts: {},
-    dailySeconds: {},
-  });
+  const [listeningStats, setListeningStats] = useState<ListeningStats>(() => emptyListeningStats());
 
   const loadedTrackId = useRef<string | null>(null);
   const restoredPosition = useRef(0);
@@ -255,75 +296,142 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     attempts: 0,
   });
   const pendingHistoryRef = useRef<{ trackId: string; song: Song } | null>(null);
+  const settingsHydratedRef = useRef(false);
+  const pendingSettingsRef = useRef<Partial<PersistedPlayerSettings>>({});
+  const settingsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const historyHydratedRef = useRef(false);
+  const statsHydratedRef = useRef(false);
+  const pendingHistoryEntriesRef = useRef<PlaybackHistoryEntry[]>([]);
+  const pendingStatsDeltaRef = useRef<ListeningStats>(emptyListeningStats());
+  const historyClearedBeforeHydrationRef = useRef(false);
+  const statsClearedBeforeHydrationRef = useRef(false);
+  const historyWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const statsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
 
-  const recordHistory = useCallback((song: Song) => {
-    const stable = persistenceSafeSong(song);
-    setHistory((current) => {
-      const next: PlaybackHistoryEntry[] = [
-        {
-          entryId: `${Date.now()}-${stable.id}`,
-          song: stable,
-          playedAt: Date.now(),
-        },
-        ...current,
-      ].slice(0, 500);
-      AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-    setListeningStats((current) => {
-      const next = { ...current, playCount: current.playCount + 1 };
-      AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+  const writeHistorySnapshot = useCallback((next: PlaybackHistoryEntry[]) => {
+    historyWriteChainRef.current = historyWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(next)))
+      .catch(() => {});
   }, []);
 
-  const clearHistory = useCallback(async () => {
-    const emptyStats: ListeningStats = {
+  const writeListeningStatsSnapshot = useCallback((next: ListeningStats) => {
+    statsWriteChainRef.current = statsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)))
+      .catch(() => {});
+  }, []);
+
+  const addPendingStatsDelta = useCallback((delta: ListeningStats) => {
+    pendingStatsDeltaRef.current = mergeListeningStats(
+      pendingStatsDeltaRef.current,
+      delta
+    );
+  }, []);
+
+  const recordHistory = useCallback((song: Song) => {
+    const stable = persistenceSafeSong(song);
+    const now = Date.now();
+    const entry: PlaybackHistoryEntry = {
+      entryId: `${now}-${stable.id}`,
+      song: stable,
+      playedAt: now,
+    };
+
+    if (!historyHydratedRef.current) {
+      pendingHistoryEntriesRef.current = [
+        entry,
+        ...pendingHistoryEntriesRef.current,
+      ].slice(0, 500);
+    }
+
+    setHistory((current) => {
+      const next = [entry, ...current].slice(0, 500);
+      if (historyHydratedRef.current) writeHistorySnapshot(next);
+      return next;
+    });
+
+    const playDelta: ListeningStats = {
       totalSeconds: 0,
-      playCount: 0,
+      playCount: 1,
       trackCounts: {},
       dailySeconds: {},
     };
+    if (!statsHydratedRef.current) addPendingStatsDelta(playDelta);
+
+    setListeningStats((current) => {
+      const next = mergeListeningStats(current, playDelta);
+      if (statsHydratedRef.current) writeListeningStatsSnapshot(next);
+      return next;
+    });
+  }, [addPendingStatsDelta, writeHistorySnapshot, writeListeningStatsSnapshot]);
+
+  const clearHistory = useCallback(async () => {
+    if (!historyHydratedRef.current) {
+      historyClearedBeforeHydrationRef.current = true;
+      pendingHistoryEntriesRef.current = [];
+    }
+    if (!statsHydratedRef.current) {
+      statsClearedBeforeHydrationRef.current = true;
+      pendingStatsDeltaRef.current = emptyListeningStats();
+    }
+
     setHistory([]);
-    setListeningStats(emptyStats);
+    setListeningStats(emptyListeningStats());
+
+    historyWriteChainRef.current = historyWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.removeItem(HISTORY_KEY))
+      .catch(() => {});
+    statsWriteChainRef.current = statsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.removeItem(LISTENING_STATS_KEY))
+      .catch(() => {});
+
     await Promise.all([
-      AsyncStorage.removeItem(HISTORY_KEY),
-      AsyncStorage.removeItem(LISTENING_STATS_KEY),
+      historyWriteChainRef.current,
+      statsWriteChainRef.current,
     ]);
   }, []);
 
-  const persistSettings = useCallback((
-    nextRate: number,
-    nextQuality: StreamQuality,
-    nextRepeat: RepeatMode = repeatModeRef.current,
-    nextShuffle: boolean = shuffleRef.current,
-    nextRadio: boolean = radioRef.current,
-    nextAdaptivePipeline: boolean = adaptivePipelineRef.current
-  ) => {
-    AsyncStorage.setItem(
-      PLAYER_SETTINGS_KEY,
-      JSON.stringify({
-        playbackRate: nextRate,
-        streamQuality: nextQuality,
-        repeatMode: nextRepeat,
-        shuffleEnabled: nextShuffle,
-        radioEnabled: nextRadio,
-        adaptivePipelineEnabled: nextAdaptivePipeline,
-      })
-    ).catch(() => {});
+  const currentSettingsSnapshot = useCallback((): PersistedPlayerSettings => ({
+    playbackRate: rateRef.current,
+    streamQuality: qualityRef.current,
+    repeatMode: repeatModeRef.current,
+    shuffleEnabled: shuffleRef.current,
+    radioEnabled: radioRef.current,
+    adaptivePipelineEnabled: adaptivePipelineRef.current,
+  }), []);
+
+  const writeSettingsSnapshot = useCallback((snapshot: PersistedPlayerSettings) => {
+    settingsWriteChainRef.current = settingsWriteChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(snapshot)))
+      .catch(() => {});
   }, []);
+
+  const persistSettings = useCallback((patch: Partial<PersistedPlayerSettings>) => {
+    if (!settingsHydratedRef.current) {
+      pendingSettingsRef.current = {
+        ...pendingSettingsRef.current,
+        ...patch,
+      };
+      return;
+    }
+    writeSettingsSnapshot(currentSettingsSnapshot());
+  }, [currentSettingsSnapshot, writeSettingsSnapshot]);
 
   const setPlaybackRate = useCallback((rate: number) => {
     const normalized = Math.max(0.5, Math.min(2, rate));
     rateRef.current = normalized;
     setPlaybackRateState(normalized);
     player.setPlaybackRate(normalized);
-    persistSettings(normalized, qualityRef.current);
+    persistSettings({ playbackRate: normalized });
   }, [persistSettings, player]);
 
   const setStreamQuality = useCallback((quality: StreamQuality) => {
@@ -331,7 +439,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     qualityRef.current = quality;
     effectiveQualityRef.current = qualityFor(quality);
     setStreamQualityState(quality);
-    persistSettings(rateRef.current, quality);
+    persistSettings({ streamQuality: quality });
     void qualityReloadRef.current();
   }, [persistSettings, qualityFor]);
 
@@ -340,7 +448,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const next = modes[(modes.indexOf(repeatModeRef.current) + 1) % modes.length];
     repeatModeRef.current = next;
     setRepeatModeState(next);
-    persistSettings(rateRef.current, qualityRef.current, next, shuffleRef.current);
+    persistSettings({ repeatMode: next });
   }, [persistSettings]);
 
   const toggleShuffle = useCallback(() => {
@@ -350,7 +458,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     const current = queueRef.current[indexRef.current];
     if (!current) {
-      persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+      persistSettings({ shuffleEnabled: nextEnabled });
       return;
     }
 
@@ -386,20 +494,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setCurrentIndex(restoredIndex);
     }
 
-    persistSettings(rateRef.current, qualityRef.current, repeatModeRef.current, nextEnabled);
+    persistSettings({ shuffleEnabled: nextEnabled });
   }, [persistSettings]);
 
   const toggleRadio = useCallback(() => {
     const nextEnabled = !radioRef.current;
     radioRef.current = nextEnabled;
     setRadioEnabledState(nextEnabled);
-    persistSettings(
-      rateRef.current,
-      qualityRef.current,
-      repeatModeRef.current,
-      shuffleRef.current,
-      nextEnabled
-    );
+    persistSettings({ radioEnabled: nextEnabled });
   }, [persistSettings]);
 
   const toggleAdaptivePipeline = useCallback(() => {
@@ -407,14 +509,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     adaptivePipelineRef.current = nextEnabled;
     setAdaptivePipelineEnabledState(nextEnabled);
     if (!nextEnabled) setAdaptivePipelineStatus('idle');
-    persistSettings(
-      rateRef.current,
-      qualityRef.current,
-      repeatModeRef.current,
-      shuffleRef.current,
-      radioRef.current,
-      nextEnabled
-    );
+    persistSettings({ adaptivePipelineEnabled: nextEnabled });
   }, [persistSettings]);
 
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
@@ -980,63 +1075,151 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           AsyncStorage.getItem(LISTENING_STATS_KEY),
         ]);
 
-        if (historyRaw) {
-          const parsedHistory = JSON.parse(historyRaw);
-          if (Array.isArray(parsedHistory)) {
-            const sanitizedHistory = parsedHistory
-              .filter((entry: any) => entry?.song?.id)
-              .slice(0, 500)
-              .map((entry: any) => ({
-                entryId: String(entry.entryId || `${entry.playedAt || Date.now()}-${entry.song.id}`),
-                playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
-                song: persistenceSafeSong(normalizeSong(entry.song as any)),
-              }));
-            setHistory(sanitizedHistory);
-            AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(sanitizedHistory)).catch(() => {});
+        let storedHistory: PlaybackHistoryEntry[] = [];
+        let historyNeedsRepair = false;
+        if (historyRaw && !historyClearedBeforeHydrationRef.current) {
+          try {
+            const parsedHistory = JSON.parse(historyRaw);
+            if (Array.isArray(parsedHistory)) {
+              storedHistory = parsedHistory
+                .filter((entry: any) => entry?.song?.id)
+                .slice(0, 500)
+                .map((entry: any) => ({
+                  entryId: String(entry.entryId || `${entry.playedAt || Date.now()}-${entry.song.id}`),
+                  playedAt: Math.max(0, Number(entry.playedAt || Date.now())),
+                  song: persistenceSafeSong(normalizeSong(entry.song as any)),
+                }));
+              historyNeedsRepair = storedHistory.length !== parsedHistory.length;
+            } else {
+              historyNeedsRepair = true;
+            }
+          } catch {
+            historyNeedsRepair = true;
           }
         }
 
-        if (statsRaw) {
-          const parsedStats = JSON.parse(statsRaw);
-          setListeningStats({
-            totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
-            playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
-            trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
-              ? parsedStats.trackCounts
-              : {},
-            dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
-              ? parsedStats.dailySeconds
-              : {},
-          });
+        const pendingHistory = pendingHistoryEntriesRef.current;
+        const pendingEntryIds = new Set(pendingHistory.map((entry) => entry.entryId));
+        const mergedHistory = [
+          ...pendingHistory,
+          ...storedHistory.filter((entry) => !pendingEntryIds.has(entry.entryId)),
+        ].slice(0, 500);
+        pendingHistoryEntriesRef.current = [];
+        historyHydratedRef.current = true;
+        setHistory(mergedHistory);
+
+        if (
+          historyClearedBeforeHydrationRef.current ||
+          historyNeedsRepair ||
+          pendingHistory.length
+        ) {
+          historyClearedBeforeHydrationRef.current = false;
+          if (mergedHistory.length) writeHistorySnapshot(mergedHistory);
+          else {
+            historyWriteChainRef.current = historyWriteChainRef.current
+              .catch(() => {})
+              .then(() => AsyncStorage.removeItem(HISTORY_KEY))
+              .catch(() => {});
+          }
         }
 
+        let storedStats = emptyListeningStats();
+        let statsNeedsRepair = false;
+        if (statsRaw && !statsClearedBeforeHydrationRef.current) {
+          try {
+            const parsedStats = JSON.parse(statsRaw);
+            storedStats = {
+              totalSeconds: Math.max(0, Number(parsedStats?.totalSeconds || 0)),
+              playCount: Math.max(0, Number(parsedStats?.playCount || 0)),
+              trackCounts: parsedStats?.trackCounts && typeof parsedStats.trackCounts === 'object'
+                ? parsedStats.trackCounts
+                : {},
+              dailySeconds: parsedStats?.dailySeconds && typeof parsedStats.dailySeconds === 'object'
+                ? parsedStats.dailySeconds
+                : {},
+            };
+          } catch {
+            statsNeedsRepair = true;
+          }
+        }
+
+        const pendingStats = pendingStatsDeltaRef.current;
+        const mergedStats = mergeListeningStats(storedStats, pendingStats);
+        pendingStatsDeltaRef.current = emptyListeningStats();
+        statsHydratedRef.current = true;
+        setListeningStats(mergedStats);
+
+        if (
+          statsClearedBeforeHydrationRef.current ||
+          statsNeedsRepair ||
+          hasListeningStatsDelta(pendingStats)
+        ) {
+          statsClearedBeforeHydrationRef.current = false;
+          if (hasListeningStatsDelta(mergedStats)) writeListeningStatsSnapshot(mergedStats);
+          else {
+            statsWriteChainRef.current = statsWriteChainRef.current
+              .catch(() => {})
+              .then(() => AsyncStorage.removeItem(LISTENING_STATS_KEY))
+              .catch(() => {});
+          }
+        }
+
+        let rawSettings: Record<string, any> = {};
         if (settingsRaw) {
-          const settings = JSON.parse(settingsRaw);
-          const nextRate = Math.max(0.5, Math.min(2, Number(settings.playbackRate || 1)));
-          const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
-          const nextQuality = validQualities.includes(settings.streamQuality) ? settings.streamQuality : 'automatic';
-          const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
-          const nextRepeat = validRepeatModes.includes(settings.repeatMode) ? settings.repeatMode : 'off';
-          const nextShuffle = Boolean(settings.shuffleEnabled);
-          const nextRadio = settings.radioEnabled !== false;
-          const nextAdaptivePipeline = settings.adaptivePipelineEnabled !== false;
-          rateRef.current = nextRate;
-          qualityRef.current = nextQuality;
-          repeatModeRef.current = nextRepeat;
-          shuffleRef.current = nextShuffle;
-          radioRef.current = nextRadio;
-          adaptivePipelineRef.current = nextAdaptivePipeline;
-          setPlaybackRateState(nextRate);
-          setStreamQualityState(nextQuality);
-          setRepeatModeState(nextRepeat);
-          setShuffleEnabledState(nextShuffle);
-          setRadioEnabledState(nextRadio);
-          setAdaptivePipelineEnabledState(nextAdaptivePipeline);
-          player.setPlaybackRate(nextRate);
+          try {
+            rawSettings = JSON.parse(settingsRaw);
+          } catch {
+            AsyncStorage.removeItem(PLAYER_SETTINGS_KEY).catch(() => {});
+          }
+        }
+        const validQualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
+        const validRepeatModes: RepeatMode[] = ['off', 'all', 'one'];
+        const restoredSettings: PersistedPlayerSettings = {
+          playbackRate: Math.max(0.5, Math.min(2, Number(rawSettings.playbackRate || 1))),
+          streamQuality: validQualities.includes(rawSettings.streamQuality)
+            ? rawSettings.streamQuality
+            : 'automatic',
+          repeatMode: validRepeatModes.includes(rawSettings.repeatMode)
+            ? rawSettings.repeatMode
+            : 'off',
+          shuffleEnabled: Boolean(rawSettings.shuffleEnabled),
+          radioEnabled: rawSettings.radioEnabled !== false,
+          adaptivePipelineEnabled: rawSettings.adaptivePipelineEnabled !== false,
+        };
+        const pendingSettings = pendingSettingsRef.current;
+        const mergedSettings: PersistedPlayerSettings = {
+          ...restoredSettings,
+          ...pendingSettings,
+        };
+        pendingSettingsRef.current = {};
+        settingsHydratedRef.current = true;
+
+        rateRef.current = mergedSettings.playbackRate;
+        qualityRef.current = mergedSettings.streamQuality;
+        repeatModeRef.current = mergedSettings.repeatMode;
+        shuffleRef.current = mergedSettings.shuffleEnabled;
+        radioRef.current = mergedSettings.radioEnabled;
+        adaptivePipelineRef.current = mergedSettings.adaptivePipelineEnabled;
+        setPlaybackRateState(mergedSettings.playbackRate);
+        setStreamQualityState(mergedSettings.streamQuality);
+        setRepeatModeState(mergedSettings.repeatMode);
+        setShuffleEnabledState(mergedSettings.shuffleEnabled);
+        setRadioEnabledState(mergedSettings.radioEnabled);
+        setAdaptivePipelineEnabledState(mergedSettings.adaptivePipelineEnabled);
+        player.setPlaybackRate(mergedSettings.playbackRate);
+
+        if (Object.keys(pendingSettings).length) {
+          writeSettingsSnapshot(mergedSettings);
         }
 
         if (!snapshotRaw || loadGenerationRef.current !== restoreGeneration) return;
-        const snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
+        let snapshot: PlaybackSnapshot;
+        try {
+          snapshot = JSON.parse(snapshotRaw) as PlaybackSnapshot;
+        } catch {
+          await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
+          return;
+        }
         const restoredQueue = Array.isArray(snapshot.queue)
           ? snapshot.queue.map((song) => persistenceSafeSong(normalizeSong(song as any))).filter((song) => song.id)
           : [];
@@ -1063,9 +1246,31 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         setPlaybackState('READY');
       } catch {
         await AsyncStorage.removeItem(PLAYBACK_SNAPSHOT_KEY).catch(() => {});
+        if (!historyHydratedRef.current) {
+          historyHydratedRef.current = true;
+          pendingHistoryEntriesRef.current = [];
+        }
+        if (!statsHydratedRef.current) {
+          statsHydratedRef.current = true;
+          pendingStatsDeltaRef.current = emptyListeningStats();
+        }
+        if (!settingsHydratedRef.current) {
+          const pendingSettings = pendingSettingsRef.current;
+          settingsHydratedRef.current = true;
+          pendingSettingsRef.current = {};
+          if (Object.keys(pendingSettings).length) {
+            writeSettingsSnapshot(currentSettingsSnapshot());
+          }
+        }
       }
     })();
-  }, [player]);
+  }, [
+    currentSettingsSnapshot,
+    player,
+    writeHistorySnapshot,
+    writeListeningStatsSnapshot,
+    writeSettingsSnapshot,
+  ]);
 
   useEffect(() => {
     const current = Number(status.currentTime || 0);
@@ -1224,36 +1429,34 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!status.playing || !currentSong?.id) return;
 
     const interval = setInterval(() => {
+      const id = String(currentSong.id);
+      const day = localDayKey();
+      const delta: ListeningStats = {
+        totalSeconds: 10,
+        playCount: 0,
+        trackCounts: { [id]: 10 },
+        dailySeconds: { [day]: 10 },
+      };
+
+      if (!statsHydratedRef.current) addPendingStatsDelta(delta);
+
       setListeningStats((current) => {
-        const id = String(currentSong.id);
-        const day = localDayKey();
-        const dailySeconds = {
-          ...(current.dailySeconds || {}),
-          [day]: ((current.dailySeconds || {})[day] || 0) + 10,
-        };
+        const next = mergeListeningStats(current, delta);
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 35);
         const cutoffKey = localDayKey(cutoff);
+        const dailySeconds = { ...next.dailySeconds };
         for (const key of Object.keys(dailySeconds)) {
           if (key < cutoffKey) delete dailySeconds[key];
         }
-
-        const next: ListeningStats = {
-          totalSeconds: current.totalSeconds + 10,
-          playCount: current.playCount,
-          trackCounts: {
-            ...current.trackCounts,
-            [id]: (current.trackCounts[id] || 0) + 10,
-          },
-          dailySeconds,
-        };
-        AsyncStorage.setItem(LISTENING_STATS_KEY, JSON.stringify(next)).catch(() => {});
-        return next;
+        const trimmed = { ...next, dailySeconds };
+        if (statsHydratedRef.current) writeListeningStatsSnapshot(trimmed);
+        return trimmed;
       });
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [currentSong?.id, status.playing]);
+  }, [addPendingStatsDelta, currentSong?.id, status.playing, writeListeningStatsSnapshot]);
 
   useEffect(() => {
     if (!queue.length || currentIndex < 0) return;

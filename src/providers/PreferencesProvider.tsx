@@ -56,29 +56,82 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [batterySaver, setBatterySaverState] = useState(DEFAULTS.batterySaver);
   const [wifiOnlyDownloads, setWifiOnlyDownloadsState] = useState(DEFAULTS.wifiOnlyDownloads);
   const prefsRef = useRef<StoredPreferences>({ ...DEFAULTS });
+  const hydratedRef = useRef(false);
+  const pendingChangesRef = useRef<Partial<StoredPreferences>>({});
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
-  useEffect(() => {
-    AsyncStorage.getItem(PREFS_KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        const qualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
-        const restored: StoredPreferences = {
-          networkAwareQuality: parsed?.networkAwareQuality !== false,
-          wifiQuality: qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality,
-          cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
-          batterySaver: Boolean(parsed?.batterySaver),
-          wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
-        };
-        prefsRef.current = restored;
-        setNetworkAwareQualityState(restored.networkAwareQuality);
-        setWifiQualityState(restored.wifiQuality);
-        setCellularQualityState(restored.cellularQuality);
-        setBatterySaverState(restored.batterySaver);
-        setWifiOnlyDownloadsState(restored.wifiOnlyDownloads);
-      })
+  const applyPreferences = useCallback((snapshot: StoredPreferences) => {
+    prefsRef.current = snapshot;
+    setNetworkAwareQualityState(snapshot.networkAwareQuality);
+    setWifiQualityState(snapshot.wifiQuality);
+    setCellularQualityState(snapshot.cellularQuality);
+    setBatterySaverState(snapshot.batterySaver);
+    setWifiOnlyDownloadsState(snapshot.wifiOnlyDownloads);
+  }, []);
+
+  const writeSnapshot = useCallback((snapshot: StoredPreferences) => {
+    // Keep writes ordered. Rapid settings changes should never let an older
+    // AsyncStorage write finish after and replace a newer snapshot.
+    writeChainRef.current = writeChainRef.current
+      .catch(() => {})
+      .then(() => AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    AsyncStorage.getItem(PREFS_KEY)
+      .then((raw) => {
+        if (!active) return;
+
+        let restored = { ...DEFAULTS };
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            const qualities: StreamQuality[] = ['automatic', 'data-saver', 'normal', 'high', 'maximum'];
+            restored = {
+              networkAwareQuality: parsed?.networkAwareQuality !== false,
+              wifiQuality: qualities.includes(parsed?.wifiQuality) ? parsed.wifiQuality : DEFAULTS.wifiQuality,
+              cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
+              batterySaver: Boolean(parsed?.batterySaver),
+              wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
+            };
+          } catch {
+            AsyncStorage.removeItem(PREFS_KEY).catch(() => {});
+          }
+        }
+
+        const pending = pendingChangesRef.current;
+        const merged: StoredPreferences = {
+          ...restored,
+          ...pending,
+        };
+        pendingChangesRef.current = {};
+        hydratedRef.current = true;
+        applyPreferences(merged);
+
+        if (Object.keys(pending).length) {
+          writeSnapshot(merged);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        const pending = pendingChangesRef.current;
+        const merged: StoredPreferences = {
+          ...DEFAULTS,
+          ...pending,
+        };
+        pendingChangesRef.current = {};
+        hydratedRef.current = true;
+        applyPreferences(merged);
+        if (Object.keys(pending).length) writeSnapshot(merged);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [applyPreferences, writeSnapshot]);
 
   const persist = useCallback((next: Partial<StoredPreferences>) => {
     // Update a synchronous snapshot first so rapid back-to-back setting
@@ -88,8 +141,19 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
       ...next,
     };
     prefsRef.current = snapshot;
-    AsyncStorage.setItem(PREFS_KEY, JSON.stringify(snapshot)).catch(() => {});
-  }, []);
+
+    if (!hydratedRef.current) {
+      // Preserve the user's early interaction, then merge it over the stored
+      // settings once hydration completes instead of overwriting unknown keys.
+      pendingChangesRef.current = {
+        ...pendingChangesRef.current,
+        ...next,
+      };
+      return;
+    }
+
+    writeSnapshot(snapshot);
+  }, [writeSnapshot]);
 
   const setNetworkAwareQuality = useCallback((enabled: boolean) => {
     setNetworkAwareQualityState(enabled);
