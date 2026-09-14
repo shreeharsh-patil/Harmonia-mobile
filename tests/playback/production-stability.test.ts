@@ -428,7 +428,7 @@ test('artwork rendering requests size-appropriate images', async () => {
   const entities = await readFile('src/lib/entities.ts', 'utf8');
 
   assert.match(trackArtwork, /artworkUrl\(song, size\)/);
-  assert.match(player, /artworkUrl\(currentSong, 720\)/);
+  assert.match(player, /artworkUrl\(currentSong, 360\)/);
   assert.match(provider, /artworkUrl\(song, 512\)/);
   assert.match(entities, /bestArtworkUrl\(value, targetSize\)/);
 });
@@ -543,8 +543,7 @@ test('Spotify import cannot navigate backward after its screen has unmounted', a
 test('native next-track preload releases stale buffers when no longer useful', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /const releasePreloadedSource = \(\) =>/);
-  assert.match(source, /if \(batterySaver \|\| !networkConnected\) \{[\s\S]*?releasePreloadedSource\(\)/);
-  assert.match(source, /batterySaver \|\| !networkConnected \|\| !status\.playing/);
+  assert.match(source, /if \(batterySaver \|\| !networkConnected \|\| !status\.playing\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /if \(!upcoming\?\.id\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /preloadedSourceRef\.current = null/);
   assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
