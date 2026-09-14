@@ -116,7 +116,7 @@ export default function LibraryScreen() {
   };
 
   const accountGate = (
-    <View style={styles.accountGate}>
+    <View style={[styles.accountGate, { paddingBottom: contentBottomInset }]}>
       <Text style={styles.gateKicker}>HARMONIA ACCOUNT</Text>
       <Text style={styles.gateTitle}>Keep your library in sync.</Text>
       <Text style={styles.gateBody}>Liked songs, saved albums, followed artists and playlists use the same account as Harmonia Web.</Text>
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   emptyBody: { color: '#6F6F6F', fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 7 },
   error: { color: '#EA8383', fontSize: 12, marginBottom: 10 },
   pressed: { opacity: 0.65 },
-  accountGate: { flex: 1, justifyContent: 'center', paddingHorizontal: 30, paddingBottom: 90 },
+  accountGate: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
   gateKicker: { color: '#555', fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
   gateTitle: { color: '#F1F1F1', fontSize: 27, lineHeight: 32, fontWeight: '800', letterSpacing: -0.7, marginTop: 8 },
   gateBody: { color: '#747474', fontSize: 14, lineHeight: 21, marginTop: 9 },
