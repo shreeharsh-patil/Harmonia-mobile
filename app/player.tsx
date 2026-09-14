@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  ImageBackground,
-  LayoutChangeEvent,
+   LayoutChangeEvent,
   Pressable,
   ScrollView,
   Share,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -181,6 +181,9 @@ export default function PlayerScreen() {
       .then((value) => {
         if (active) setLyrics(value);
       })
+      .catch(() => {
+        if (active) setLyrics(null);
+      })
       .finally(() => {
         if (active) setLyricsLoading(false);
       });
@@ -253,12 +256,13 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {!!cover && (
-        <ImageBackground
+        <Image
           source={{ uri: cover }}
           blurRadius={42}
-          resizeMode="cover"
-          style={StyleSheet.absoluteFill}
-          imageStyle={styles.backdropImage}
+          contentFit="cover"
+          style={[StyleSheet.absoluteFill, styles.backdropImage]}
+          cachePolicy="memory-disk"
+          recyclingKey={String(currentSong.id || cover)}
         />
       )}
       <View style={styles.backdropTint} />
