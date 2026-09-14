@@ -347,3 +347,21 @@ test('player settings persistence handles storage failures after ordered writes'
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /settingsWriteChainRef\.current = settingsWriteChainRef\.current[\s\S]*?\.catch\(\(\) => \{\}\)/);
 });
+
+
+test('playlist artwork falls back through web-compatible fields and track artwork', async () => {
+  const source = await readFile('src/components/PlaylistArtwork.tsx', 'utf8');
+  assert.match(source, /raw\.spotifyImages/);
+  assert.match(source, /raw\.coverImage/);
+  assert.match(source, /raw\.thumbnailUrl/);
+  assert.match(source, /raw\.sourceTracks/);
+  assert.match(source, /artworkUrl\(normalizeSong\(track as any\), targetSize\)/);
+});
+
+test('native recovery tracks the active resolution source before retrying candidates', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /activeSourceRef/);
+  assert.match(source, /activeSourceRef\.current === 'embedded'/);
+  assert.match(source, /getAudioCandidates\(/);
+  assert.match(source, /embeddedCandidateIndex/);
+});
