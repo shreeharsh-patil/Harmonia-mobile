@@ -1,4 +1,4 @@
-import { HARMONIA_API_URL, HARMONIA_STREAM_API_URL } from '@/src/config';
+import { HARMONIA_STREAM_API_URL } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 import {
@@ -111,7 +111,7 @@ const TEMPORARY_PAGE_PATTERNS = [
   /\.html?(?:$|[?#])/i,
 ];
 
-function absoluteUrl(value: string, base = HARMONIA_API_URL) {
+function absoluteUrl(value: string, base = HARMONIA_STREAM_API_URL) {
   try {
     return base ? new URL(value, base).href : new URL(value).href;
   } catch {
@@ -395,11 +395,9 @@ function firstSongFromPayload(payload: any) {
 
 export function createHarmoniaProviders({
   fetchImpl = fetch,
-  apiBase = HARMONIA_API_URL,
   streamApiBase = HARMONIA_STREAM_API_URL,
 }: {
   fetchImpl?: FetchLike;
-  apiBase?: string;
   streamApiBase?: string;
 } = {}): StreamProvider[] {
   return [
@@ -517,7 +515,7 @@ export function createHarmoniaProviders({
     {
       id: 'youtube-server',
       canResolve(track) {
-        return Boolean(apiBase && youtubeIdOf(track));
+        return Boolean(streamApiBase && youtubeIdOf(track));
       },
       async resolve(track) {
         const videoId = youtubeIdOf(track);
@@ -530,7 +528,7 @@ export function createHarmoniaProviders({
         }
 
         return {
-          url: `${apiBase}/api/yt-stream?id=${encodeURIComponent(videoId)}`,
+          url: `${streamApiBase}/api/yt-stream?id=${encodeURIComponent(videoId)}`,
           track,
           provider: 'youtube-server',
           quality: 'server-selected',
