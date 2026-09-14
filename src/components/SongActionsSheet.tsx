@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
@@ -30,6 +31,7 @@ function playlistId(playlist: Playlist) {
 }
 
 export function SongActionsSheet({ song, visible, onClose }: Props) {
+  const insets = useSafeAreaInsets();
   const { token } = useAuth();
   const { playlists, isLiked, toggleLike, addToPlaylist } = useLibrary();
   const { playNext, addToQueue, streamQuality } = usePlayer();
@@ -44,6 +46,12 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
   const [showPlaylists, setShowPlaylists] = useState(false);
   const [busyPlaylist, setBusyPlaylist] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setShowPlaylists(false);
+    setBusyPlaylist(null);
+    setMessage(null);
+  }, [song?.id]);
 
   if (!song) return null;
   const downloaded = isDownloaded(song.id);
@@ -73,7 +81,7 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <View style={styles.root}>
         <Pressable accessibilityLabel="Close song actions" style={styles.scrim} onPress={close} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(28, insets.bottom + 16) }]}>
           <View style={styles.handle} />
           <View style={styles.trackHeader}>
             <TrackArtwork song={song} size={58} radius={11} />
@@ -196,7 +204,7 @@ function Action({ label, detail, glyph, onPress, busy = false }: {
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.64)' },
-  sheet: { maxHeight: '82%', backgroundColor: '#101010', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#2A2A2A', paddingHorizontal: 18, paddingBottom: 28 },
+  sheet: { maxHeight: '82%', backgroundColor: '#101010', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#2A2A2A', paddingHorizontal: 18 },
   handle: { width: 38, height: 4, borderRadius: 2, backgroundColor: '#454545', alignSelf: 'center', marginTop: 9, marginBottom: 17 },
   trackHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 17, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#272727' },
   trackCopy: { flex: 1, minWidth: 0, marginLeft: 13 },
