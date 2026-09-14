@@ -101,7 +101,6 @@ export default function PlayerScreen() {
     pipelineInitialResolveMs,
     pipelinePromotionResolveMs,
     sleepTimer,
-    sleepRemaining,
     repeatMode,
     shuffleEnabled,
     radioEnabled,
@@ -123,7 +122,7 @@ export default function PlayerScreen() {
     toggleRadio,
   } = usePlayer();
   const { history } = usePlaybackActivity();
-  const { position, duration } = usePlaybackProgress();
+  const { position, duration, sleepRemaining } = usePlaybackProgress();
 
   const [progressWidth, setProgressWidth] = useState(1);
   const [panel, setPanel] = useState<Panel>('none');
