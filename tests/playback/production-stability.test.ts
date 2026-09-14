@@ -248,3 +248,38 @@ test('invalidated in-flight metadata cannot repopulate the cache', async () => {
   assert.equal(await cache.getOrLoad('track', async () => 'fresh'), 'fresh');
   assert.equal(cache.get('track'), 'fresh');
 });
+
+
+test('account refresh cannot overwrite or clear a newer session', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+  assert.match(source, /tokenRef = useRef\(token\)/);
+  assert.match(source, /const refreshToken = token/);
+  assert.match(source, /tokenRef\.current !== refreshToken/);
+  assert.match(source, /tokenRef\.current === refreshToken/);
+});
+
+test('preferences merge early user changes over asynchronous hydration', async () => {
+  const source = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  assert.match(source, /hydratedRef = useRef\(false\)/);
+  assert.match(source, /pendingChangesRef/);
+  assert.match(source, /const merged: StoredPreferences = \{[\s\S]*?\.\.\.restored,[\s\S]*?\.\.\.pending/);
+  assert.match(source, /if \(!hydratedRef\.current\)/);
+  assert.match(source, /writeChainRef/);
+});
+
+test('recent searches reject stale hydration and serialize storage writes', async () => {
+  const source = await readFile('app/(tabs)/search.tsx', 'utf8');
+  assert.match(source, /recentSearchesRef/);
+  assert.match(source, /recentMutationRef/);
+  assert.match(source, /generation !== recentMutationRef\.current/);
+  assert.match(source, /recentWriteChainRef/);
+  assert.match(source, /recentMutationRef\.current \+= 1/);
+});
+
+test('app update checks cannot hang indefinitely', async () => {
+  const source = await readFile('src/lib/updates.ts', 'utf8');
+  assert.match(source, /new AbortController\(\)/);
+  assert.match(source, /setTimeout\(\(\) => controller\.abort\(\), 10_000\)/);
+  assert.match(source, /signal: controller\.signal/);
+  assert.match(source, /clearTimeout\(timeout\)/);
+});
