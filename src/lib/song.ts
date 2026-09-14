@@ -9,21 +9,48 @@ function decode(value: string) {
     .trim();
 }
 
+function normalizeArtist(value: any): HarmoniaArtist | null {
+  if (typeof value === 'string') {
+    const name = decode(value);
+    return name ? { name } : null;
+  }
+  if (!value || typeof value !== 'object') return null;
+  const name = decode(String(value.name || value.title || ''));
+  return name ? { ...value, name } as HarmoniaArtist : null;
+}
+
+function normalizeArtistArray(values: any[]) {
+  return values.map(normalizeArtist).filter(Boolean) as HarmoniaArtist[];
+}
+
 export function normalizeSong(input: Record<string, any>): Song {
-  const id = String(input.id || input.songId || input.sourceId || input.videoId || '');
+  const id = String(
+    input.id ||
+    input.songId ||
+    input.sourceId ||
+    input._id ||
+    input.spotifyId ||
+    input.saavnId ||
+    input.jiosaavnId ||
+    input.videoId ||
+    input.youtubeId ||
+    ''
+  );
   const name = decode(String(input.name || input.songName || input.title || 'Unknown track'));
 
   let artists = input.artists;
   if (Array.isArray(artists)) {
-    artists = { primary: artists };
+    artists = { primary: normalizeArtistArray(artists) };
+  } else if (artists && typeof artists === 'object' && Array.isArray(artists.primary)) {
+    artists = { ...artists, primary: normalizeArtistArray(artists.primary) };
   }
 
   return {
     ...input,
     id,
-    songId: id,
+    songId: String(input.songId || id),
     name,
-    title: input.title || name,
+    title: decode(String(input.title || name)),
     artists,
   } as Song;
 }
@@ -45,29 +72,97 @@ export function artistNames(song?: Song | null) {
   return decode(String(song.primaryArtists || song.artist || 'Unknown artist'));
 }
 
-function pickImage(images?: HarmoniaImage[] | string) {
-  if (!images) return '';
-  if (typeof images === 'string') return images;
-  if (!Array.isArray(images) || images.length === 0) return '';
-
-  const ranked = [...images].sort((a, b) => {
-    const number = (value?: string) => Number(String(value || '').match(/\d+/)?.[0] || 0);
-    return number(b.quality) - number(a.quality);
-  });
-  return ranked[0]?.url || '';
+export function normalizeArtworkUrl(value: unknown) {
+  return String(value || '')
+    .trim()
+    .replace(/^http:\/\//i, 'https://')
+    .replace(
+      /^https:\/\/image-cdn-[^.]+\.spotifycdn\.com\/image\//i,
+      'https://i.scdn.co/image/'
+    );
 }
 
-export function artworkUrl(song?: Song | null) {
+function imageScore(image: any) {
+  const width = Number(image?.width || 0);
+  const height = Number(image?.height || width || 0);
+  if (width && height) return width * height;
+
+  const quality = String(image?.quality || '').toLowerCase();
+  const dimensions = quality.match(/(\d{2,4})\s*x\s*(\d{2,4})/);
+  if (dimensions) return Number(dimensions[1]) * Number(dimensions[2]);
+
+  const number = Number(quality.replace(/\D/g, ''));
+  return Number.isFinite(number) ? number : 0;
+}
+
+export function bestArtworkUrl(value: any, targetSize = 0) {
+  if (!value) return '';
+  if (typeof value === 'string') return normalizeArtworkUrl(value);
+
+  const values = Array.isArray(value) ? value : [value];
+  const candidates = values
+    .map((image: any) => {
+      if (typeof image === 'string') return { url: normalizeArtworkUrl(image) };
+      if (!image || typeof image !== 'object') return null;
+      const url = image.url || image.src || image.link || image.href;
+      const normalized = normalizeArtworkUrl(url);
+      return normalized ? { ...image, url: normalized } : null;
+    })
+    .filter(Boolean) as any[];
+
+  if (!candidates.length) return '';
+
+  const sorted = [...candidates].sort((a, b) => imageScore(a) - imageScore(b));
+  if (targetSize > 0) {
+    const targetArea = targetSize * targetSize;
+    return (sorted.find((image) => imageScore(image) >= targetArea) || sorted[sorted.length - 1]).url;
+  }
+  return sorted[sorted.length - 1].url;
+}
+
+export function artworkUrl(song?: Song | null, targetSize = 0) {
   if (!song) return '';
-  const direct = pickImage(song.image);
+  const raw = song as any;
+
+  // Match Harmonia Web priority: Spotify identity artwork first, then provider
+  // artwork, album artwork, and finally legacy/fallback fields.
+  const spotify = bestArtworkUrl(raw.spotifyImages, targetSize);
+  if (spotify) return spotify;
+
+  const direct = bestArtworkUrl(raw.image || raw.images, targetSize);
   if (direct) return direct;
-  if (song.cover) return String(song.cover);
-  if (Array.isArray(song.spotifyImages) && song.spotifyImages.length) {
-    return song.spotifyImages[0]?.url || '';
+
+  if (raw.album && typeof raw.album === 'object') {
+    const albumArtwork = bestArtworkUrl(
+      raw.album.image ||
+      raw.album.images ||
+      raw.album.cover ||
+      raw.album.coverArt ||
+      raw.album.cover_image,
+      targetSize
+    );
+    if (albumArtwork) return albumArtwork;
   }
-  if (song.album && typeof song.album === 'object') {
-    return pickImage(song.album.image);
+
+  for (const field of [
+    raw.cover,
+    raw.coverUrl,
+    raw.coverImage,
+    raw.thumbnail,
+    raw.thumbnailUrl,
+    raw.thumbnails,
+    raw.artwork,
+    raw.albumArt,
+    raw.imageUrl,
+    raw.img,
+    raw.picture,
+    raw.more_info?.image,
+    raw.more_info?.thumbnail,
+  ]) {
+    const fallback = bestArtworkUrl(field, targetSize);
+    if (fallback) return fallback;
   }
+
   return '';
 }
 
