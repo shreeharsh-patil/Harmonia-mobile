@@ -365,3 +365,10 @@ test('native recovery tracks the active resolution source before retrying candid
   assert.match(source, /getAudioCandidates\(/);
   assert.match(source, /embeddedCandidateIndex/);
 });
+
+
+test('embedded CDN failure does not blacklist the fresh provider fallback', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(source, /activeSourceRef\.current !== 'embedded'/);
+  assert.match(source, /\? \[failedProvider\]/);
+});
