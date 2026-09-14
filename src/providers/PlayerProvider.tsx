@@ -1333,7 +1333,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     };
 
     const warmNextTrack = async () => {
-      if (batterySaver || !networkConnected) {
+      if (batterySaver || !networkConnected || !status.playing) {
         releasePreloadedSource();
         return;
       }
@@ -1404,7 +1404,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       cancelled = true;
       controller.abort();
     };
-  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, streamQuality]);
+  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, status.playing, streamQuality]);
 
   useEffect(() => {
     return () => {
