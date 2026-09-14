@@ -41,7 +41,7 @@ The mobile app is designed to start playback quickly, prefer on-device/direct so
 - Direct **JioSaavn** resolution
 - Direct **YouTube Music / Innertube** fallback
 - Optional Harmonia server fallbacks
-- Spotify Canvas through the Harmonia Canvas proxy
+- Spotify Canvas fetched directly by the APK from the configured Canvas service
 - Synced lyrics with seekable timed lines and words
 - Playlist, liked song, liked album and liked artist synchronization
 - Spotify playlist import through the Harmonia backend
@@ -320,15 +320,16 @@ Harmonia uses `expo-media-library` to read audio assets and intentionally batche
 
 # 🎬 Spotify Canvas
 
-Canvas rendering uses `expo-video` and the Harmonia backend proxy.
+Canvas rendering uses `expo-video` and calls the configured Spotify Canvas service directly from the APK. Canvas lookup traffic does not pass through the Harmonia account backend.
 
 Behavior includes:
 
 - Spotify identity extraction from normalized track metadata
 - bounded Canvas lookup timeout
 - cancellation when the active track changes
-- LRU-style Canvas URL cache
-- negative-result cache
+- in-memory LRU-style Canvas URL cache
+- persistent AsyncStorage Canvas cache (7-day positive TTL, bounded to 200 tracks)
+- short negative-result cache to avoid repeated misses
 - automatic pause/unmount when the app is backgrounded
 - disabled motion when Lyrics, Queue or Tools replaces the artwork view
 - Reduced Motion support
@@ -369,6 +370,7 @@ Harmonia Mobile is intentionally **local/direct-first**, but account synchroniza
 - queue / shuffle / repeat
 - local history
 - local Replay statistics
+- Spotify Canvas when `EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL` is configured
 - bundled build-time catalog
 - playback speed
 - sleep timer
@@ -383,7 +385,6 @@ Harmonia Mobile is intentionally **local/direct-first**, but account synchroniza
 - Spotify playlist import
 - cloud library sync
 - server recommendations where available
-- Spotify Canvas proxy
 - optional server stream fallbacks
 
 The app does **not** embed MongoDB credentials or database administration credentials inside the APK.
@@ -535,6 +536,9 @@ Copy the values you need from `.env.example`.
 ```env
 # Optional Harmonia account/catalog backend.
 EXPO_PUBLIC_HARMONIA_API_URL=https://your-harmonia-api.example
+
+# Spotify Canvas service called directly by the APK (public URL, not a secret).
+EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL=https://spotify-canvas-one.vercel.app
 
 # Optional dedicated stream fallback backend.
 EXPO_PUBLIC_HARMONIA_STREAM_API_URL=https://your-harmonia-stream-backend.example
