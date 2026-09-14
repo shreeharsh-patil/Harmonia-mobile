@@ -440,3 +440,68 @@ test('library view hydration cannot overwrite an early user toggle', async () =>
   assert.match(source, /viewModeMutationRef\.current \+= 1/);
   assert.match(source, /finally \{[\s\S]*?setCreating\(false\)/);
 });
+
+
+test('cached authenticated sessions unblock cold start before account refresh', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+  assert.match(source, /if \(cachedUser\) \{[\s\S]*?setUser\(cachedUser\);[\s\S]*?setLoading\(false\)/);
+  assert.match(source, /const result = await fetchMe\(saved\)/);
+});
+
+test('inactive tabs freeze and defer mounting until visited', async () => {
+  const source = await readFile('app/(tabs)/_layout.tsx', 'utf8');
+  assert.match(source, /lazy: true/);
+  assert.match(source, /freezeOnBlur: true/);
+});
+
+test('large music lists use bounded render batches', async () => {
+  const tuning = await readFile('src/lib/listPerformance.ts', 'utf8');
+  assert.match(tuning, /SONG_LIST_INITIAL_RENDER/);
+  assert.match(tuning, /SONG_LIST_BATCH_SIZE/);
+  assert.match(tuning, /SONG_LIST_WINDOW_SIZE/);
+
+  for (const path of [
+    'app/(tabs)/search.tsx',
+    'app/(tabs)/library.tsx',
+    'app/album/[id].tsx',
+    'app/artist/[id].tsx',
+    'app/playlist/[id].tsx',
+    'app/mix/[id].tsx',
+  ]) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, /initialNumToRender=\{SONG_LIST_INITIAL_RENDER\}/);
+    assert.match(source, /maxToRenderPerBatch=\{SONG_LIST_BATCH_SIZE\}/);
+    assert.match(source, /windowSize=\{SONG_LIST_WINDOW_SIZE\}/);
+  }
+});
+
+test('library playlists are virtualized instead of mapped inside a vertical ScrollView', async () => {
+  const source = await readFile('app/(tabs)/library.tsx', 'utf8');
+  assert.match(source, /<FlatList<Playlist>/);
+  assert.match(source, /numColumns=\{viewMode === 'grid' \? 2 : 1\}/);
+  assert.doesNotMatch(source, /playlists\.map\(\(playlist\)/);
+});
+
+test('artwork and Canvas avoid unnecessary decode and lookup work', async () => {
+  const track = await readFile('src/components/TrackArtwork.tsx', 'utf8');
+  const playlist = await readFile('src/components/PlaylistArtwork.tsx', 'utf8');
+  const canvas = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+
+  assert.match(track, /memo\(function TrackArtwork/);
+  assert.match(track, /recyclingKey=/);
+  assert.match(playlist, /memo\(function PlaylistArtwork/);
+  assert.match(playlist, /recyclingKey=/);
+  assert.match(canvas, /songRef\.current/);
+  assert.doesNotMatch(canvas, /reduceMotion, song\]\)/);
+  assert.match(player, /import \{ Image \} from 'expo-image'/);
+  assert.match(player, /recyclingKey=\{String\(currentSong\.id \|\| cover\)\}/);
+});
+
+test('lyrics use logarithmic timing lookup instead of rescanning each tick', async () => {
+  const source = await readFile('src/lib/lyrics.ts', 'utf8');
+  assert.match(source, /while \(low <= high\)/);
+  assert.match(source, /const middle = low \+ Math\.floor/);
+  assert.match(source, /lastTimedIndexAtOrBefore\(lines/);
+  assert.match(source, /lastTimedIndexAtOrBefore\(words/);
+});
