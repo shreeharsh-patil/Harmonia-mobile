@@ -19,6 +19,7 @@ import {
   fetchRecommendedMixes,
 } from '@/src/lib/api';
 import { artistNames } from '@/src/lib/song';
+import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -188,6 +189,9 @@ export default function HomeScreen() {
                   showsHorizontalScrollIndicator={false}
                   data={mixes}
                   keyExtractor={(item, index) => String(item._mixId || item.id || index)}
+                  initialNumToRender={RAIL_INITIAL_RENDER}
+                  maxToRenderPerBatch={RAIL_BATCH_SIZE}
+                  windowSize={RAIL_WINDOW_SIZE}
                   renderItem={({ item }) => <PlaylistCard playlist={item} onPress={() => openMix(item)} />}
                 />
               </View>
@@ -228,6 +232,9 @@ function PlaylistRail({ title, data, onPress }: { title: string; data: Playlist[
         showsHorizontalScrollIndicator={false}
         data={data}
         keyExtractor={(item, index) => String(item.id || item._id || `${title}-${index}`)}
+        initialNumToRender={RAIL_INITIAL_RENDER}
+        maxToRenderPerBatch={RAIL_BATCH_SIZE}
+        windowSize={RAIL_WINDOW_SIZE}
         renderItem={({ item }) => <PlaylistCard playlist={item} onPress={() => onPress(item)} />}
       />
     </View>
