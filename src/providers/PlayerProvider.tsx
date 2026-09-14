@@ -1658,6 +1658,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
                   : 0,
               excludeProviders:
                 policy.action !== 'next-candidate' &&
+                activeSourceRef.current !== 'embedded' &&
                 attempt >= 3 &&
                 failedProvider
                   ? [failedProvider]
