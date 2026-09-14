@@ -299,8 +299,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const settingsHydratedRef = useRef(false);
   const pendingSettingsRef = useRef<Partial<PersistedPlayerSettings>>({});
   const settingsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
-  const historyMutationRef = useRef(0);
-  const statsMutationRef = useRef(0);
   const historyHydratedRef = useRef(false);
   const statsHydratedRef = useRef(false);
   const pendingHistoryEntriesRef = useRef<PlaybackHistoryEntry[]>([]);
@@ -345,9 +343,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       playedAt: now,
     };
 
-    historyMutationRef.current += 1;
-    statsMutationRef.current += 1;
-
     if (!historyHydratedRef.current) {
       pendingHistoryEntriesRef.current = [
         entry,
@@ -377,9 +372,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [addPendingStatsDelta, writeHistorySnapshot, writeListeningStatsSnapshot]);
 
   const clearHistory = useCallback(async () => {
-    historyMutationRef.current += 1;
-    statsMutationRef.current += 1;
-
     if (!historyHydratedRef.current) {
       historyClearedBeforeHydrationRef.current = true;
       pendingHistoryEntriesRef.current = [];
@@ -1437,7 +1429,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!status.playing || !currentSong?.id) return;
 
     const interval = setInterval(() => {
-      statsMutationRef.current += 1;
       const id = String(currentSong.id);
       const day = localDayKey();
       const delta: ListeningStats = {
