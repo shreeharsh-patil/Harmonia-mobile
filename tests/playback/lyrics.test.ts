@@ -31,3 +31,17 @@ test('parses enhanced LRC word timestamps', () => {
   assert.equal(activeLyricWordIndex(lines[0], 10.8), 1);
   assert.equal(activeLyricWordIndex(lines[0], 11.2), 2);
 });
+
+
+test('active lyric lookup preserves first-line behavior before the first timestamp', () => {
+  const lines = parseLrc('[00:05.00]First line\n[00:10.00]Second line');
+  assert.equal(activeLyricIndex(lines, 0), 0);
+});
+
+test('active lyric lookup handles long synced transcripts', () => {
+  const lines = Array.from({ length: 10_000 }, (_, index) => ({
+    time: index * 0.5,
+    text: `Line ${index}`,
+  }));
+  assert.equal(activeLyricIndex(lines, 4_321.1), 8642);
+});
