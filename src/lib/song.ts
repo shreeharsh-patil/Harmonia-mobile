@@ -58,14 +58,17 @@ export function normalizeSong(input: Record<string, any>): Song {
 export function artistNames(song?: Song | null) {
   if (!song) return 'Unknown artist';
 
+  const nameOf = (artist: any) =>
+    decode(typeof artist === 'string' ? artist : String(artist?.name || artist?.title || ''));
+
   const artists = song.artists;
   if (Array.isArray(artists)) {
-    const names = artists.map((artist: HarmoniaArtist) => artist?.name).filter(Boolean);
+    const names = artists.map(nameOf).filter(Boolean);
     if (names.length) return names.join(', ');
   }
 
   if (artists && !Array.isArray(artists) && Array.isArray(artists.primary)) {
-    const names = artists.primary.map((artist: HarmoniaArtist) => artist?.name).filter(Boolean);
+    const names = artists.primary.map(nameOf).filter(Boolean);
     if (names.length) return names.join(', ');
   }
 
@@ -73,8 +76,9 @@ export function artistNames(song?: Song | null) {
 }
 
 export function normalizeArtworkUrl(value: unknown) {
-  return String(value || '')
-    .trim()
+  const trimmed = String(value || '').trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return '';
+  return trimmed
     .replace(/^http:\/\//i, 'https://')
     .replace(
       /^https:\/\/image-cdn-[^.]+\.spotifycdn\.com\/image\//i,
@@ -129,19 +133,22 @@ export function artworkUrl(song?: Song | null, targetSize = 0) {
   const spotify = bestArtworkUrl(raw.spotifyImages, targetSize);
   if (spotify) return spotify;
 
-  const direct = bestArtworkUrl(raw.image || raw.images, targetSize);
-  if (direct) return direct;
+  for (const field of [raw.image, raw.images]) {
+    const direct = bestArtworkUrl(field, targetSize);
+    if (direct) return direct;
+  }
 
   if (raw.album && typeof raw.album === 'object') {
-    const albumArtwork = bestArtworkUrl(
-      raw.album.image ||
-      raw.album.images ||
-      raw.album.cover ||
-      raw.album.coverArt ||
+    for (const field of [
+      raw.album.image,
+      raw.album.images,
+      raw.album.cover,
+      raw.album.coverArt,
       raw.album.cover_image,
-      targetSize
-    );
-    if (albumArtwork) return albumArtwork;
+    ]) {
+      const albumArtwork = bestArtworkUrl(field, targetSize);
+      if (albumArtwork) return albumArtwork;
+    }
   }
 
   for (const field of [
