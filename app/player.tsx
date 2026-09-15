@@ -175,7 +175,7 @@ export default function PlayerScreen() {
     if (panel !== 'lyrics' || activeLine < 0 || !syncedLines.length) return;
     const timeout = setTimeout(() => {
       lyricsScrollRef.current?.scrollTo({
-        y: Math.max(0, activeLine * 48 - 96),
+        y: Math.max(0, activeLine * 82 - 112),
         animated: true,
       });
     }, 50);
@@ -312,88 +312,13 @@ export default function PlayerScreen() {
           bounces={false}
         >
           <View style={[styles.artworkWrap, compactArtwork && styles.artworkWrapCompact]}>
-            {panel === 'lyrics' ? (
-              <View style={styles.lyricsStage}>
-                <View style={styles.lyricsStageHeader}>
-                  <View>
-                    <Text style={styles.lyricsStageTitle}>Lyrics</Text>
-                    <Text style={styles.lyricsStageProvider}>{lyrics?.lyricsProvider || 'Harmonia'}</Text>
-                  </View>
-                  <Pressable onPress={() => togglePanel('lyrics')} hitSlop={10} accessibilityLabel="Close lyrics">
-                    <Ionicons name="close" size={22} color="rgba(255,255,255,0.78)" />
-                  </Pressable>
-                </View>
-
-                {lyricsLoading ? (
-                  <View style={styles.lyricsStageLoading}>
-                    {[82, 64, 91, 70, 86].map((widthValue, index) => (
-                      <View
-                        key={widthValue}
-                        style={[styles.lyricsStageSkeleton, { width: `${widthValue}%`, opacity: 1 - index * 0.12 }]}
-                      />
-                    ))}
-                  </View>
-                ) : syncedLines.length ? (
-                  <ScrollView
-                    ref={lyricsScrollRef}
-                    style={styles.lyricsStageScroll}
-                    contentContainerStyle={styles.lyricsStageContent}
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
-                  >
-                    {syncedLines.map((line, index) => {
-                      const active = index === activeLine;
-                      return (
-                        <Pressable
-                          key={`${line.time}-${index}`}
-                          onPress={() => void seek(line.time)}
-                          style={styles.lyricTap}
-                        >
-                          <Text style={[styles.lyricLine, active && styles.lyricActive]}>
-                            {line.words?.length
-                              ? line.words.map((word, wordIndex) => (
-                                  <Text
-                                    key={`${word.time}-${wordIndex}`}
-                                    style={[
-                                      styles.lyricWord,
-                                      active && wordIndex <= activeWord && styles.lyricWordActive,
-                                    ]}
-                                  >
-                                    {word.text}
-                                  </Text>
-                                ))
-                              : line.text}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                ) : lyrics?.plainLyrics ? (
-                  <ScrollView
-                    style={styles.lyricsStageScroll}
-                    contentContainerStyle={styles.lyricsStageContent}
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
-                  >
-                    <Text style={styles.plainLyrics}>{lyrics.plainLyrics}</Text>
-                  </ScrollView>
-                ) : (
-                  <View style={styles.lyricsStageEmpty}>
-                    <Ionicons name="mic-outline" size={42} color="rgba(255,255,255,0.25)" />
-                    <Text style={styles.lyricsStageEmptyTitle}>No lyrics found</Text>
-                    <Text style={styles.lyricsStageEmptyBody}>Lyrics may not be available for this release yet.</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <ArtworkRenderer
-                song={currentSong}
-                size={artworkSize}
-                radius={0}
-                enableMotion={panel === 'none'}
-                style={styles.artwork}
-              />
-            )}
+            <ArtworkRenderer
+              song={currentSong}
+              size={artworkSize}
+              radius={0}
+              enableMotion={panel === 'none'}
+              style={styles.artwork}
+            />
           </View>
 
           <View style={styles.meta}>
@@ -764,7 +689,7 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          {panel !== 'none' && (
+          {panel !== 'none' && panel !== 'lyrics' && (
             <View style={styles.footer}>
               <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
                 <Text style={styles.secondaryText}>−10</Text>
@@ -777,6 +702,169 @@ export default function PlayerScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {panel === 'lyrics' && (
+        <View style={styles.lyricsOverlay}>
+          {!!cover && (
+            <Image
+              source={{ uri: cover }}
+              blurRadius={78}
+              contentFit="cover"
+              style={[StyleSheet.absoluteFill, styles.lyricsBackdropImage]}
+              cachePolicy="memory-disk"
+              recyclingKey={`lyrics-bg-${String(currentSong.id || cover)}`}
+            />
+          )}
+          <View pointerEvents="none" style={styles.lyricsBackdropWash} />
+          <View pointerEvents="none" style={styles.lyricsBackdropBottomWash} />
+
+          <SafeAreaView style={styles.lyricsOverlaySafe}>
+            <View style={styles.lyricsGrabberWrap}>
+              <Pressable
+                onPress={() => togglePanel('lyrics')}
+                hitSlop={16}
+                accessibilityLabel="Close lyrics"
+                style={styles.lyricsGrabberButton}
+              >
+                <View style={styles.lyricsGrabber} />
+              </Pressable>
+            </View>
+
+            <View style={styles.lyricsNowPlayingRow}>
+              <Pressable
+                onPress={() => togglePanel('lyrics')}
+                accessibilityLabel="Close lyrics and show artwork"
+                style={styles.lyricsSongInfo}
+              >
+                <ArtworkRenderer
+                  song={currentSong}
+                  size={64}
+                  radius={8}
+                  enableMotion={false}
+                  style={styles.lyricsArtwork}
+                />
+                <View style={styles.lyricsSongCopy}>
+                  <Text numberOfLines={1} style={styles.lyricsSongTitle}>{currentSong.name}</Text>
+                  <Text numberOfLines={1} style={styles.lyricsSongArtist}>{artistNames(currentSong)}</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => void togglePlayback()}
+                style={styles.lyricsPlayButton}
+                accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isBuffering || isLoadingTrack
+                  ? <ActivityIndicator color="#FFF" size="small" />
+                  : <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFF" style={!isPlaying ? styles.lyricsPlayIcon : undefined} />}
+              </Pressable>
+            </View>
+
+            <View style={styles.lyricsPager}>
+              <View style={styles.lyricsPagerDotActive} />
+              <View style={styles.lyricsPagerDotActive} />
+              <View style={styles.lyricsPagerDot} />
+            </View>
+
+            <View style={styles.lyricsViewport}>
+              {lyricsLoading ? (
+                <View style={styles.lyricsOverlayLoading}>
+                  {[80, 60, 90, 50, 75, 65, 85].map((widthValue, index) => (
+                    <View
+                      key={`${widthValue}-${index}`}
+                      style={[
+                        styles.lyricsOverlaySkeleton,
+                        { width: `${widthValue}%`, opacity: 0.9 - index * 0.09 },
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : syncedLines.length ? (
+                <ScrollView
+                  ref={lyricsScrollRef}
+                  style={styles.lyricsOverlayScroll}
+                  contentContainerStyle={styles.lyricsOverlayContent}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  {syncedLines.map((line, index) => {
+                    const active = index === activeLine;
+                    const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
+                    const opacity = active ? 1 : distance === 1 ? 0.46 : distance === 2 ? 0.25 : 0.12;
+                    const scale = active ? 1 : distance === 1 ? 0.96 : 0.92;
+                    const shadowRadius = active ? 0 : distance === 1 ? 4 : 9;
+
+                    return (
+                      <Pressable
+                        key={`${line.time}-${index}`}
+                        onPress={() => void seek(line.time)}
+                        style={styles.lyricsOverlayLineTap}
+                      >
+                        <Text
+                          style={[
+                            styles.lyricsOverlayLine,
+                            active && styles.lyricsOverlayLineActive,
+                            {
+                              opacity,
+                              transform: [{ scale }],
+                              textShadowRadius: shadowRadius,
+                            },
+                          ]}
+                        >
+                          {line.words?.length
+                            ? line.words.map((word, wordIndex) => (
+                                <Text
+                                  key={`${word.time}-${wordIndex}`}
+                                  style={[
+                                    active ? styles.lyricsOverlayWordPending : undefined,
+                                    active && wordIndex <= activeWord ? styles.lyricsOverlayWordActive : undefined,
+                                  ]}
+                                >
+                                  {word.text}
+                                </Text>
+                              ))
+                            : line.text}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : lyrics?.plainLyrics ? (
+                <ScrollView
+                  style={styles.lyricsOverlayScroll}
+                  contentContainerStyle={styles.lyricsPlainContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {lyrics.plainLyrics
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .map((line, index) => (
+                      <Text
+                        key={`${index}-${line}`}
+                        style={[
+                          styles.lyricsPlainLine,
+                          { opacity: index === 0 ? 0.8 : Math.max(0.22, 0.56 - index * 0.05) },
+                        ]}
+                      >
+                        {line}
+                      </Text>
+                    ))}
+                </ScrollView>
+              ) : (
+                <View style={styles.lyricsOverlayEmpty}>
+                  <Ionicons name="mic-outline" size={48} color="rgba(255,255,255,0.26)" />
+                  <Text style={styles.lyricsOverlayEmptyTitle}>No lyrics found</Text>
+                  <Text style={styles.lyricsOverlayEmptyBody}>Try another song or check again later.</Text>
+                </View>
+              )}
+
+              <View pointerEvents="none" style={styles.lyricsTopFade} />
+              <View pointerEvents="none" style={styles.lyricsBottomFade} />
+            </View>
+          </SafeAreaView>
+        </View>
+      )}
     </View>
   );
 }
@@ -802,17 +890,203 @@ const styles = StyleSheet.create({
   album: { color: 'rgba(255,255,255,0.60)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 1, maxWidth: 210 },
   artworkWrap: { minHeight: 404, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 26 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
-  lyricsStage: { width: '100%', height: 380, paddingHorizontal: 10, paddingTop: 12, paddingBottom: 4 },
-  lyricsStageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 10 },
-  lyricsStageTitle: { color: '#FFF', fontSize: 22, fontWeight: '800', fontFamily: PLAYER_FONT },
-  lyricsStageProvider: { color: 'rgba(255,255,255,0.46)', fontSize: 9, fontWeight: '700', fontFamily: PLAYER_FONT, textTransform: 'uppercase', letterSpacing: 0.9, marginTop: 2 },
-  lyricsStageScroll: { flex: 1 },
-  lyricsStageContent: { paddingTop: 54, paddingBottom: 130, gap: 15 },
-  lyricsStageLoading: { flex: 1, justifyContent: 'center', gap: 16, paddingHorizontal: 4 },
-  lyricsStageSkeleton: { height: 16, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.13)' },
-  lyricsStageEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  lyricsStageEmptyTitle: { color: 'rgba(255,255,255,0.72)', fontSize: 18, fontWeight: '800', fontFamily: PLAYER_FONT, marginTop: 12 },
-  lyricsStageEmptyBody: { color: 'rgba(255,255,255,0.42)', fontSize: 12, lineHeight: 18, fontFamily: PLAYER_FONT, textAlign: 'center', marginTop: 5 },
+  lyricsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    backgroundColor: '#121212',
+  },
+  lyricsBackdropImage: {
+    opacity: 0.9,
+    transform: [{ scale: 1.7 }],
+  },
+  lyricsBackdropWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(20,6,6,0.55)',
+  },
+  lyricsBackdropBottomWash: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '62%',
+    backgroundColor: 'rgba(0,0,0,0.34)',
+  },
+  lyricsOverlaySafe: { flex: 1 },
+  lyricsGrabberWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 1 },
+  lyricsGrabberButton: {
+    width: 72,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lyricsGrabber: {
+    width: 48,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.36)',
+  },
+  lyricsNowPlayingRow: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    gap: 14,
+  },
+  lyricsSongInfo: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' },
+  lyricsArtwork: {
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
+  },
+  lyricsSongCopy: { flex: 1, minWidth: 0, marginLeft: 14 },
+  lyricsSongTitle: {
+    color: '#FFF',
+    fontSize: 19,
+    lineHeight: 24,
+    fontWeight: '800',
+    fontFamily: PLAYER_FONT,
+    letterSpacing: -0.25,
+  },
+  lyricsSongArtist: {
+    color: 'rgba(255,255,255,0.70)',
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: PLAYER_FONT,
+    marginTop: 2,
+  },
+  lyricsPlayButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+  lyricsPlayIcon: { marginLeft: 2 },
+  lyricsPager: {
+    height: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  lyricsPagerDotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFF',
+  },
+  lyricsPagerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  lyricsViewport: { flex: 1, position: 'relative', overflow: 'hidden' },
+  lyricsOverlayScroll: { flex: 1 },
+  lyricsOverlayContent: {
+    paddingTop: 96,
+    paddingBottom: 210,
+    paddingHorizontal: 28,
+  },
+  lyricsOverlayLineTap: {
+    minHeight: 82,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  lyricsOverlayLine: {
+    width: '100%',
+    color: '#FFF',
+    fontSize: 27,
+    lineHeight: 34,
+    fontWeight: '750' as any,
+    fontFamily: PLAYER_FONT,
+    letterSpacing: -0.45,
+    textAlign: 'center',
+    textShadowColor: 'rgba(255,255,255,0.34)',
+  },
+  lyricsOverlayLineActive: {
+    fontSize: 32,
+    lineHeight: 39,
+    fontWeight: '850' as any,
+    letterSpacing: -0.65,
+    textShadowColor: 'transparent',
+  },
+  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.52)' },
+  lyricsOverlayWordActive: { color: '#FFF' },
+  lyricsOverlayLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 18,
+    paddingHorizontal: 34,
+  },
+  lyricsOverlaySkeleton: {
+    height: 18,
+    alignSelf: 'center',
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  lyricsPlainContent: {
+    paddingTop: 92,
+    paddingBottom: 190,
+    paddingHorizontal: 28,
+    gap: 26,
+  },
+  lyricsPlainLine: {
+    color: '#FFF',
+    fontSize: 25,
+    lineHeight: 33,
+    fontWeight: '700',
+    fontFamily: PLAYER_FONT,
+    textAlign: 'center',
+    letterSpacing: -0.35,
+    textShadowColor: 'rgba(255,255,255,0.24)',
+    textShadowRadius: 5,
+  },
+  lyricsOverlayEmpty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 34,
+    paddingBottom: 80,
+  },
+  lyricsOverlayEmptyTitle: {
+    color: 'rgba(255,255,255,0.76)',
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: PLAYER_FONT,
+    marginTop: 14,
+  },
+  lyricsOverlayEmptyBody: {
+    color: 'rgba(255,255,255,0.46)',
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: PLAYER_FONT,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  lyricsTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 76,
+    backgroundColor: 'rgba(20,6,6,0.14)',
+  },
+  lyricsBottomFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
   artwork: {
     shadowColor: '#000',
     shadowOpacity: 0.34,
