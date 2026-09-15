@@ -542,14 +542,18 @@ test('lyrics use logarithmic timing lookup instead of rescanning each tick', asy
 });
 
 
-test('lyrics overlay uses artwork-driven fades and measured line positions', async () => {
+test('lyrics overlay uses one artwork-driven gradient and measured line positions', async () => {
   const source = await readFile('app/player.tsx', 'utf8');
 
   assert.match(source, /lyricLineLayouts/);
   assert.match(source, /lyricsViewportHeight \* 0\.43/);
   assert.match(source, /event\.nativeEvent\.layout\.height/);
+  assert.match(source, /blurRadius=\{44\}/);
   assert.match(source, /source=\{\{ uri: PLAYER_BACKGROUND_FADE \}\}/);
+  assert.match(source, /lyricsBackdropGradient/);
+  assert.match(source, /distance === 3/);
   assert.doesNotMatch(source, /lyricsBackdropBottomWash/);
+  assert.doesNotMatch(source, /styles\.lyricsTopFade|styles\.lyricsBottomFade/);
   assert.doesNotMatch(source, /activeLine \* 82 - 112,[\s\S]*animated: true/);
   assert.doesNotMatch(source, /textShadowRadius: shadowRadius/);
 });
