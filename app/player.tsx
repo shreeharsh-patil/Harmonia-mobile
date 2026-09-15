@@ -224,8 +224,8 @@ export default function PlayerScreen() {
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
-  const artworkSize = Math.min(compactArtwork ? 244 : 380, playerContentWidth);
-  const controlsFixedWidth = 40 + 50 + 64 + 50 + 40;
+  const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
+  const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
@@ -281,7 +281,7 @@ export default function PlayerScreen() {
       {!!cover && (
         <Image
           source={{ uri: cover }}
-          blurRadius={72}
+          blurRadius={28}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
@@ -1108,9 +1108,9 @@ const styles = StyleSheet.create({
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 14, paddingBottom: 8 },
-  modeControl: { width: 40, height: 50, alignItems: 'center', justifyContent: 'center' },
-  skip: { width: 50, height: 56, alignItems: 'center', justifyContent: 'center' },
-  play: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  modeControl: { width: 42, height: 52, alignItems: 'center', justifyContent: 'center' },
+  skip: { width: 52, height: 58, alignItems: 'center', justifyContent: 'center' },
+  play: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   playIcon: { marginLeft: 3 },
   repeatBadge: {
     position: 'absolute',
