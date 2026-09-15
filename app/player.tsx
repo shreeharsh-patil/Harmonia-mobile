@@ -139,6 +139,8 @@ export default function PlayerScreen() {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const lyricsScrollRef = useRef<ScrollView>(null);
+  const lyricLineLayouts = useRef<Record<number, { y: number; height: number }>>({});
+  const [lyricsViewportHeight, setLyricsViewportHeight] = useState(0);
 
   const cover = artworkUrl(currentSong, 360);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
@@ -174,15 +176,25 @@ export default function PlayerScreen() {
   }, [params.panel]);
 
   useEffect(() => {
+    lyricLineLayouts.current = {};
+  }, [currentSong?.id, syncedLines.length]);
+
+  useEffect(() => {
     if (panel !== 'lyrics' || activeLine < 0 || !syncedLines.length) return;
     const timeout = setTimeout(() => {
+      const layout = lyricLineLayouts.current[activeLine];
+      const anchor = lyricsViewportHeight > 0 ? lyricsViewportHeight * 0.43 : 112;
+      const targetY = layout
+        ? Math.max(0, layout.y - anchor + layout.height / 2)
+        : Math.max(0, activeLine * 82 - 112);
+
       lyricsScrollRef.current?.scrollTo({
-        y: Math.max(0, activeLine * 82 - 112),
+        y: targetY,
         animated: true,
       });
     }, 50);
     return () => clearTimeout(timeout);
-  }, [activeLine, panel, syncedLines.length]);
+  }, [activeLine, panel, syncedLines.length, lyricsViewportHeight]);
 
   useEffect(() => {
     let active = true;
@@ -721,7 +733,7 @@ export default function PlayerScreen() {
           {!!cover && (
             <Image
               source={{ uri: cover }}
-              blurRadius={78}
+              blurRadius={44}
               contentFit="cover"
               style={[StyleSheet.absoluteFill, styles.lyricsBackdropImage]}
               cachePolicy="memory-disk"
@@ -729,7 +741,13 @@ export default function PlayerScreen() {
             />
           )}
           <View pointerEvents="none" style={styles.lyricsBackdropWash} />
-          <View pointerEvents="none" style={styles.lyricsBackdropBottomWash} />
+          <Image
+            pointerEvents="none"
+            source={{ uri: PLAYER_BACKGROUND_FADE }}
+            contentFit="fill"
+            style={[StyleSheet.absoluteFill, styles.lyricsBackdropGradient]}
+            cachePolicy="memory"
+          />
 
           <SafeAreaView style={styles.lyricsOverlaySafe}>
             <View style={styles.lyricsGrabberWrap}>
@@ -779,7 +797,10 @@ export default function PlayerScreen() {
               <View style={styles.lyricsPagerDot} />
             </View>
 
-            <View style={styles.lyricsViewport}>
+            <View
+              style={styles.lyricsViewport}
+              onLayout={(event) => setLyricsViewportHeight(event.nativeEvent.layout.height)}
+            >
               {lyricsLoading ? (
                 <View style={styles.lyricsOverlayLoading}>
                   {[80, 60, 90, 50, 75, 65, 85].map((widthValue, index) => (
@@ -803,14 +824,27 @@ export default function PlayerScreen() {
                   {syncedLines.map((line, index) => {
                     const active = index === activeLine;
                     const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
-                    const opacity = active ? 1 : distance === 1 ? 0.46 : distance === 2 ? 0.25 : 0.12;
-                    const scale = active ? 1 : distance === 1 ? 0.96 : 0.92;
-                    const shadowRadius = active ? 0 : distance === 1 ? 4 : 9;
+                    const opacity = active
+                      ? 1
+                      : distance === 1
+                        ? 0.6
+                        : distance === 2
+                          ? 0.36
+                          : distance === 3
+                            ? 0.22
+                            : 0.12;
+                    const scale = active ? 1 : distance === 1 ? 0.99 : 0.97;
 
                     return (
                       <Pressable
                         key={`${line.time}-${index}`}
                         onPress={() => void seek(line.time)}
+                        onLayout={(event) => {
+                          lyricLineLayouts.current[index] = {
+                            y: event.nativeEvent.layout.y,
+                            height: event.nativeEvent.layout.height,
+                          };
+                        }}
                         style={styles.lyricsOverlayLineTap}
                       >
                         <Text
@@ -820,7 +854,6 @@ export default function PlayerScreen() {
                             {
                               opacity,
                               transform: [{ scale }],
-                              textShadowRadius: shadowRadius,
                             },
                           ]}
                         >
@@ -857,7 +890,7 @@ export default function PlayerScreen() {
                         key={`${index}-${line}`}
                         style={[
                           styles.lyricsPlainLine,
-                          { opacity: index === 0 ? 0.8 : Math.max(0.22, 0.56 - index * 0.05) },
+                          { opacity: index === 0 ? 0.86 : 0.66 },
                         ]}
                       >
                         {line}
@@ -872,8 +905,6 @@ export default function PlayerScreen() {
                 </View>
               )}
 
-              <View pointerEvents="none" style={styles.lyricsTopFade} />
-              <View pointerEvents="none" style={styles.lyricsBottomFade} />
             </View>
           </SafeAreaView>
         </View>
@@ -907,23 +938,18 @@ const styles = StyleSheet.create({
   lyricsOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 50,
-    backgroundColor: '#121212',
+    backgroundColor: '#15110F',
   },
   lyricsBackdropImage: {
-    opacity: 0.9,
-    transform: [{ scale: 1.7 }],
+    opacity: 1,
+    transform: [{ scale: 1.48 }],
   },
   lyricsBackdropWash: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(20,6,6,0.55)',
+    backgroundColor: 'rgba(6,5,4,0.10)',
   },
-  lyricsBackdropBottomWash: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '62%',
-    backgroundColor: 'rgba(0,0,0,0.34)',
+  lyricsBackdropGradient: {
+    opacity: 0.9,
   },
   lyricsOverlaySafe: { flex: 1 },
   lyricsGrabberWrap: { alignItems: 'center', paddingTop: 7, paddingBottom: 1 },
@@ -1004,35 +1030,33 @@ const styles = StyleSheet.create({
   lyricsViewport: { flex: 1, position: 'relative', overflow: 'hidden' },
   lyricsOverlayScroll: { flex: 1 },
   lyricsOverlayContent: {
-    paddingTop: 96,
+    paddingTop: 104,
     paddingBottom: 210,
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
   },
   lyricsOverlayLineTap: {
-    minHeight: 82,
+    minHeight: 78,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   lyricsOverlayLine: {
     width: '100%',
     color: '#FFF',
     fontSize: 27,
-    lineHeight: 34,
+    lineHeight: 35,
     fontWeight: '750' as any,
     fontFamily: PLAYER_FONT,
     letterSpacing: -0.45,
     textAlign: 'center',
-    textShadowColor: 'rgba(255,255,255,0.34)',
   },
   lyricsOverlayLineActive: {
     fontSize: 32,
-    lineHeight: 39,
+    lineHeight: 40,
     fontWeight: '850' as any,
     letterSpacing: -0.65,
-    textShadowColor: 'transparent',
   },
-  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.52)' },
+  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.66)' },
   lyricsOverlayWordActive: { color: '#FFF' },
   lyricsOverlayLoading: {
     flex: 1,
@@ -1049,19 +1073,17 @@ const styles = StyleSheet.create({
   lyricsPlainContent: {
     paddingTop: 92,
     paddingBottom: 190,
-    paddingHorizontal: 28,
-    gap: 26,
+    paddingHorizontal: 24,
+    gap: 24,
   },
   lyricsPlainLine: {
     color: '#FFF',
-    fontSize: 25,
-    lineHeight: 33,
-    fontWeight: '700',
+    fontSize: 26,
+    lineHeight: 35,
+    fontWeight: '720' as any,
     fontFamily: PLAYER_FONT,
     textAlign: 'center',
     letterSpacing: -0.35,
-    textShadowColor: 'rgba(255,255,255,0.24)',
-    textShadowRadius: 5,
   },
   lyricsOverlayEmpty: {
     flex: 1,
@@ -1084,22 +1106,6 @@ const styles = StyleSheet.create({
     fontFamily: PLAYER_FONT,
     textAlign: 'center',
     marginTop: 6,
-  },
-  lyricsTopFade: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 76,
-    backgroundColor: 'rgba(20,6,6,0.14)',
-  },
-  lyricsBottomFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 120,
-    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   artwork: {
     shadowColor: '#000',
