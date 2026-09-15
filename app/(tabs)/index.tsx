@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chartPlaybackOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.42)',
