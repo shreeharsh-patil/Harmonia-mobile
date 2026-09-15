@@ -49,8 +49,6 @@ export default function SearchScreen() {
   const recentMutationRef = useRef(0);
   const recentWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
 
-  recentSearchesRef.current = recentSearches;
-
   const commitRecentSearches = useCallback((next: string[]) => {
     recentSearchesRef.current = next;
     setRecentSearches(next);

@@ -319,10 +319,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const playbackSnapshotWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastStatsPersistedAtRef = useRef(0);
 
-  queueRef.current = queue;
-  indexRef.current = currentIndex;
-  currentTimeRef.current = Number(status.currentTime || 0);
-  nativePlayingRef.current = Boolean(status.playing);
+  useEffect(() => {
+    queueRef.current = queue;
+    indexRef.current = currentIndex;
+  }, [currentIndex, queue]);
+
+  useEffect(() => {
+    currentTimeRef.current = Number(status.currentTime || 0);
+    nativePlayingRef.current = Boolean(status.playing);
+  }, [status.currentTime, status.playing]);
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
 

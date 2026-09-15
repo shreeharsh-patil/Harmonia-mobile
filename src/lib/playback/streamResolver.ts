@@ -370,8 +370,9 @@ async function fetchJson(
     }
 
     return data;
-  } catch (error) {
-    if (timedOut) {
+  } catch (error: any) {
+    if (parentSignal?.aborted) throw classifyPlaybackError(error);
+    if (timedOut && error?.name === 'AbortError') {
       throw new PlaybackPipelineError(
         PlaybackErrorType.NETWORK_ERROR,
         'Stream resolution timed out.',
