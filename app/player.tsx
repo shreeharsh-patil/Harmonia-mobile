@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyrics';
-import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
+import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlaybackHistory, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
@@ -145,23 +145,7 @@ export default function PlayerScreen() {
     () => activeLyricWordIndex(syncedLines[activeLine], position),
     [activeLine, position, syncedLines]
   );
-  const previewLyric = useMemo(() => {
-    if (syncedLines.length) {
-      const index = activeLine >= 0 ? activeLine : 0;
-      return syncedLines[index]?.text || syncedLines[0]?.text || '';
-    }
-    if (lyrics?.plainLyrics) {
-      return lyrics.plainLyrics.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
-    }
-    return '';
-  }, [activeLine, lyrics, syncedLines]);
-
-  const playingFromLabel = useMemo(() => {
-    const album = String(albumName(currentSong) || '').trim();
-    const title = String(currentSong?.name || currentSong?.title || '').trim();
-    if (album && album.toLowerCase() !== title.toLowerCase()) return album;
-    return 'Harmonia';
-  }, [currentSong]);
+  const playingFromLabel = useMemo(() => 'Music', [currentSong?.id]);
 
   const recentQueueSuggestions = useMemo(() => {
     const queued = new Set(queue.map((song) => String(song.id || '')));
@@ -237,7 +221,7 @@ export default function PlayerScreen() {
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
-  const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
+  const artworkSize = Math.min(compactArtwork ? 244 : 332, Math.max(0, width - 44));
   const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
   const controlGap = Math.max(
     4,
@@ -294,7 +278,7 @@ export default function PlayerScreen() {
       {!!cover && (
         <Image
           source={{ uri: cover }}
-          blurRadius={28}
+          blurRadius={56}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
@@ -402,7 +386,7 @@ export default function PlayerScreen() {
               <ArtworkRenderer
                 song={currentSong}
                 size={artworkSize}
-                radius={14}
+                radius={2}
                 enableMotion={panel === 'none'}
                 style={styles.artwork}
               />
@@ -450,7 +434,7 @@ export default function PlayerScreen() {
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
-              <Ionicons name="play-skip-back" size={40} color="#FFF" />
+              <Ionicons name="play-skip-back" size={34} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
@@ -458,7 +442,7 @@ export default function PlayerScreen() {
                 : <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
-              <Ionicons name="play-skip-forward" size={40} color="#FFF" />
+              <Ionicons name="play-skip-forward" size={34} color="#FFF" />
             </Pressable>
             <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
               <Ionicons
@@ -477,54 +461,27 @@ export default function PlayerScreen() {
               onPress={() => togglePanel('queue')}
               style={[styles.secondaryControl, panel === 'queue' && styles.secondaryControlActive]}
               accessibilityLabel="Queue"
+              hitSlop={12}
             >
               <Ionicons
-                name="list-outline"
-                size={20}
-                color={panel === 'queue' ? '#111' : 'rgba(255,255,255,0.78)'}
+                name="list"
+                size={24}
+                color={panel === 'queue' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
-              <Text style={[styles.secondaryControlText, panel === 'queue' && styles.secondaryControlTextActive]}>Queue</Text>
             </Pressable>
             <Pressable
               onPress={() => togglePanel('lyrics')}
               style={[styles.secondaryControl, panel === 'lyrics' && styles.secondaryControlActive]}
               accessibilityLabel="Lyrics"
+              hitSlop={12}
             >
               <Ionicons
                 name="mic-outline"
-                size={19}
-                color={panel === 'lyrics' ? '#111' : 'rgba(255,255,255,0.78)'}
+                size={23}
+                color={panel === 'lyrics' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
-              <Text style={[styles.secondaryControlText, panel === 'lyrics' && styles.secondaryControlTextActive]}>Lyrics</Text>
             </Pressable>
           </View>
-
-          {panel === 'none' && (
-            <Pressable
-              onPress={() => togglePanel('lyrics')}
-              style={({ pressed }) => [styles.lyricsPeek, pressed && styles.lyricsPeekPressed]}
-              accessibilityLabel="Open lyrics"
-            >
-              <View style={styles.lyricsPeekHeader}>
-                <View>
-                  <Text style={styles.lyricsPeekTitle}>Lyrics</Text>
-                  <Text style={styles.lyricsPeekProvider}>{lyrics?.lyricsProvider || 'Harmonia'}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={19} color="rgba(255,255,255,0.72)" />
-              </View>
-              {lyricsLoading ? (
-                <View style={styles.lyricsPeekLoading}>
-                  <View style={[styles.lyricsSkeleton, { width: '84%' }]} />
-                  <View style={[styles.lyricsSkeleton, { width: '62%' }]} />
-                </View>
-              ) : previewLyric ? (
-                <Text numberOfLines={2} style={styles.lyricsPeekLine}>{previewLyric}</Text>
-              ) : (
-                <Text style={styles.lyricsPeekEmpty}>Tap to find lyrics for this track</Text>
-              )}
-            </Pressable>
-          )}
-
 
           {panel === 'queue' && (
             <View style={styles.panel}>
@@ -823,13 +780,13 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#121212' },
-  backdropImage: { opacity: 0.88, transform: [{ scale: 1.28 }] },
-  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.10)' },
-  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '40%', bottom: '30%', backgroundColor: 'rgba(0,0,0,0.32)' },
-  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '52%', backgroundColor: 'rgba(0,0,0,0.72)' },
-  safe: { flex: 1, paddingHorizontal: 16 },
-  scroll: { paddingBottom: 16 },
-  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  backdropImage: { opacity: 0.66, transform: [{ scale: 1.46 }] },
+  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.28)' },
+  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '34%', bottom: '32%', backgroundColor: 'rgba(0,0,0,0.46)' },
+  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '58%', backgroundColor: 'rgba(0,0,0,0.82)' },
+  safe: { flex: 1, paddingHorizontal: 20 },
+  scroll: { paddingBottom: 18 },
+  header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundButton: {
     width: 40,
     height: 40,
@@ -838,9 +795,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCopy: { alignItems: 'center', flex: 1, paddingHorizontal: 12 },
-  playingFrom: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '700', fontFamily: PLAYER_FONT },
-  album: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 2, maxWidth: 210 },
-  artworkWrap: { minHeight: 408, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 34 },
+  playingFrom: { color: 'rgba(255,255,255,0.94)', fontSize: 15, fontWeight: '700', fontFamily: PLAYER_FONT },
+  album: { color: 'rgba(255,255,255,0.58)', fontSize: 13, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 1, maxWidth: 210 },
+  artworkWrap: { minHeight: 398, justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 28 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
   lyricsStage: { width: '100%', height: 380, paddingHorizontal: 10, paddingTop: 12, paddingBottom: 4 },
   lyricsStageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 10 },
@@ -855,28 +812,28 @@ const styles = StyleSheet.create({
   lyricsStageEmptyBody: { color: 'rgba(255,255,255,0.42)', fontSize: 12, lineHeight: 18, fontFamily: PLAYER_FONT, textAlign: 'center', marginTop: 5 },
   artwork: {
     shadowColor: '#000',
-    shadowOpacity: 0.42,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 18 },
-    elevation: 18,
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
   },
-  meta: { paddingTop: 20, flexDirection: 'row', alignItems: 'center' },
+  meta: { paddingTop: 18, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   likeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFF', fontSize: 22, fontWeight: '800', fontFamily: PLAYER_FONT, letterSpacing: -0.45 },
   artist: { color: 'rgba(255,255,255,0.66)', fontSize: 16, fontFamily: PLAYER_FONT, marginTop: 4 },
-  timeline: { paddingTop: 22 },
+  timeline: { paddingTop: 18 },
   track: { height: 22, justifyContent: 'center' },
-  trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
+  trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' },
   fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
-  thumb: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFF', marginLeft: -6 },
+  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, backgroundColor: '#FFF', marginLeft: -7 },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 18, paddingBottom: 12 },
-  modeControl: { width: 42, height: 56, alignItems: 'center', justifyContent: 'center' },
-  skip: { width: 52, height: 64, alignItems: 'center', justifyContent: 'center' },
-  play: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 16, paddingBottom: 8 },
+  modeControl: { width: 42, height: 54, alignItems: 'center', justifyContent: 'center' },
+  skip: { width: 52, height: 62, alignItems: 'center', justifyContent: 'center' },
+  play: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   playIcon: { marginLeft: 3 },
   repeatBadge: {
     position: 'absolute',
@@ -893,43 +850,18 @@ const styles = StyleSheet.create({
   secondaryControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 4,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginTop: 2,
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
   secondaryControl: {
-    flex: 1,
+    width: 44,
     height: 44,
-    borderRadius: 22,
-    flexDirection: 'row',
-    gap: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
   },
-  secondaryControlActive: { backgroundColor: '#F3F3F3', borderColor: '#F3F3F3' },
-  secondaryControlText: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '750' as any, fontFamily: PLAYER_FONT },
-  secondaryControlTextActive: { color: '#111' },
-  lyricsPeek: {
-    minHeight: 112,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  lyricsPeekPressed: { opacity: 0.82, transform: [{ scale: 0.992 }] },
-  lyricsPeekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  lyricsPeekTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', fontFamily: PLAYER_FONT },
-  lyricsPeekProvider: { color: 'rgba(255,255,255,0.48)', fontSize: 9, fontWeight: '700', fontFamily: PLAYER_FONT, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
-  lyricsPeekLine: { color: '#FFF', fontSize: 19, lineHeight: 25, fontWeight: '700', fontFamily: PLAYER_FONT, marginTop: 14 },
-  lyricsPeekEmpty: { color: 'rgba(255,255,255,0.56)', fontSize: 13, fontFamily: PLAYER_FONT, marginTop: 16 },
-  lyricsPeekLoading: { gap: 8, marginTop: 16 },
-  lyricsSkeleton: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.13)' },
+  secondaryControlActive: { opacity: 1 },
   panel: {
     minHeight: 178,
     borderRadius: 20,
