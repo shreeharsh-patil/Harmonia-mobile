@@ -453,6 +453,14 @@ export async function findDirectYouTubeMusicTrack(
   return ranked[0]?.score >= 50 ? ranked[0].track : null;
 }
 
+function formatCodecPreference(mimeType: string) {
+  const value = String(mimeType || '').toLowerCase();
+  if (/opus/.test(value)) return 3;
+  if (/(mp4a|aac)/.test(value)) return 2;
+  if (/vorbis/.test(value)) return 1;
+  return 0;
+}
+
 function rankFormats(formats: any[], quality: StreamQuality) {
   const ceiling = qualityCeiling(quality);
   const direct = formats
@@ -469,10 +477,16 @@ function rankFormats(formats: any[], quality: StreamQuality) {
 
   const within = direct
     .filter((format) => !Number.isFinite(ceiling) || !format.bitrate || format.bitrate <= ceiling)
-    .sort((a, b) => b.bitrate - a.bitrate);
+    .sort((a, b) =>
+      b.bitrate - a.bitrate ||
+      formatCodecPreference(b.mimeType) - formatCodecPreference(a.mimeType)
+    );
   const over = direct
     .filter((format) => Number.isFinite(ceiling) && format.bitrate > ceiling)
-    .sort((a, b) => a.bitrate - b.bitrate);
+    .sort((a, b) =>
+      a.bitrate - b.bitrate ||
+      formatCodecPreference(b.mimeType) - formatCodecPreference(a.mimeType)
+    );
 
   return [...within, ...over];
 }
