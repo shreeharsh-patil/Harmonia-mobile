@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   LayoutChangeEvent,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -25,6 +26,8 @@ import { usePlaybackActivity, usePlaybackProgress, usePlayer, type SleepTimerMod
 import { useOffline } from '@/src/providers/OfflineProvider';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
+
+const PLAYER_FONT = Platform.OS === 'android' ? 'sans-serif' : undefined;
 
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
@@ -141,6 +144,24 @@ export default function PlayerScreen() {
     () => activeLyricWordIndex(syncedLines[activeLine], position),
     [activeLine, position, syncedLines]
   );
+  const previewLyric = useMemo(() => {
+    if (syncedLines.length) {
+      const index = activeLine >= 0 ? activeLine : 0;
+      return syncedLines[index]?.text || syncedLines[0]?.text || '';
+    }
+    if (lyrics?.plainLyrics) {
+      return lyrics.plainLyrics.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
+    }
+    return '';
+  }, [activeLine, lyrics?.plainLyrics, syncedLines]);
+
+  const playingFromLabel = useMemo(() => {
+    const album = String(albumName(currentSong) || '').trim();
+    const title = String(currentSong?.name || currentSong?.title || '').trim();
+    if (album && album.toLowerCase() !== title.toLowerCase()) return album;
+    return 'Harmonia';
+  }, [currentSong]);
+
   const recentQueueSuggestions = useMemo(() => {
     const queued = new Set(queue.map((song) => String(song.id || '')));
     const seen = new Set<string>();
@@ -175,27 +196,30 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     let active = true;
-    if (panel !== 'lyrics' || !currentSong) return;
+    if (!currentSong) return;
 
     const controller = new AbortController();
-    setLyricsLoading(true);
-    setLyrics(null);
-    fetchLyrics(currentSong, controller.signal)
-      .then((value) => {
-        if (active) setLyrics(value);
-      })
-      .catch((cause: any) => {
-        if (active && cause?.name !== 'AbortError') setLyrics(null);
-      })
-      .finally(() => {
-        if (active) setLyricsLoading(false);
-      });
+    const timeout = setTimeout(() => {
+      setLyricsLoading(true);
+      setLyrics(null);
+      fetchLyrics(currentSong, controller.signal)
+        .then((value) => {
+          if (active) setLyrics(value);
+        })
+        .catch((cause: any) => {
+          if (active && cause?.name !== 'AbortError') setLyrics(null);
+        })
+        .finally(() => {
+          if (active) setLyricsLoading(false);
+        });
+    }, 120);
 
     return () => {
       active = false;
+      clearTimeout(timeout);
       controller.abort();
     };
-  }, [currentSong, panel]);
+  }, [currentSong]);
 
   if (!currentSong) {
     return (
@@ -267,17 +291,28 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {!!cover && (
-        <Image
-          source={{ uri: cover }}
-          blurRadius={28}
-          contentFit="cover"
-          style={[StyleSheet.absoluteFill, styles.backdropImage]}
-          cachePolicy="memory-disk"
-          recyclingKey={String(currentSong.id || cover)}
-        />
+        <>
+          <Image
+            source={{ uri: cover }}
+            blurRadius={58}
+            contentFit="cover"
+            style={[StyleSheet.absoluteFill, styles.backdropImage]}
+            cachePolicy="memory-disk"
+            recyclingKey={String(currentSong.id || cover)}
+          />
+          <Image
+            source={{ uri: cover }}
+            blurRadius={18}
+            contentFit="cover"
+            style={[StyleSheet.absoluteFill, styles.backdropGlow]}
+            cachePolicy="memory-disk"
+            recyclingKey={`glow-${String(currentSong.id || cover)}`}
+          />
+        </>
       )}
-      <View style={styles.backdropTint} />
-      <View style={styles.backdropFade} />
+      <View style={styles.backdropTopWash} />
+      <View style={styles.backdropMiddleWash} />
+      <View style={styles.backdropBottomWash} />
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
@@ -286,7 +321,7 @@ export default function PlayerScreen() {
           </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.playingFrom}>Playing from</Text>
-            <Text numberOfLines={1} style={styles.album}>{albumName(currentSong) || 'Harmonia'}</Text>
+            <Text numberOfLines={1} style={styles.album}>{playingFromLabel}</Text>
           </View>
           <Pressable onPress={() => togglePanel('tools')} style={styles.roundButton} accessibilityLabel="More options">
             <Ionicons name="ellipsis-horizontal" size={22} color="#FFF" />
@@ -374,27 +409,55 @@ export default function PlayerScreen() {
           <View style={styles.secondaryControls}>
             <Pressable
               onPress={() => togglePanel('queue')}
-              style={styles.secondaryControl}
+              style={[styles.secondaryControl, panel === 'queue' && styles.secondaryControlActive]}
               accessibilityLabel="Queue"
             >
               <Ionicons
                 name="list-outline"
-                size={22}
-                color={panel === 'queue' ? '#FFF' : 'rgba(255,255,255,0.62)'}
+                size={20}
+                color={panel === 'queue' ? '#111' : 'rgba(255,255,255,0.78)'}
               />
+              <Text style={[styles.secondaryControlText, panel === 'queue' && styles.secondaryControlTextActive]}>Queue</Text>
             </Pressable>
             <Pressable
               onPress={() => togglePanel('lyrics')}
-              style={styles.secondaryControl}
+              style={[styles.secondaryControl, panel === 'lyrics' && styles.secondaryControlActive]}
               accessibilityLabel="Lyrics"
             >
               <Ionicons
                 name="mic-outline"
-                size={21}
-                color={panel === 'lyrics' ? '#FFF' : 'rgba(255,255,255,0.62)'}
+                size={19}
+                color={panel === 'lyrics' ? '#111' : 'rgba(255,255,255,0.78)'}
               />
+              <Text style={[styles.secondaryControlText, panel === 'lyrics' && styles.secondaryControlTextActive]}>Lyrics</Text>
             </Pressable>
           </View>
+
+          {panel === 'none' && (
+            <Pressable
+              onPress={() => togglePanel('lyrics')}
+              style={({ pressed }) => [styles.lyricsPeek, pressed && styles.lyricsPeekPressed]}
+              accessibilityLabel="Open lyrics"
+            >
+              <View style={styles.lyricsPeekHeader}>
+                <View>
+                  <Text style={styles.lyricsPeekTitle}>Lyrics</Text>
+                  <Text style={styles.lyricsPeekProvider}>{lyrics?.lyricsProvider || 'Harmonia'}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={19} color="rgba(255,255,255,0.72)" />
+              </View>
+              {lyricsLoading ? (
+                <View style={styles.lyricsPeekLoading}>
+                  <View style={[styles.lyricsSkeleton, { width: '84%' }]} />
+                  <View style={[styles.lyricsSkeleton, { width: '62%' }]} />
+                </View>
+              ) : previewLyric ? (
+                <Text numberOfLines={2} style={styles.lyricsPeekLine}>{previewLyric}</Text>
+              ) : (
+                <Text style={styles.lyricsPeekEmpty}>Tap to find lyrics for this track</Text>
+              )}
+            </Pressable>
+          )}
 
           {panel === 'lyrics' && (
             <View style={styles.panel}>
@@ -744,9 +807,11 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
-  backdropImage: { opacity: 0.48, transform: [{ scale: 1.18 }] },
-  backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5,5,5,0.64)' },
-  backdropFade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.14)' },
+  backdropImage: { opacity: 0.9, transform: [{ scale: 1.42 }] },
+  backdropGlow: { opacity: 0.16, transform: [{ scale: 1.78 }] },
+  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
+  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '42%', bottom: '28%', backgroundColor: 'rgba(0,0,0,0.16)' },
+  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '44%', backgroundColor: 'rgba(0,0,0,0.58)' },
   safe: { flex: 1, paddingHorizontal: 16 },
   scroll: { paddingBottom: 16 },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -758,8 +823,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCopy: { alignItems: 'center', flex: 1, paddingHorizontal: 12 },
-  playingFrom: { color: 'rgba(255,255,255,0.88)', fontSize: 15, fontWeight: '700' },
-  album: { color: 'rgba(255,255,255,0.56)', fontSize: 13, fontWeight: '500', marginTop: 2, maxWidth: 210 },
+  playingFrom: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '700', fontFamily: PLAYER_FONT },
+  album: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 2, maxWidth: 210 },
   artworkWrap: { minHeight: 408, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 34 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
   artwork: {
@@ -772,8 +837,8 @@ const styles = StyleSheet.create({
   meta: { paddingTop: 20, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   likeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#FFF', fontSize: 21, fontWeight: '800', letterSpacing: -0.35 },
-  artist: { color: 'rgba(255,255,255,0.62)', fontSize: 16, marginTop: 4 },
+  title: { color: '#FFF', fontSize: 22, fontWeight: '800', fontFamily: PLAYER_FONT, letterSpacing: -0.45 },
+  artist: { color: 'rgba(255,255,255,0.66)', fontSize: 16, fontFamily: PLAYER_FONT, marginTop: 4 },
   timeline: { paddingTop: 22 },
   track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
@@ -802,17 +867,43 @@ const styles = StyleSheet.create({
   secondaryControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
+    gap: 10,
+    marginTop: 4,
     marginBottom: 12,
   },
   secondaryControl: {
-    width: 46,
+    flex: 1,
     height: 44,
     borderRadius: 22,
+    flexDirection: 'row',
+    gap: 7,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
+  secondaryControlActive: { backgroundColor: '#F3F3F3', borderColor: '#F3F3F3' },
+  secondaryControlText: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '750' as any, fontFamily: PLAYER_FONT },
+  secondaryControlTextActive: { color: '#111' },
+  lyricsPeek: {
+    minHeight: 112,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  lyricsPeekPressed: { opacity: 0.82, transform: [{ scale: 0.992 }] },
+  lyricsPeekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  lyricsPeekTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', fontFamily: PLAYER_FONT },
+  lyricsPeekProvider: { color: 'rgba(255,255,255,0.48)', fontSize: 9, fontWeight: '700', fontFamily: PLAYER_FONT, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
+  lyricsPeekLine: { color: '#FFF', fontSize: 19, lineHeight: 25, fontWeight: '700', fontFamily: PLAYER_FONT, marginTop: 14 },
+  lyricsPeekEmpty: { color: 'rgba(255,255,255,0.56)', fontSize: 13, fontFamily: PLAYER_FONT, marginTop: 16 },
+  lyricsPeekLoading: { gap: 8, marginTop: 16 },
+  lyricsSkeleton: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.13)' },
   panel: {
     minHeight: 178,
     borderRadius: 20,
@@ -823,18 +914,18 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  panelTitle: { color: '#F2F2F2', fontSize: 18, fontWeight: '800' },
+  panelTitle: { color: '#F2F2F2', fontSize: 20, fontWeight: '800', fontFamily: PLAYER_FONT },
   panelMeta: { color: '#707070', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   panelLoading: { height: 120, justifyContent: 'center' },
   panelEmpty: { color: '#777', fontSize: 14, paddingVertical: 38, textAlign: 'center' },
   lyricsScroll: { maxHeight: 310 },
   lyrics: { gap: 10, paddingBottom: 18 },
   lyricTap: { minHeight: 38, justifyContent: 'center' },
-  lyricLine: { color: '#777', fontSize: 18, lineHeight: 23, fontWeight: '650' as any },
-  lyricWord: { color: '#777' },
+  lyricLine: { color: 'rgba(255,255,255,0.34)', fontSize: 22, lineHeight: 28, fontWeight: '700', fontFamily: PLAYER_FONT },
+  lyricWord: { color: 'rgba(255,255,255,0.34)' },
   lyricWordActive: { color: '#FFF' },
-  lyricActive: { color: '#FFF', fontSize: 24, lineHeight: 29, fontWeight: '800' },
-  plainLyrics: { color: '#CFCFCF', fontSize: 17, lineHeight: 25 },
+  lyricActive: { color: '#FFF', fontSize: 28, lineHeight: 34, fontWeight: '800', fontFamily: PLAYER_FONT },
+  plainLyrics: { color: 'rgba(255,255,255,0.82)', fontSize: 20, lineHeight: 29, fontWeight: '650' as any, fontFamily: PLAYER_FONT },
   queueList: { gap: 4 },
   queueRow: { minHeight: 58, borderRadius: 13, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   queueRowActive: { backgroundColor: 'rgba(255,255,255,0.09)' },
