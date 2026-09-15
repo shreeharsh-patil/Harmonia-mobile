@@ -293,13 +293,26 @@ async function withTimeout<T>(
   timeoutMs: number
 ) {
   const controller = new AbortController();
+  let timedOut = false;
   const abortParent = () => controller.abort();
   if (parentSignal?.aborted) controller.abort();
   else parentSignal?.addEventListener('abort', abortParent, { once: true });
 
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   try {
     return await operation(controller.signal);
+  } catch (error) {
+    // Do not let a timeout owned by this provider masquerade as the caller's
+    // AbortSignal. The caller may still have another client/provider to try.
+    if (timedOut && !parentSignal?.aborted) {
+      const timeoutError = new Error('YouTube Music request timed out.');
+      timeoutError.name = 'TimeoutError';
+      throw timeoutError;
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', abortParent);

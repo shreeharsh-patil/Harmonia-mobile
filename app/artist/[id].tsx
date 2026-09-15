@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,7 +43,7 @@ export default function ArtistScreen() {
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const loadGenerationRef = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     if (!id) {
       setArtist(null);
@@ -75,7 +75,7 @@ export default function ArtistScreen() {
       setError((artistResult.reason as any)?.message || 'Unable to load this artist');
     }
     setLoading(false);
-  };
+  }, [id]);
 
   useEffect(() => {
     setArtist(null);
@@ -86,7 +86,7 @@ export default function ArtistScreen() {
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [id]);
+  }, [load]);
 
   const visibleSongs = useMemo(() => {
     if (songs.length) return songs;

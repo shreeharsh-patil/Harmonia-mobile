@@ -50,15 +50,41 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const activeTicketRef = useRef<string | null>(null);
   const completedTicketsRef = useRef(new Set<string>());
   const tokenRef = useRef(token);
-  tokenRef.current = token;
+  const sessionGenerationRef = useRef(0);
+  const sessionWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  const enqueueSessionWrite = useCallback((operation: () => Promise<unknown>) => {
+    const pending = sessionWriteChainRef.current
+      .catch(() => {})
+      .then(operation);
+    sessionWriteChainRef.current = pending.catch(() => {});
+    return pending;
+  }, []);
 
   const adoptSession = useCallback(async (accessToken: string, nextUser: HarmoniaUser) => {
-    await writeAccessToken(accessToken);
-    await writeCachedUser(nextUser).catch(() => {});
+    const previousToken = tokenRef.current;
+    const generation = ++sessionGenerationRef.current;
+    // Mark the pending account immediately so older refreshes cannot update or
+    // clear it while secure persistence is still completing.
+    tokenRef.current = accessToken;
+
+    try {
+      await enqueueSessionWrite(async () => {
+        await writeAccessToken(accessToken);
+        await writeCachedUser(nextUser).catch(() => {});
+      });
+    } catch (cause) {
+      if (sessionGenerationRef.current === generation) {
+        tokenRef.current = previousToken;
+      }
+      throw cause;
+    }
+
+    if (sessionGenerationRef.current !== generation) return;
     setToken(accessToken);
     setUser(nextUser);
     setError(null);
-  }, []);
+  }, [enqueueSessionWrite]);
 
   const processDeepLink = useCallback(async (url?: string | null) => {
     if (!url || !url.includes('oauthredirect')) return;
@@ -96,6 +122,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let active = true;
+    const startupGeneration = sessionGenerationRef.current;
     const subscription = Linking.addEventListener('url', ({ url }) => {
       void processDeepLink(url);
     });
@@ -107,15 +134,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
           await processDeepLink(initialUrl);
         }
 
+        if (!active || sessionGenerationRef.current !== startupGeneration) return;
+
         const [saved, cachedUser] = await Promise.all([
           readAccessToken(),
           readCachedUser(),
         ]);
 
-        if (!saved || !active) return;
+        if (
+          !saved ||
+          !active ||
+          sessionGenerationRef.current !== startupGeneration
+        ) return;
 
         // Restore a usable session immediately. A slow or unavailable network
         // must not sign a valid user out of the app.
+        tokenRef.current = saved;
         setToken(saved);
         if (cachedUser) {
           setUser(cachedUser);
@@ -126,7 +160,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         try {
           const result = await fetchMe(saved);
-          if (!active) return;
+          if (
+            !active ||
+            sessionGenerationRef.current !== startupGeneration ||
+            tokenRef.current !== saved
+          ) return;
           setUser(result.user);
           await writeCachedUser(result.user).catch(() => {});
           setError(null);
@@ -136,11 +174,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
             (cause.status === 401 || cause.status === 403);
 
           if (rejected) {
-            await Promise.all([
+            if (
+              sessionGenerationRef.current !== startupGeneration ||
+              tokenRef.current !== saved
+            ) return;
+            const clearGeneration = ++sessionGenerationRef.current;
+            tokenRef.current = null;
+            await enqueueSessionWrite(() => Promise.all([
               clearAccessToken().catch(() => {}),
               clearCachedUser().catch(() => {}),
-            ]);
-            if (active) {
+            ]));
+            if (active && sessionGenerationRef.current === clearGeneration) {
               setToken(null);
               setUser(null);
             }
@@ -150,7 +194,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       } catch {
         // Secure storage itself failed. Do not pretend a session was restored.
-        if (active) {
+        if (active && sessionGenerationRef.current === startupGeneration) {
+          tokenRef.current = null;
           setToken(null);
           setUser(null);
         }
@@ -163,7 +208,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       active = false;
       subscription.remove();
     };
-  }, [processDeepLink]);
+  }, [enqueueSessionWrite, processDeepLink]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setAuthenticating(true);
@@ -201,14 +246,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await Promise.all([
-      clearAccessToken().catch(() => {}),
-      clearCachedUser().catch(() => {}),
-    ]);
+    const generation = ++sessionGenerationRef.current;
+    tokenRef.current = null;
     setToken(null);
     setUser(null);
     setError(null);
-  }, []);
+
+    await enqueueSessionWrite(() => Promise.all([
+      clearAccessToken().catch(() => {}),
+      clearCachedUser().catch(() => {}),
+    ]));
+
+    // A newer sign-in may have been queued while storage was clearing.
+    if (sessionGenerationRef.current !== generation) return;
+  }, [enqueueSessionWrite]);
 
   const refreshUser = useCallback(async () => {
     if (!token) return;
@@ -224,20 +275,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (tokenRef.current !== refreshToken) return;
       if (
         cause instanceof ApiError &&
-        (cause.status === 401 || cause.status === 403)
+        (cause.status === 401 || cause.status === 403) &&
+        tokenRef.current === refreshToken
       ) {
-        await Promise.all([
+        const clearGeneration = ++sessionGenerationRef.current;
+        tokenRef.current = null;
+        await enqueueSessionWrite(() => Promise.all([
           clearAccessToken().catch(() => {}),
           clearCachedUser().catch(() => {}),
-        ]);
-        if (tokenRef.current === refreshToken) {
+        ]));
+        if (sessionGenerationRef.current === clearGeneration) {
           setToken(null);
           setUser(null);
         }
       }
       throw cause;
     }
-  }, [token]);
+  }, [enqueueSessionWrite, token]);
 
   const value = useMemo<AuthContextValue>(() => ({
     token,

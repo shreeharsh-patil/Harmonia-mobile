@@ -74,7 +74,8 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    manual ? setRefreshing(true) : setLoading(true);
+    if (manual) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const library = await fetchLibrary(token);

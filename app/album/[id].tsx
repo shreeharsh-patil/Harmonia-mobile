@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -46,7 +46,7 @@ export default function AlbumScreen() {
     [album]
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     if (!id) {
       setAlbum(null);
@@ -69,7 +69,7 @@ export default function AlbumScreen() {
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     setAlbum(null);
@@ -78,7 +78,7 @@ export default function AlbumScreen() {
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [id]);
+  }, [load]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;

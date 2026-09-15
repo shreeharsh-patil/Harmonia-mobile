@@ -22,7 +22,6 @@ import {
   searchStaticCatalog,
 } from '@/src/lib/staticCatalog';
 import type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
-export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 import type {
   HarmoniaAlbum,
   HarmoniaArtistEntity,
@@ -34,6 +33,7 @@ import type {
   SearchPayload,
   Song,
 } from '@/src/types';
+export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 
 export type LyricsResult = {
   syncedLyrics?: string | null;
@@ -894,7 +894,7 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
   const q = encodeURIComponent(`${artist} ${title}`);
   if (HAS_HARMONIA_API) {
     try {
-      const search = await requestJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
+      const search = await requestJson<(LyricsResult & { trackName?: string; artistName?: string })[]>(
         `/api/proxy/lyrics?endpoint=search&q=${q}`,
         { signal }
       );
@@ -907,7 +907,7 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
     }
   }
 
-  const search = await fetchLyricsJson<Array<LyricsResult & { trackName?: string; artistName?: string }>>(
+  const search = await fetchLyricsJson<(LyricsResult & { trackName?: string; artistName?: string })[]>(
     `https://lrclib.net/api/search?q=${q}`,
     signal
   );

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import type { Playlist } from '@/src/types';
 

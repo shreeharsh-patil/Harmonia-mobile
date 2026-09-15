@@ -127,11 +127,15 @@ async function requestJson(
   }
 ) {
   const controller = new AbortController();
+  let timedOut = false;
   const abortParent = () => controller.abort();
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener('abort', abortParent, { once: true });
 
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   try {
     const query = new URLSearchParams(params);
     const response = await fetchImpl(`${JIOSAAVN_API_URL}?${query.toString()}`, {
@@ -145,6 +149,16 @@ async function requestJson(
     });
     if (!response.ok) return null;
     return response.json().catch(() => null);
+  } catch (error) {
+    // An internal provider timeout is a provider failure, not a caller
+    // cancellation. Keeping those cases distinct lets the stream resolver try
+    // the next provider while still stopping immediately when the caller aborts.
+    if (timedOut && !signal?.aborted) {
+      const timeoutError = new Error('JioSaavn request timed out.');
+      timeoutError.name = 'TimeoutError';
+      throw timeoutError;
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abortParent);
@@ -651,12 +665,12 @@ export type DirectSaavnArtist = {
   image: string | null;
   followerCount: number | null;
   topTracks: DirectSaavnTrack[];
-  albums: Array<{
+  albums: {
     id: string;
     title: string;
     year: string | null;
     image: string | null;
-  }>;
+  }[];
 };
 
 function providerImage(value: any) {
