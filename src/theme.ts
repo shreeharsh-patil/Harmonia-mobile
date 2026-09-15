@@ -1,17 +1,19 @@
+// Harmonia app palette mirrored from the web player's dark theme.
 export const colors = {
-  background: '#000000',
-  surface: '#0D0D0D',
-  surfaceRaised: '#181818',
-  surfaceHover: '#222222',
-  border: '#242424',
+  background: '#121212',
+  surface: '#171717',
+  surfaceRaised: '#242424',
+  surfaceHover: '#313131',
+  border: '#292929',
   borderStrong: '#323232',
-  text: '#E6E6E6',
-  textStrong: '#FFFFFF',
-  muted: '#808080',
-  mutedDim: '#5D5D5D',
-  accent: '#10B981',
-  accentDark: '#006239',
-  danger: '#F3727F',
+  text: '#E2E8F0',
+  textStrong: '#FAFAFA',
+  muted: '#A2A2A2',
+  mutedDim: '#707070',
+  accent: '#006239',
+  accentBright: '#4ADE80',
+  accentDark: '#064E3B',
+  danger: '#EDE9E8',
 } as const;
 
 export const radii = {

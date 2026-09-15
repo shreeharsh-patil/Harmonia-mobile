@@ -822,11 +822,11 @@ export default function PlayerScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#080808' },
-  backdropImage: { opacity: 0.82, transform: [{ scale: 1.24 }] },
-  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.15)' },
-  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '40%', bottom: '30%', backgroundColor: 'rgba(0,0,0,0.18)' },
-  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', backgroundColor: 'rgba(0,0,0,0.56)' },
+  root: { flex: 1, backgroundColor: '#121212' },
+  backdropImage: { opacity: 0.88, transform: [{ scale: 1.28 }] },
+  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.10)' },
+  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '40%', bottom: '30%', backgroundColor: 'rgba(0,0,0,0.32)' },
+  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '52%', backgroundColor: 'rgba(0,0,0,0.72)' },
   safe: { flex: 1, paddingHorizontal: 16 },
   scroll: { paddingBottom: 16 },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -933,9 +933,9 @@ const styles = StyleSheet.create({
   panel: {
     minHeight: 178,
     borderRadius: 20,
-    backgroundColor: 'rgba(12,12,12,0.82)',
+    backgroundColor: 'rgba(31,31,31,0.90)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.11)',
+    borderColor: 'rgba(255,255,255,0.10)',
     padding: 16,
     marginBottom: 18,
   },
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
   secondary: { width: 46, height: 38, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: '#A0A0A0', fontWeight: '700', fontSize: 13 },
   device: { color: '#626262', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
-  empty: { flex: 1, backgroundColor: '#090909', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  empty: { flex: 1, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', padding: 24 },
   close: { position: 'absolute', top: 56, left: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   closeText: { color: '#FFF', fontSize: 28 },
   emptyTitle: { color: '#FFF', fontSize: 25, fontWeight: '800' },
