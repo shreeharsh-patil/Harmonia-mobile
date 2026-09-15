@@ -145,7 +145,7 @@ export default function PlayerScreen() {
     () => activeLyricWordIndex(syncedLines[activeLine], position),
     [activeLine, position, syncedLines]
   );
-  const playingFromLabel = useMemo(() => 'Music', [currentSong?.id]);
+  const playingFromLabel = 'Music';
 
   const recentQueueSuggestions = useMemo(() => {
     const queued = new Set(queue.map((song) => String(song.id || '')));
@@ -220,9 +220,9 @@ export default function PlayerScreen() {
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel === 'queue' || panel === 'tools';
-  const playerContentWidth = Math.max(0, width - 32);
+  const playerContentWidth = Math.max(0, width - 40);
   const artworkSize = Math.min(compactArtwork ? 244 : 332, Math.max(0, width - 44));
-  const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
+  const controlsFixedWidth = 42 + 52 + 80 + 52 + 42;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
