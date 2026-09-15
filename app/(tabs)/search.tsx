@@ -40,20 +40,10 @@ type BrowseCategory = {
   name: string;
   query: string;
   color: string;
-  coverImage?: string;
-  subtitle?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  coverImage: string;
 };
 
 const BROWSE_CATEGORIES: BrowseCategory[] = [
-  {
-    id: 'radio',
-    name: 'Live Radio',
-    query: 'Live Radio',
-    color: '#2C8F74',
-    subtitle: 'Tune into world stations',
-    icon: 'radio-outline',
-  },
   { id: 'hindi', name: 'Hindi', query: 'Hindi Hits', color: '#A47C34', coverImage: 'https://c.saavncdn.com/editorial/charts_Hindi1990s_136920_20240408061858_500x500.jpg' },
   { id: 'english', name: 'English', query: 'English Hits', color: '#687880', coverImage: 'https://c.saavncdn.com/editorial/EnglishNurseryRhymes_20240902092448_500x500.jpg' },
   { id: 'new-releases', name: 'New Releases', query: 'New Releases', color: '#3C4044', coverImage: 'https://c.saavncdn.com/editorial/TaazaTunes_20260626100440_500x500.jpg' },
@@ -347,24 +337,15 @@ export default function SearchScreen() {
               >
                 <View style={styles.browseCardCopy}>
                   <Text numberOfLines={2} style={styles.browseCardTitle}>{category.name}</Text>
-                  {!!category.subtitle && (
-                    <Text numberOfLines={2} style={styles.browseCardSubtitle}>{category.subtitle}</Text>
-                  )}
                 </View>
 
                 <View style={styles.browseArtworkWrap}>
-                  {category.coverImage ? (
-                    <Image
-                      source={{ uri: category.coverImage }}
-                      style={styles.browseArtwork}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={styles.radioArtwork}>
-                      <Ionicons name={category.icon || 'radio-outline'} size={34} color="#FFF" />
-                    </View>
-                  )}
+                  <Image
+                    source={{ uri: category.coverImage }}
+                    style={styles.browseArtwork}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 </View>
               </Pressable>
             ))}
@@ -499,7 +480,6 @@ const styles = StyleSheet.create({
   browseCardPressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
   browseCardCopy: { paddingHorizontal: 14, paddingTop: 15, paddingRight: '30%' },
   browseCardTitle: { color: '#FFF', fontSize: 17, lineHeight: 21, fontWeight: '800', letterSpacing: -0.25 },
-  browseCardSubtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 11, lineHeight: 15, fontWeight: '500', marginTop: 5, maxWidth: 125 },
   browseArtworkWrap: {
     position: 'absolute',
     right: -13,
@@ -516,7 +496,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   browseArtwork: { width: '100%', height: '100%' },
-  radioArtwork: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.14)' },
   recentFooter: { marginTop: 28, paddingBottom: 4 },
   recentFooterTitle: { color: '#DADADA', fontSize: 16, fontWeight: '800', marginBottom: 10 },
   recentFooterRow: { gap: 8, paddingRight: 16 },

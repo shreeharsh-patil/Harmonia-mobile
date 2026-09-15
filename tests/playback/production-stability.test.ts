@@ -141,7 +141,8 @@ test('search UI keeps full Harmonia discovery and web-parity browse categories',
   assert.ok(source.includes('placeholder="What do you want to listen to?"'));
   assert.match(source, /BROWSE_CATEGORIES/);
   assert.match(source, />Browse all</);
-  assert.match(source, /name: 'Live Radio'/);
+  assert.doesNotMatch(source, /name: 'Live Radio'/);
+  assert.doesNotMatch(source, /id: 'radio'/);
   assert.match(source, /name: 'Rock'/);
   assert.match(source, /BROWSE_CATEGORIES\.map/);
   assert.doesNotMatch(source, /showAllCategories/);
