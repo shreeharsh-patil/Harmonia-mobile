@@ -34,13 +34,6 @@ import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from
 
 type FeedTab = 'all' | 'music' | 'podcasts' | 'radio';
 
-const FEED_TABS: { id: FeedTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'music', label: 'Music' },
-  { id: 'podcasts', label: 'Podcasts' },
-  { id: 'radio', label: 'Radio' },
-];
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -53,7 +46,7 @@ export default function HomeScreen() {
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<HarmoniaAlbum[]>([]);
   const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
-  const [activeFeedTab, setActiveFeedTab] = useState<FeedTab>('all');
+  const [activeFeedTab] = useState<FeedTab>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,23 +165,6 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
       >
         <View pointerEvents="none" style={styles.ambientGlow} />
-
-        <View style={styles.feedTabs}>
-          {FEED_TABS.map((tab) => {
-            const active = activeFeedTab === tab.id;
-            return (
-              <Pressable
-                key={tab.id}
-                onPress={() => setActiveFeedTab(tab.id)}
-                style={[styles.feedPill, active && styles.feedPillActive]}
-              >
-                <Text style={[styles.feedPillText, active && styles.feedPillTextActive]}>
-                  {tab.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
 
         {showMusicFeed ? (
           <>
