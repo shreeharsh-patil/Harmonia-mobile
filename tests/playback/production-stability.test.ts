@@ -542,6 +542,19 @@ test('lyrics use logarithmic timing lookup instead of rescanning each tick', asy
 });
 
 
+test('lyrics overlay uses artwork-driven fades and measured line positions', async () => {
+  const source = await readFile('app/player.tsx', 'utf8');
+
+  assert.match(source, /lyricLineLayouts/);
+  assert.match(source, /lyricsViewportHeight \* 0\.43/);
+  assert.match(source, /event\.nativeEvent\.layout\.height/);
+  assert.match(source, /source=\{\{ uri: PLAYER_BACKGROUND_FADE \}\}/);
+  assert.doesNotMatch(source, /lyricsBackdropBottomWash/);
+  assert.doesNotMatch(source, /activeLine \* 82 - 112,[\s\S]*animated: true/);
+  assert.doesNotMatch(source, /textShadowRadius: shadowRadius/);
+});
+
+
 test('Canvas fully unmounts when motion is disabled and proxy work is bounded', async () => {
   const renderer = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
