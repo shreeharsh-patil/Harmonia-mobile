@@ -142,7 +142,17 @@ test('search UI keeps full Harmonia discovery and web-parity browse categories',
   assert.match(source, /BROWSE_CATEGORIES/);
   assert.match(source, />Browse all</);
   assert.match(source, /name: 'Live Radio'/);
+  assert.match(source, /name: 'Rock'/);
+  assert.match(source, /BROWSE_CATEGORIES\.map/);
+  assert.doesNotMatch(source, /showAllCategories/);
+  assert.match(source, /height: 112/);
   assert.match(source, /searchMusic\(trimmed, 30, controller\.signal\)/);
+});
+
+test('bottom navigation excludes the removed Create tab', async () => {
+  const source = await readFile('app/(tabs)/_layout.tsx', 'utf8');
+  assert.doesNotMatch(source, /name="create"/);
+  assert.doesNotMatch(source, /title: 'Create'/);
 });
 
 
