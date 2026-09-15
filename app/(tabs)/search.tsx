@@ -378,14 +378,10 @@ export default function SearchScreen() {
             }}
             style={styles.input}
           />
-          {!!query ? (
+          {!!query && (
             <Pressable onPress={() => setQuery('')} style={styles.clear} accessibilityLabel="Clear search">
               <Ionicons name="close-circle" size={21} color="#7A7A7A" />
             </Pressable>
-          ) : (
-            <View style={styles.voiceIcon} accessibilityElementsHidden>
-              <Ionicons name="mic-outline" size={24} color="#8B8B8B" />
-            </View>
           )}
         </View>
       </View>
@@ -540,7 +536,6 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: colors.textStrong, fontSize: 17, fontWeight: '650' as any, paddingVertical: 0 },
   clear: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
-  voiceIcon: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
   results: { paddingHorizontal: 16, paddingTop: 14 },
   railSection: { marginBottom: 27, paddingTop: 8 },
   rail: { gap: 12, paddingRight: 10 },
