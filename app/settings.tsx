@@ -26,7 +26,7 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlaybackActivity, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 
-const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
+const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
   { value: 'automatic', label: 'Automatic' },
   { value: 'data-saver', label: 'Data Saver' },
   { value: 'normal', label: 'Normal' },
@@ -35,7 +35,7 @@ const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
 ];
 
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const TIMER_OPTIONS: Array<{ value: SleepTimerMode; label: string }> = [
+const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 15, label: '15 min' },
   { value: 30, label: '30 min' },
@@ -146,8 +146,15 @@ export default function SettingsScreen() {
   };
 
   const signOutNow = async () => {
-    await signOut();
-    router.replace('/(tabs)');
+    try {
+      await signOut();
+      router.replace('/(tabs)');
+    } catch {
+      Alert.alert(
+        'Sign out incomplete',
+        'Harmonia could not remove the saved session from this phone. Please try again.'
+      );
+    }
   };
 
   return (

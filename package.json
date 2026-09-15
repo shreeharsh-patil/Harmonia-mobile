@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "build:apk": "eas build -p android --profile preview",
     "build:android": "eas build -p android --profile production",
-    "test": "tsx --test tests/playback/**/*.test.ts",
+    "test": "node --import tsx --test tests/playback/**/*.test.ts",
     "sync:catalog": "node scripts/sync-static-catalog.mjs",
     "eas-build-post-install": "npm run sync:catalog:required",
     "sync:catalog:required": "node scripts/sync-static-catalog.mjs --required"
@@ -23,13 +23,20 @@
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "crypto-js": "^4.2.0",
     "expo": "~57.0.1",
+    "expo-asset": "~57.0.17",
     "expo-audio": "~57.0.4",
+    "expo-constants": "~57.0.18",
     "expo-file-system": "~57.0.6",
+    "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.2",
     "expo-image": "~57.0.4",
+    "expo-image-manipulator": "~57.0.17",
+    "expo-image-picker": "~57.0.16",
     "expo-linking": "~57.0.9",
     "expo-media-library": "~57.0.5",
+    "expo-network": "~57.0.2",
     "expo-router": "~57.0.20",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
@@ -37,18 +44,17 @@
     "expo-web-browser": "~57.0.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native": "0.86.0",
-    "react-native-safe-area-context": "~5.6.2",
-    "react-native-screens": "~4.26.0",
-    "expo-image-picker": "~57.0.16",
-    "expo-image-manipulator": "~57.0.17",
-    "expo-network": "~57.0.2",
-    "crypto-js": "^4.2.0"
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.2.0",
-    "typescript": "~5.9.2",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
+    "eslint-import-resolver-typescript": "^3.10.1",
     "tsx": "^4.20.5",
-    "@types/crypto-js": "^4.2.2"
+    "typescript": "~5.9.2"
   }
 }

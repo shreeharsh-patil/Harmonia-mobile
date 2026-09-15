@@ -12,14 +12,14 @@ type StaticCatalogSnapshot = {
   source?: string;
   generatedAt?: string | null;
   stats?: { sections?: number; playlists?: number; songs?: number };
-  sections?: Array<MusicSection & { genreId?: string; genreName?: string }>;
+  sections?: (MusicSection & { genreId?: string; genreName?: string })[];
   songs?: Song[];
 };
 
 // This file is overwritten with the compact catalog during EAS builds by
 // scripts/sync-static-catalog.mjs. Keeping a tiny checked-in placeholder makes
 // typecheck/local setup deterministic even before the first catalog sync.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 const bundledCatalog = require('../../assets/catalog/harmonia-catalog.json') as StaticCatalogSnapshot;
 
 const CURATED_SECTIONS = [
@@ -172,7 +172,7 @@ function deriveArtists(matchedSongs: Song[], query: string, limit: number): Harm
   const result: HarmoniaArtistEntity[] = [];
 
   for (const song of matchedSongs) {
-    const rawArtists: Array<{ id?: string; name: string; image?: any }> = Array.isArray(song.artists)
+    const rawArtists: { id?: string; name: string; image?: any }[] = Array.isArray(song.artists)
       ? song.artists
       : Array.isArray(song.artists?.primary)
         ? song.artists.primary

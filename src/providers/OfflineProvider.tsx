@@ -42,6 +42,10 @@ type OfflineContextValue = {
 };
 
 const OfflineContext = createContext<OfflineContextValue | null>(null);
+type OfflinePlaybackContextValue = Pick<OfflineContextValue, 'getOfflineUri'>;
+const OfflinePlaybackContext = createContext<OfflinePlaybackContextValue | null>(null);
+
+const DOWNLOAD_PROGRESS_UPDATE_MS = 250;
 
 function safeName(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 100) || 'track';
@@ -61,8 +65,8 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const downloadEpochRef = useRef(0);
   const downloadsMutationRef = useRef(0);
   const downloadsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
-
-  downloadsRef.current = downloads;
+  const progressUpdatedAtRef = useRef(new Map<string, number>());
+  const mountedRef = useRef(true);
 
   const persist = useCallback(async (next: DownloadedTrack[]) => {
     downloadsMutationRef.current += 1;
@@ -123,6 +127,23 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
+  useEffect(() => {
+    const activeTasks = activeDownloadTasksRef.current;
+    const cancelledDownloads = cancelledDownloadsRef.current;
+    const progressUpdatedAt = progressUpdatedAtRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      downloadEpochRef.current += 1;
+      for (const [id, task] of activeTasks) {
+        cancelledDownloads.add(id);
+        task.cancel();
+      }
+      activeTasks.clear();
+      progressUpdatedAt.clear();
+    };
+  }, []);
+
   const byId = useMemo(
     () => new Map(downloads.map((item) => [String(item.song.id), item])),
     [downloads]
@@ -149,6 +170,7 @@ export function OfflineProvider({ children }: PropsWithChildren) {
 
     activeDownloadsRef.current.add(id);
     cancelledDownloadsRef.current.delete(id);
+    progressUpdatedAtRef.current.set(id, Date.now());
     const downloadEpoch = downloadEpochRef.current;
     setDownloading((current) => ({ ...current, [id]: 0 }));
     setDownloadFailures((current) => {
@@ -191,8 +213,12 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       const task = File.createDownloadTask(resolved.url, destination, {
         ...(resolved.headers ? { headers: resolved.headers } : {}),
         onProgress: ({ bytesWritten, totalBytes }) => {
-          if (cancelledDownloadsRef.current.has(id)) return;
+          if (!mountedRef.current || cancelledDownloadsRef.current.has(id)) return;
           const progress = totalBytes > 0 ? bytesWritten / totalBytes : 0;
+          const now = Date.now();
+          const lastUpdate = progressUpdatedAtRef.current.get(id) || 0;
+          if (progress < 1 && now - lastUpdate < DOWNLOAD_PROGRESS_UPDATE_MS) return;
+          progressUpdatedAtRef.current.set(id, now);
           setDownloading((current) => ({ ...current, [id]: progress }));
         },
       });
@@ -240,11 +266,14 @@ export function OfflineProvider({ children }: PropsWithChildren) {
       activeDownloadsRef.current.delete(id);
       activeDownloadTasksRef.current.delete(id);
       cancelledDownloadsRef.current.delete(id);
-      setDownloading((current) => {
-        const next = { ...current };
-        delete next[id];
-        return next;
-      });
+      progressUpdatedAtRef.current.delete(id);
+      if (mountedRef.current) {
+        setDownloading((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }
     }
   }, [byId, networkConnected, networkType, persist, wifiOnlyDownloads]);
 
@@ -334,11 +363,25 @@ export function OfflineProvider({ children }: PropsWithChildren) {
     clearDownloadFailure,
   ]);
 
-  return <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>;
+  const playbackValue = useMemo<OfflinePlaybackContextValue>(() => ({
+    getOfflineUri,
+  }), [getOfflineUri]);
+
+  return (
+    <OfflinePlaybackContext.Provider value={playbackValue}>
+      <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>
+    </OfflinePlaybackContext.Provider>
+  );
 }
 
 export function useOffline() {
   const value = useContext(OfflineContext);
   if (!value) throw new Error('useOffline must be used inside OfflineProvider');
+  return value;
+}
+
+export function useOfflinePlayback() {
+  const value = useContext(OfflinePlaybackContext);
+  if (!value) throw new Error('useOfflinePlayback must be used inside OfflineProvider');
   return value;
 }

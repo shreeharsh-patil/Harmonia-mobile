@@ -56,7 +56,7 @@ export function LocalMusicProvider({ children }: PropsWithChildren) {
       // Media-library metadata calls can be surprisingly expensive on Android.
       // Process a small batch at a time instead of opening ~200 native requests
       // concurrently, which previously caused visible CPU/I/O spikes and heat.
-      const mapped: Array<Song | null> = [];
+      const mapped: (Song | null)[] = [];
       const batchSize = 12;
 
       for (let start = 0; start < assets.length; start += batchSize) {

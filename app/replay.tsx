@@ -58,7 +58,7 @@ export default function ReplayScreen() {
   }, [topTracks]);
 
   const days = useMemo(() => {
-    const result: Array<{ key: string; label: string; seconds: number }> = [];
+    const result: { key: string; label: string; seconds: number }[] = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
       const date = new Date();
       date.setDate(date.getDate() - offset);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -70,7 +70,7 @@ export default function PlaylistScreen() {
     [id, ownedPlaylists]
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     if (!id) {
       setPlaylist(null);
@@ -100,7 +100,7 @@ export default function PlaylistScreen() {
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false);
     }
-  };
+  }, [id, token]);
 
   useEffect(() => {
     setPlaylist(null);
@@ -111,7 +111,7 @@ export default function PlaylistScreen() {
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [id, token]);
+  }, [load]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;

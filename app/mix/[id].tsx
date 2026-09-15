@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -37,7 +37,7 @@ export default function MixScreen() {
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const loadGenerationRef = useRef(0);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     if (!token || !id) {
       setMix(null);
@@ -67,7 +67,7 @@ export default function MixScreen() {
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false);
     }
-  };
+  }, [id, token]);
 
   useEffect(() => {
     setMix(null);
@@ -77,7 +77,7 @@ export default function MixScreen() {
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [id, token]);
+  }, [load]);
 
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!songs.length || playing) return;

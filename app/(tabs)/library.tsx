@@ -196,7 +196,7 @@ export default function LibraryScreen() {
           ['downloads', `Downloads · ${downloads.length}`],
           ['local', 'On device'],
           ['history', 'History'],
-        ] as Array<[LibraryTab, string]>).map(([value, label]) => (
+        ] as [LibraryTab, string][]).map(([value, label]) => (
           <Pressable key={value} onPress={() => setTab(value)} style={[styles.chip, tab === value && styles.chipActive]}>
             <Text style={[styles.chipText, tab === value && styles.chipTextActive]}>{label}</Text>
           </Pressable>

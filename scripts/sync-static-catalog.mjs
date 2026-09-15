@@ -1,5 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
 import path from 'node:path';
 
 const OWNER = 'shreeharsh-patil';

@@ -26,14 +26,14 @@ import { useOffline } from '@/src/providers/OfflineProvider';
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
 
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const QUALITY_OPTIONS: Array<{ value: StreamQuality; label: string }> = [
+const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
   { value: 'automatic', label: 'Auto' },
   { value: 'data-saver', label: 'Saver' },
   { value: 'normal', label: 'Normal' },
   { value: 'high', label: 'High' },
   { value: 'maximum', label: 'Max' },
 ];
-const TIMER_OPTIONS: Array<{ value: SleepTimerMode; label: string }> = [
+const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
   { value: 15, label: '15m' },
   { value: 30, label: '30m' },
   { value: 45, label: '45m' },
@@ -194,7 +194,7 @@ export default function PlayerScreen() {
       active = false;
       controller.abort();
     };
-  }, [currentSong?.id, panel]);
+  }, [currentSong, panel]);
 
   if (!currentSong) {
     return (
