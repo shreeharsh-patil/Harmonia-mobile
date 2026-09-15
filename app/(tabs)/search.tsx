@@ -35,6 +35,118 @@ import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song
 
 const MAX_RECENT_SEARCHES = 10;
 
+type BrowseCategory = {
+  id: string;
+  name: string;
+  query: string;
+  color: string;
+  coverImage?: string;
+  subtitle?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+};
+
+const BROWSE_CATEGORIES: BrowseCategory[] = [
+  {
+    id: 'radio',
+    name: 'Live Radio',
+    query: 'Live Radio',
+    color: '#2C8F74',
+    subtitle: 'Tune into world stations',
+    icon: 'radio-outline',
+  },
+  {
+    id: 'hindi',
+    name: 'Hindi',
+    query: 'Hindi Hits',
+    color: '#7F2415',
+    coverImage: 'https://c.saavncdn.com/editorial/charts_Hindi1990s_136920_20240408061858_500x500.jpg',
+  },
+  {
+    id: 'english',
+    name: 'English',
+    query: 'English Hits',
+    color: '#625F3D',
+    coverImage: 'https://c.saavncdn.com/editorial/EnglishNurseryRhymes_20240902092448_500x500.jpg',
+  },
+  {
+    id: 'new-releases',
+    name: 'New Releases',
+    query: 'New Releases',
+    color: '#B9B4B7',
+    coverImage: 'https://c.saavncdn.com/editorial/TaazaTunes_20260626100440_500x500.jpg',
+  },
+  {
+    id: 'summer',
+    name: 'Summer',
+    query: 'Summer Hits',
+    color: '#978A43',
+    coverImage: 'https://c.saavncdn.com/editorial/RetroChill_20250626045906_500x500.jpg',
+  },
+  {
+    id: 'pop',
+    name: 'Pop',
+    query: 'Pop Hits',
+    color: '#A56557',
+    coverImage: 'https://c.saavncdn.com/editorial/BestOfIndipopHindi_20260504065326_500x500.jpg',
+  },
+  {
+    id: 'charts',
+    name: 'Charts',
+    query: 'Top Songs Global',
+    color: '#9148A9',
+    coverImage: 'https://c.saavncdn.com/editorial/GlobalPop_20260608125844_500x500.jpg',
+  },
+  {
+    id: 'punjabi',
+    name: 'Punjabi',
+    query: 'Punjabi Hits',
+    color: '#CD7C68',
+    coverImage: 'https://c.saavncdn.com/editorial/PunjabiHitSongs_20260409070056_500x500.jpg',
+  },
+  {
+    id: 'telugu',
+    name: 'Telugu',
+    query: 'Telugu Hits',
+    color: '#8C503C',
+    coverImage: 'https://c.saavncdn.com/editorial/charts_Telugu1990s_157621_20240408063237_500x500.jpg',
+  },
+  {
+    id: 'malayalam',
+    name: 'Malayalam',
+    query: 'Malayalam Hits',
+    color: '#508C78',
+    coverImage: 'https://c.saavncdn.com/editorial/charts_Malayalam2000s_160867_20240408063713_500x500.jpg',
+  },
+  {
+    id: 'love',
+    name: 'Love',
+    query: 'Love Songs',
+    color: '#B9273C',
+    coverImage: 'https://c.saavncdn.com/editorial/MostStreamedLoveSongs-Hindi_20260629041408_500x500.jpg',
+  },
+  {
+    id: 'party',
+    name: 'Party',
+    query: 'Party Hits',
+    color: '#8E367F',
+    coverImage: 'https://c.saavncdn.com/editorial/BestOfDanceHindi_20260622051632_500x500.jpg',
+  },
+  {
+    id: 'chill',
+    name: 'Chill',
+    query: 'Chill Hits',
+    color: '#477D95',
+    coverImage: 'https://c.saavncdn.com/editorial/FILTRDilKaSukoon_20250515094823_500x500.jpg',
+  },
+  {
+    id: 'workout',
+    name: 'Workout',
+    query: 'Workout Beats',
+    color: '#776850',
+    coverImage: 'https://c.saavncdn.com/editorial/BollywoodRockWorkoutMix_20240229050234_500x500.jpg',
+  },
+];
+
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const { isLiked } = useLibrary();
@@ -46,6 +158,7 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const [retrySeq, setRetrySeq] = useState(0);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const recentSearchesRef = useRef<string[]>([]);
   const recentMutationRef = useRef(0);
   const recentWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -154,12 +267,6 @@ export default function SearchScreen() {
     await persistRecentSearches(next).catch(() => {});
   };
 
-  const clearRecent = async () => {
-    recentMutationRef.current += 1;
-    commitRecentSearches([]);
-    await persistRecentSearches([]).catch(() => {});
-  };
-
   const openPlaylist = (playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (!id) return;
@@ -182,6 +289,13 @@ export default function SearchScreen() {
     void rememberSearch();
     Keyboard.dismiss();
     router.push({ pathname: '/artist/[id]', params: { id } });
+  };
+
+  const browseCategories = showAllCategories ? BROWSE_CATEGORIES : BROWSE_CATEGORIES.slice(0, 8);
+
+  const openBrowseCategory = (category: BrowseCategory) => {
+    setQuery(category.query);
+    Keyboard.dismiss();
   };
 
   const header = (
@@ -264,10 +378,14 @@ export default function SearchScreen() {
             }}
             style={styles.input}
           />
-          {!!query && (
+          {!!query ? (
             <Pressable onPress={() => setQuery('')} style={styles.clear} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={20} color="#6F6F6F" />
+              <Ionicons name="close-circle" size={21} color="#7A7A7A" />
             </Pressable>
+          ) : (
+            <View style={styles.voiceIcon} accessibilityElementsHidden>
+              <Ionicons name="mic-outline" size={24} color="#8B8B8B" />
+            </View>
           )}
         </View>
       </View>
@@ -277,30 +395,65 @@ export default function SearchScreen() {
           contentContainerStyle={[styles.idleContent, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
         >
-          {!!recentSearches.length ? (
-            <View>
-              <View style={styles.recentHead}>
-                <Text style={styles.sectionTitle}>Recent searches</Text>
-                <Pressable onPress={() => void clearRecent()} hitSlop={10}>
-                  <Text style={styles.clearRecent}>Clear</Text>
-                </Pressable>
-              </View>
-              <View style={styles.recentWrap}>
-                {recentSearches.map((item) => (
-                  <Pressable key={item} onPress={() => setQuery(item)} style={styles.recentChip}>
-                    <Ionicons name="time-outline" size={15} color="#777" />
-                    <Text numberOfLines={1} style={styles.recentText}>{item}</Text>
+          <View style={styles.browseHead}>
+            <Text style={styles.browseTitle}>Browse all</Text>
+            <Pressable
+              onPress={() => setShowAllCategories((value) => !value)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={showAllCategories ? 'Show fewer categories' : 'See all categories'}
+            >
+              <Text style={styles.seeAll}>{showAllCategories ? 'Show less' : 'See all'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.browseGrid}>
+            {browseCategories.map((category) => (
+              <Pressable
+                key={category.id}
+                onPress={() => openBrowseCategory(category)}
+                style={({ pressed }) => [
+                  styles.browseCard,
+                  { backgroundColor: category.color },
+                  pressed && styles.browseCardPressed,
+                ]}
+              >
+                <View style={styles.browseCardCopy}>
+                  <Text numberOfLines={2} style={styles.browseCardTitle}>{category.name}</Text>
+                  {!!category.subtitle && (
+                    <Text numberOfLines={2} style={styles.browseCardSubtitle}>{category.subtitle}</Text>
+                  )}
+                </View>
+
+                <View style={styles.browseArtworkWrap}>
+                  {category.coverImage ? (
+                    <Image
+                      source={{ uri: category.coverImage }}
+                      style={styles.browseArtwork}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  ) : (
+                    <View style={styles.radioArtwork}>
+                      <Ionicons name={category.icon || 'radio-outline'} size={34} color="#FFF" />
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            ))}
+          </View>
+
+          {!!recentSearches.length && (
+            <View style={styles.recentFooter}>
+              <Text style={styles.recentFooterTitle}>Recent searches</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentFooterRow}>
+                {recentSearches.slice(0, 6).map((item) => (
+                  <Pressable key={item} onPress={() => setQuery(item)} style={styles.recentFooterChip}>
+                    <Ionicons name="time-outline" size={14} color="#898989" />
+                    <Text numberOfLines={1} style={styles.recentFooterText}>{item}</Text>
                   </Pressable>
                 ))}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.discover}>
-              <Text style={styles.discoverKicker}>FIND YOUR NEXT TRACK</Text>
-              <Text style={styles.discoverTitle}>Search the Harmonia catalog.</Text>
-              <Text style={styles.discoverBody}>
-                Bundled Harmonia discovery plus direct JioSaavn keeps songs, playlists, artists and albums available even without account sync.
-              </Text>
+              </ScrollView>
             </View>
           )}
         </ScrollView>
@@ -370,23 +523,24 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: 'rgba(0,0,0,0.96)',
+    borderBottomColor: '#1D1D1D',
+    backgroundColor: '#0D0D0D',
   },
   searchBox: {
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceRaised,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: '#171717',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 9,
+    paddingHorizontal: 16,
+    gap: 11,
   },
-  input: { flex: 1, color: colors.textStrong, fontSize: 16, fontWeight: '500', paddingVertical: 0 },
-  clear: { width: 30, height: 32, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, color: colors.textStrong, fontSize: 17, fontWeight: '650' as any, paddingVertical: 0 },
+  clear: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
+  voiceIcon: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
   results: { paddingHorizontal: 16, paddingTop: 14 },
   railSection: { marginBottom: 27, paddingTop: 8 },
   rail: { gap: 12, paddingRight: 10 },
@@ -399,16 +553,49 @@ const styles = StyleSheet.create({
   entityTitle: { color: '#E8E8E8', fontSize: 13, fontWeight: '700', marginTop: 8 },
   entityMeta: { color: '#676767', fontSize: 11, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
-  idleContent: { flexGrow: 1, paddingHorizontal: 18 },
-  discover: { flex: 1, justifyContent: 'center', paddingHorizontal: 12, paddingBottom: 80 },
-  discoverKicker: { color: '#575757', fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
-  discoverTitle: { color: '#F4F4F4', fontSize: 28, lineHeight: 33, fontWeight: '800', letterSpacing: -0.8, marginTop: 8 },
-  discoverBody: { color: '#737373', fontSize: 15, lineHeight: 22, marginTop: 10, maxWidth: 330 },
-  recentHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12 },
-  clearRecent: { color: '#818181', fontSize: 12, fontWeight: '700' },
-  recentWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  recentChip: { maxWidth: '100%', height: 39, borderRadius: 13, borderWidth: StyleSheet.hairlineWidth, borderColor: '#282828', backgroundColor: '#111', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12 },
-  recentText: { color: '#B7B7B7', fontSize: 12, fontWeight: '600', maxWidth: 230 },
+  idleContent: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 24 },
+  browseHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
+  browseTitle: { color: '#F3F3F3', fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  seeAll: { color: '#9B9B9B', fontSize: 15, fontWeight: '700' },
+  browseGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  browseCard: {
+    width: '48.4%',
+    aspectRatio: 1.45,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  browseCardPressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
+  browseCardCopy: { paddingHorizontal: 14, paddingTop: 15, paddingRight: '30%' },
+  browseCardTitle: { color: '#FFF', fontSize: 17, lineHeight: 21, fontWeight: '800', letterSpacing: -0.25 },
+  browseCardSubtitle: { color: 'rgba(255,255,255,0.72)', fontSize: 11, lineHeight: 15, fontWeight: '500', marginTop: 5, maxWidth: 125 },
+  browseArtworkWrap: {
+    position: 'absolute',
+    right: -13,
+    bottom: -13,
+    width: '49%',
+    aspectRatio: 1,
+    borderRadius: 7,
+    overflow: 'hidden',
+    transform: [{ rotate: '25deg' }],
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 7,
+    shadowOffset: { width: -3, height: 4 },
+    elevation: 6,
+  },
+  browseArtwork: { width: '100%', height: '100%' },
+  radioArtwork: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.14)' },
+  recentFooter: { marginTop: 28, paddingBottom: 4 },
+  recentFooterTitle: { color: '#DADADA', fontSize: 16, fontWeight: '800', marginBottom: 10 },
+  recentFooterRow: { gap: 8, paddingRight: 16 },
+  recentFooterChip: { height: 38, borderRadius: 19, backgroundColor: '#171717', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12 },
+  recentFooterText: { color: '#B8B8B8', fontSize: 12, fontWeight: '600', maxWidth: 150 },
   errorTitle: { color: '#ECECEC', fontSize: 18, fontWeight: '800' },
   error: { color: '#888', textAlign: 'center', marginTop: 7, lineHeight: 19 },
   retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: '#EEE', paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
