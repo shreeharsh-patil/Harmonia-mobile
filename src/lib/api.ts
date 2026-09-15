@@ -663,7 +663,7 @@ async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
       const payload = await requestJson<{
         success: true;
         data?: { tracks?: any[] };
-      }>('/api/trending-songs?playlist=india&limit=30&v=9', { timeoutMs: 8_000 });
+      }>('/api/trending-songs?playlist=india&limit=30&v=10', { timeoutMs: 8_000 });
       songs = (payload.data?.tracks || [])
         .map(normalizeTrendingTrack)
         .filter((song): song is Song => Boolean(song))
