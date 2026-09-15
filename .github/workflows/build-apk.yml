@@ -66,4 +66,4 @@ jobs:
             --title "Harmonia Mobile APK" \
             --notes "Standalone Android APK built from the current main branch. Download Harmonia-mobile.apk on your Android phone and install it."
 
-# Release trigger: 2026-09-15
+# Release trigger: 2026-09-15-ui-cleanup
