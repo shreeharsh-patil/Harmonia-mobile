@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import {
@@ -29,6 +29,7 @@ export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boo
 }
 
 export function MiniPlayer() {
+  const pathname = usePathname();
   const {
     currentSong,
     isPlaying,
@@ -41,6 +42,23 @@ export function MiniPlayer() {
   if (!currentSong) return null;
 
   const cover = artworkUrl(currentSong, 96);
+  const playingFrom = pathname.includes('/search')
+    ? 'Search Results'
+    : pathname.includes('/library')
+      ? 'Your Library'
+      : pathname.includes('/catalog')
+        ? 'Discover'
+        : 'Music';
+
+  const openPlayer = (panel?: 'lyrics') => {
+    router.push({
+      pathname: '/player',
+      params: {
+        from: playingFrom,
+        ...(panel ? { panel } : {}),
+      },
+    });
+  };
 
   return (
     <View style={styles.shell}>
@@ -60,7 +78,7 @@ export function MiniPlayer() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Open Now Playing for ${currentSong.name}`}
-          onPress={() => router.push('/player')}
+          onPress={() => openPlayer()}
           style={styles.info}
         >
           <TrackArtwork song={currentSong} size={42} radius={4} />
@@ -73,7 +91,7 @@ export function MiniPlayer() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Lyrics"
-          onPress={() => router.push({ pathname: '/player', params: { panel: 'lyrics' } })}
+          onPress={() => openPlayer('lyrics')}
           style={styles.smallControl}
         >
           <Ionicons name="mic-outline" size={16} color="rgba(255,255,255,0.68)" />
