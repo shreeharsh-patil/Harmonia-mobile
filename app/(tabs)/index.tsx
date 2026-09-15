@@ -56,7 +56,7 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { token } = useAuth();
   const { likedSongs } = useLibrary();
-  const { currentSong, playSong } = usePlayer();
+  const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
   const { history } = usePlaybackHistory();
 
   const [sections, setSections] = useState<MusicSection[]>([]);
@@ -294,14 +294,43 @@ export default function HomeScreen() {
                             <Pressable
                               key={String(song.id)}
                               accessibilityRole="button"
-                              accessibilityLabel={`Play ${song.name || 'song'}`}
-                              onPress={() => void playSong(song, trendingSongs)}
+                              accessibilityLabel={
+                                String(currentSong?.id || '') === String(song.id || '') && isPlaying
+                                  ? `Pause ${song.name || 'song'}`
+                                  : `Play ${song.name || 'song'}`
+                              }
+                              onPress={() => {
+                                if (String(currentSong?.id || '') === String(song.id || '')) {
+                                  void togglePlayback();
+                                } else {
+                                  void playSong(song, trendingSongs);
+                                }
+                              }}
                               style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
                             >
-                              <TrackArtwork song={song} size={52} radius={8} />
+                              <View style={styles.chartArtworkWrap}>
+                                <TrackArtwork song={song} size={52} radius={10} />
+                                {String(currentSong?.id || '') === String(song.id || '') && (
+                                  <View style={styles.chartPlaybackOverlay}>
+                                    <Ionicons
+                                      name={isPlaying ? 'pause' : 'play'}
+                                      size={18}
+                                      color="#FFF"
+                                    />
+                                  </View>
+                                )}
+                              </View>
                               <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
                               <View style={styles.chartCopy}>
-                                <Text numberOfLines={1} style={styles.chartTitle}>{song.name}</Text>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    styles.chartTitle,
+                                    String(currentSong?.id || '') === String(song.id || '') && styles.chartTitleActive,
+                                  ]}
+                                >
+                                  {song.name || song.title || 'Untitled Track'}
+                                </Text>
                                 <Text numberOfLines={1} style={styles.chartArtist}>{artistNames(song)}</Text>
                               </View>
                             </Pressable>
@@ -664,6 +693,19 @@ const styles = StyleSheet.create({
   chartArrowDisabled: { opacity: 0.35 },
   chartRail: { gap: 10, paddingRight: 8 },
   chartColumn: { gap: 6 },
+  chartArtworkWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  chartPlaybackOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
   chartRow: {
     minHeight: 64,
     borderRadius: 12,
@@ -683,6 +725,7 @@ const styles = StyleSheet.create({
   },
   chartCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
   chartTitle: { color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: '700' },
+  chartTitleActive: { color: colors.accentBright, fontWeight: '800' },
   chartArtist: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 2 },
   errorBox: {
     borderRadius: 9,
