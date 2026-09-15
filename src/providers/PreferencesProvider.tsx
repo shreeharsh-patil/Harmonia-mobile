@@ -43,7 +43,7 @@ type StoredPreferences = {
 const DEFAULTS: StoredPreferences = {
   networkAwareQuality: true,
   wifiQuality: 'maximum',
-  cellularQuality: 'normal',
+  cellularQuality: 'high',
   batterySaver: false,
   wifiOnlyDownloads: false,
 };

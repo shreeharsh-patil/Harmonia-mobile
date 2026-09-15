@@ -70,8 +70,8 @@ function streamCandidates(url: string, supports320: boolean): DirectSaavnCandida
   if (!match) {
     return [{
       url,
-      quality: supports320 ? '320kbps' : 'unknown',
-      bitrate: supports320 ? 320000 : 0,
+      quality: 'unknown',
+      bitrate: 0,
       codec: 'aac',
       mimeType: 'audio/mp4',
     }];

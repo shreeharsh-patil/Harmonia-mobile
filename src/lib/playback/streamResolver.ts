@@ -154,13 +154,38 @@ function parseNumericBitrate(value: unknown) {
   return 0;
 }
 
+function bitrateFromUrl(value: unknown) {
+  const text = String(value || '').trim();
+  if (!text) return 0;
+
+  try {
+    const parsed = new URL(text, 'https://harmonia.local');
+    for (const key of ['bitrate', 'br', 'abr', 'audioBitrate']) {
+      const raw = parsed.searchParams.get(key);
+      const direct = parseNumericBitrate(raw);
+      if (direct) return direct;
+    }
+
+    const quality = parsed.searchParams.get('quality');
+    const qualityMatch = String(quality || '').match(/(\d{2,4})\s*k(?:bps)?/i);
+    if (qualityMatch) return Number(qualityMatch[1]) * 1000;
+  } catch {}
+
+  const pathMatch =
+    text.match(/_(48|64|96|128|160|192|256|320)\.(?:mp4|m4a|aac|mp3|opus|ogg|webm)(?=[?#]|$)/i) ||
+    text.match(/(?:^|[\/_-])(48|64|96|128|160|192|256|320)\s*k(?:bps)?(?=[\/_?.#-]|$)/i);
+  return pathMatch ? Number(pathMatch[1]) * 1000 : 0;
+}
+
 function candidateBitrate(item: any) {
   const direct = parseNumericBitrate(item?.bitrate);
   if (direct) return direct;
 
   const label = String(item?.quality || item?.codec || '').toLowerCase();
   const match = label.match(/(\d{2,4})\s*k(?:bps)?/i) || label.match(/(\d{2,4})/);
-  return match ? Number(match[1]) * 1000 : 0;
+  if (match) return Number(match[1]) * 1000;
+
+  return bitrateFromUrl(item?.url || item?.link || item?.downloadUrl || item?.src);
 }
 
 function isLosslessCandidate(item: any) {
@@ -185,9 +210,22 @@ function qualityCeiling(quality: StreamQuality) {
   }
 }
 
+function codecPreference(candidate: AudioCandidate) {
+  const label = [candidate.codec, candidate.mimeType, candidate.url]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (/(flac|alac|wav)/.test(label)) return 500;
+  if (/opus/.test(label)) return 400;
+  if (/(aac|m4a|audio\/mp4)/.test(label)) return 300;
+  if (/vorbis/.test(label)) return 250;
+  if (/mp3|mpeg/.test(label)) return 200;
+  return 0;
+}
+
 function candidateScore(candidate: AudioCandidate) {
-  if (candidate.lossless) return 10_000_000 + Number(candidate.bitrate || 0);
-  return Number(candidate.bitrate || 1);
+  if (candidate.lossless) return 1_000_000_000_000 + Number(candidate.bitrate || 0);
+  return Number(candidate.bitrate || 0) * 1000 + codecPreference(candidate);
 }
 
 function normalizeCandidate(item: any): AudioCandidate | null {

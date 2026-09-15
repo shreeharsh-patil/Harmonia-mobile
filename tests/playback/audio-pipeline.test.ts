@@ -377,7 +377,7 @@ test('17 native preloading stays on one track while resolver warms one extra can
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /queueRef\.current\[indexRef\.current \+ 1\]/);
   assert.match(source, /queueRef\.current\[indexRef\.current \+ 2\]/);
-  assert.match(source, /preferredForwardBufferDuration: 12/);
+  assert.match(source, /preferredForwardBufferDuration: 18/);
   assert.match(source, /priority: 'low'/);
   assert.match(source, /clearPreloadedSource/);
 });
@@ -1214,3 +1214,59 @@ test('48 caller cancellation still stops direct providers immediately', async ()
     (error: any) => error?.name === 'AbortError'
   );
 });
+
+test('49 embedded candidates infer CDN bitrate and honor the requested ceiling', () => {
+  const target = song({
+    downloadUrl: [
+      { url: 'https://aac.saavncdn.com/001/song_96.mp4?token=a' },
+      { url: 'https://aac.saavncdn.com/001/song_320.mp4?token=b' },
+      { url: 'https://aac.saavncdn.com/001/song_160.mp4?token=c' },
+    ],
+  });
+
+  const normal = getAudioCandidates(target, 'normal');
+  const maximum = getAudioCandidates(target, 'maximum');
+
+  assert.match(normal[0].url, /_160\.mp4/);
+  assert.equal(normal[0].bitrate, 160000);
+  assert.match(maximum[0].url, /_320\.mp4/);
+  assert.equal(maximum[0].bitrate, 320000);
+});
+
+test('50 playback defaults favor high cellular quality with a larger forward buffer', async () => {
+  const preferences = await readFile('src/providers/PreferencesProvider.tsx', 'utf8');
+  const player = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+
+  assert.match(preferences, /cellularQuality: 'high'/);
+  assert.match(player, /preferredForwardBufferDuration: 18/);
+});
+
+test('51 JioSaavn does not label an unknown CDN URL as 320kbps', async () => {
+  const providers = createHarmoniaProviders({
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('song.getDetails')) {
+        return json(saavnDetails(
+          'unknown-quality-id',
+          'https://aac.saavncdn.com/001/tokenized-audio.mp4?Expires=9999999999',
+          { supports320: true }
+        ));
+      }
+      throw new Error(`unexpected request: ${url}`);
+    },
+  });
+
+  const jio = providers.find((provider) => provider.id === 'jiosaavn');
+  assert.ok(jio);
+
+  const resolved = await jio!.resolve(song({
+    id: 'unknown-quality-id',
+    songId: 'unknown-quality-id',
+    source: 'jiosaavn',
+  }), { quality: 'maximum' });
+
+  assert.equal(resolved.bitrate, null);
+  assert.equal(resolved.quality, 'unknown');
+});
+
