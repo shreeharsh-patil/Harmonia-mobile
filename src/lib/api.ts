@@ -508,18 +508,6 @@ export async function fetchHomeSections(): Promise<MusicSection[]> {
   return getStaticHomeSections();
 }
 
-export async function fetchCommunityPlaylists(limit = 20): Promise<Playlist[]> {
-  if (!HAS_HARMONIA_API) return [];
-  try {
-    const payload = await requestJson<{ success: true; data: Playlist[] }>(
-      `/api/playlists/community?limit=${Math.max(1, Math.min(50, limit))}&page=0`
-    );
-    return Array.isArray(payload.data) ? payload.data : [];
-  } catch {
-    return [];
-  }
-}
-
 export async function fetchTrendingHomeContent(): Promise<{
   albums: HarmoniaAlbum[];
   songs: Song[];
