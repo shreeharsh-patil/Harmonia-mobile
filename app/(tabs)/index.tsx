@@ -32,7 +32,6 @@ import { usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
-type FeedTab = 'all' | 'music' | 'podcasts' | 'radio';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -46,7 +45,6 @@ export default function HomeScreen() {
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<HarmoniaAlbum[]>([]);
   const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
-  const [activeFeedTab] = useState<FeedTab>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +143,6 @@ export default function HomeScreen() {
     trendingSongs.length > 0;
 
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
-  const showMusicFeed = activeFeedTab === 'all' || activeFeedTab === 'music';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -166,8 +163,6 @@ export default function HomeScreen() {
       >
         <View pointerEvents="none" style={styles.ambientGlow} />
 
-        {showMusicFeed ? (
-          <>
             <View style={styles.quickGrid}>
               <Pressable
                 onPress={() => {
@@ -328,22 +323,6 @@ export default function HomeScreen() {
                 )}
               </>
             )}
-          </>
-        ) : (
-          <View style={styles.feedEmpty}>
-            <Ionicons
-              name={activeFeedTab === 'radio' ? 'radio-outline' : 'mic-outline'}
-              size={30}
-              color="#767676"
-            />
-            <Text style={styles.feedEmptyTitle}>
-              {activeFeedTab === 'radio' ? 'Radio feed' : 'Podcasts'}
-            </Text>
-            <Text style={styles.feedEmptyBody}>
-              This feed will appear here when its Harmonia provider is connected.
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -517,23 +496,6 @@ const styles = StyleSheet.create({
     borderRadius: 140,
     backgroundColor: 'rgba(69,10,245,0.08)',
   },
-  feedTabs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  feedPill: {
-    minHeight: 28,
-    paddingHorizontal: 15,
-    borderRadius: 999,
-    backgroundColor: '#121212',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedPillActive: { backgroundColor: '#F2F2F2' },
-  feedPillText: { color: '#BDBDBD', fontSize: 10, fontWeight: '600' },
-  feedPillTextActive: { color: '#111', fontWeight: '800' },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -643,14 +605,6 @@ const styles = StyleSheet.create({
   empty: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: '#E7E7E7', fontSize: 15, fontWeight: '800' },
   emptyBody: { color: '#777', fontSize: 11, marginTop: 5 },
-  feedEmpty: {
-    minHeight: 320,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 36,
-  },
-  feedEmptyTitle: { color: '#E8E8E8', fontSize: 18, fontWeight: '800', marginTop: 12 },
-  feedEmptyBody: { color: '#737373', fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 6 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
   skeletonWrap: { paddingTop: 2 },
   skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: '#171717', marginBottom: 9 },
