@@ -879,16 +879,112 @@ async function fetchLyricsJson<T>(url: string, parentSignal?: AbortSignal): Prom
   }
 }
 
+type LyricsCandidate = LyricsResult & {
+  trackName?: string;
+  artistName?: string;
+  albumName?: string;
+  duration?: number;
+};
+
+function cleanLyricsMetadata(value: string) {
+  const normalized = String(value || '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;/gi, "'")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
+
+  const withoutDescriptors = normalized
+    .replace(/\s*[\(\[][^\)\]]*(official|video|audio|lyric|lyrics|lyrical|edit|feat|ft|with|clip|remaster|mono|stereo|single|ep|album|ost)[^\)\]]*[\)\]]/gi, '')
+    .replace(/\s*[\(\[][^\)\]]*from\s+["']?[^\)\]]+["']?[^\)\]]*[\)\]]/gi, '')
+    .replace(/\s+-\s+(official|video|audio|lyric|lyrics|lyrical|edit|feat|ft|with|clip|remaster|single|ep|album|ost).*$/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return withoutDescriptors || normalized.trim();
+}
+
+function lyricsAlbumTitle(song: Song) {
+  const album = (song as any)?.album;
+  if (typeof album === 'string') return album.trim();
+  return String(album?.name || album?.title || '').trim();
+}
+
+function normalizeLyricsMatch(value?: string | null) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/[^a-z0-9\u00C0-\uFFFF]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function rankLyricsCandidate(
+  candidate: LyricsCandidate,
+  target: { title: string; artist: string; duration: number }
+) {
+  const candidateTitle = normalizeLyricsMatch(candidate.trackName);
+  const candidateArtist = normalizeLyricsMatch(candidate.artistName);
+  const title = normalizeLyricsMatch(target.title);
+  const artist = normalizeLyricsMatch(target.artist);
+  let score = 0;
+
+  if (candidate.syncedLyrics) score += 30;
+  else if (candidate.plainLyrics) score += 10;
+
+  if (candidateTitle && title) {
+    if (candidateTitle === title) score += 80;
+    else if (candidateTitle.includes(title) || title.includes(candidateTitle)) score += 42;
+  }
+
+  if (candidateArtist && artist) {
+    if (candidateArtist === artist) score += 36;
+    else {
+      const wanted = artist.split(' ').filter((part) => part.length > 2);
+      if (wanted.some((part) => candidateArtist.includes(part))) score += 18;
+    }
+  }
+
+  const candidateDuration = Number(candidate.duration || 0);
+  if (target.duration > 0 && candidateDuration > 0) {
+    const delta = Math.abs(candidateDuration - target.duration);
+    if (delta <= 2) score += 28;
+    else if (delta <= 5) score += 16;
+    else if (delta <= 10) score += 6;
+    else score -= Math.min(20, Math.round(delta / 10));
+  }
+
+  return score;
+}
+
+function bestLyricsCandidate(
+  candidates: LyricsCandidate[] | null | undefined,
+  target: { title: string; artist: string; duration: number }
+) {
+  if (!Array.isArray(candidates) || !candidates.length) return null;
+  return [...candidates]
+    .filter((item) => Boolean(item?.syncedLyrics || item?.plainLyrics))
+    .sort((a, b) => rankLyricsCandidate(b, target) - rankLyricsCandidate(a, target))[0] || null;
+}
+
 export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<LyricsResult | null> {
-  const artist = artistNames(song);
-  const title = song.name || song.title || '';
-  if (!title) return null;
+  const rawArtist = artistNames(song);
+  const rawTitle = song.name || song.title || '';
+  if (!rawTitle) return null;
+
+  // Match Harmonia Web's metadata cleanup so titles such as
+  // "Song (From \"Movie\")" can still resolve exact synced lyrics.
+  const artist = cleanLyricsMetadata(rawArtist);
+  const title = cleanLyricsMetadata(rawTitle);
+  const album = cleanLyricsMetadata(lyricsAlbumTitle(song));
+  const duration = Number(song.duration || 0);
 
   const params = new URLSearchParams({
     artist_name: artist,
     track_name: title,
   });
-  if (song.duration) params.set('duration', String(Math.round(song.duration)));
+  if (album) params.set('album_name', album);
+  if (duration) params.set('duration', String(Math.round(duration)));
 
   const getLyrics = async () => {
     if (HAS_HARMONIA_API) {
@@ -914,29 +1010,41 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
     return { ...exact, lyricsProvider: 'LRCLib' };
   }
 
-  const q = encodeURIComponent(`${artist} ${title}`);
+  const target = { title, artist, duration };
+  const queries = [
+    `${artist} ${title}`.trim(),
+    title,
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+
   if (HAS_HARMONIA_API) {
     try {
-      const search = await requestJson<(LyricsResult & { trackName?: string; artistName?: string })[]>(
-        `/api/proxy/lyrics?endpoint=search&q=${q}`,
-        { signal }
+      const serverResults = await Promise.all(
+        queries.map((query) =>
+          requestJson<LyricsCandidate[]>(
+            `/api/proxy/lyrics?endpoint=search&q=${encodeURIComponent(query)}`,
+            { signal }
+          ).catch((cause: any) => {
+            if (signal?.aborted || cause?.name === 'AbortError') throw cause;
+            return [];
+          })
+        )
       );
-      const best = Array.isArray(search)
-        ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
-        : null;
+      const best = bestLyricsCandidate(serverResults.flat(), target);
       if (best) return { ...best, lyricsProvider: 'LRCLib' };
     } catch (cause: any) {
       if (signal?.aborted || cause?.name === 'AbortError') throw cause;
     }
   }
 
-  const search = await fetchLyricsJson<(LyricsResult & { trackName?: string; artistName?: string })[]>(
-    `https://lrclib.net/api/search?q=${q}`,
-    signal
+  const directResults = await Promise.all(
+    queries.map((query) =>
+      fetchLyricsJson<LyricsCandidate[]>(
+        `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`,
+        signal
+      )
+    )
   );
-  const best = Array.isArray(search)
-    ? search.find((item) => item?.syncedLyrics) || search.find((item) => item?.plainLyrics)
-    : null;
+  const best = bestLyricsCandidate(directResults.flatMap((items) => items || []), target);
   return best ? { ...best, lyricsProvider: 'LRCLib' } : null;
 }
 
