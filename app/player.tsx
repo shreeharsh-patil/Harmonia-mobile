@@ -213,7 +213,7 @@ export default function PlayerScreen() {
   const compactArtwork = panel !== 'none';
   const playerContentWidth = Math.max(0, width - 32);
   const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
-  const controlsFixedWidth = 42 + 52 + 74 + 52 + 42;
+  const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
@@ -344,25 +344,25 @@ export default function PlayerScreen() {
             <Pressable onPress={toggleShuffle} style={styles.modeControl} accessibilityLabel="Shuffle">
               <Ionicons
                 name="shuffle"
-                size={24}
+                size={26}
                 color={shuffleEnabled ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
-              <Ionicons name="play-skip-back" size={38} color="#FFF" />
+              <Ionicons name="play-skip-back" size={40} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
                 ? <ActivityIndicator color="#080808" size="large" />
-                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
-              <Ionicons name="play-skip-forward" size={38} color="#FFF" />
+              <Ionicons name="play-skip-forward" size={40} color="#FFF" />
             </Pressable>
             <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
               <Ionicons
                 name="repeat"
-                size={24}
+                size={26}
                 color={repeatMode !== 'off' ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
               />
               {repeatMode === 'one' && (
@@ -725,15 +725,17 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          <View style={styles.footer}>
-            <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
-              <Text style={styles.secondaryText}>−10</Text>
-            </Pressable>
-            <Text style={styles.device}>HARMONIA • THIS PHONE</Text>
-            <Pressable onPress={() => void seek(Math.min(duration, position + 10))} style={styles.secondary}>
-              <Text style={styles.secondaryText}>+10</Text>
-            </Pressable>
-          </View>
+          {panel !== 'none' && (
+            <View style={styles.footer}>
+              <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
+                <Text style={styles.secondaryText}>−10</Text>
+              </Pressable>
+              <Text style={styles.device}>HARMONIA • THIS PHONE</Text>
+              <Pressable onPress={() => void seek(Math.min(duration, position + 10))} style={styles.secondary}>
+                <Text style={styles.secondaryText}>+10</Text>
+              </Pressable>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
