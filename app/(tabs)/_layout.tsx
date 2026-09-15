@@ -93,7 +93,7 @@ export default function TabsLayout() {
           options={{
             title: 'Create',
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon active="add" inactive="add-outline" color={String(color)} focused={focused} />
+              <TabIcon active="add-circle" inactive="add-circle-outline" color={String(color)} focused={focused} />
             ),
           }}
         />
