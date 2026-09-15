@@ -30,6 +30,7 @@ import {
 } from '@/src/lib/listPerformance';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song } from '@/src/types';
 
 const MAX_RECENT_SEARCHES = 10;
@@ -247,14 +248,13 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.heading}>Search</Text>
         <View style={styles.searchBox}>
           <Ionicons name="search" size={19} color="#777" />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Songs, artists, albums, playlists"
-            placeholderTextColor="#656565"
+            placeholder="What do you want to listen to?"
+            placeholderTextColor={colors.muted}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
@@ -367,20 +367,34 @@ function SearchRail({ title, children }: { title: string; children: React.ReactN
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
-  header: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 13 },
-  heading: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8, marginBottom: 16 },
-  searchBox: { height: 50, borderRadius: 15, backgroundColor: '#131313', borderWidth: StyleSheet.hairlineWidth, borderColor: '#272727', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 9 },
-  input: { flex: 1, color: '#FFF', fontSize: 15, paddingVertical: 0 },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+  },
+  searchBox: {
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceRaised,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    gap: 9,
+  },
+  input: { flex: 1, color: colors.textStrong, fontSize: 16, fontWeight: '500', paddingVertical: 0 },
   clear: { width: 30, height: 32, alignItems: 'center', justifyContent: 'center' },
-  results: { paddingHorizontal: 18 },
+  results: { paddingHorizontal: 16, paddingTop: 14 },
   railSection: { marginBottom: 27, paddingTop: 8 },
   rail: { gap: 12, paddingRight: 10 },
   sectionTitle: { color: '#EEE', fontSize: 19, fontWeight: '800', marginBottom: 12 },
   artistCard: { width: 118 },
   artistImage: { width: 112, height: 112, borderRadius: 56, backgroundColor: '#111' },
   albumCard: { width: 126 },
-  albumImage: { width: 126, height: 126, borderRadius: 14, backgroundColor: '#111' },
+  albumImage: { width: 126, height: 126, borderRadius: 8, backgroundColor: colors.surfaceRaised },
   imageFallback: { alignItems: 'center', justifyContent: 'center' },
   entityTitle: { color: '#E8E8E8', fontSize: 13, fontWeight: '700', marginTop: 8 },
   entityMeta: { color: '#676767', fontSize: 11, marginTop: 3 },
@@ -400,7 +414,7 @@ const styles = StyleSheet.create({
   retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: '#EEE', paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#080808', fontWeight: '800', fontSize: 12 },
   empty: { color: '#777', textAlign: 'center', paddingVertical: 60 },
-  inlineLoading: { position: 'absolute', top: 101, right: 32 },
+  inlineLoading: { position: 'absolute', top: 26, right: 32 },
   nonBlockingError: { position: 'absolute', left: 20, right: 20, color: '#D98787', fontSize: 11, backgroundColor: '#171010', borderRadius: 10, padding: 9 },
   likedIndicator: { color: '#FFF', fontSize: 17, marginLeft: 8 },
 });
