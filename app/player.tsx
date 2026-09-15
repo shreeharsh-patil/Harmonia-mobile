@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
   artworkWrap: { minHeight: 404, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 26 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
   lyricsOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 50,
     backgroundColor: '#121212',
   },
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.7 }],
   },
   lyricsBackdropWash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(20,6,6,0.55)',
   },
   lyricsBackdropBottomWash: {
