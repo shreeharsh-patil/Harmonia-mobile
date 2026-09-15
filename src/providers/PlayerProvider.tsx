@@ -243,7 +243,7 @@ const PlaybackActivityContext = createContext<PlaybackActivityValue | null>(null
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOfflinePlayback();
   const { batterySaver, qualityFor, networkConnected } = usePreferences();
-  const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
+  const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 18 });
   const status = useAudioPlayerStatus(player);
   const [queue, setQueue] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -1388,7 +1388,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         clearPreloadedSource(previous.source).catch(() => {});
       }
 
-      preload(source, { preferredForwardBufferDuration: 12 }).catch(() => {
+      preload(source, { preferredForwardBufferDuration: 18 }).catch(() => {
         if (preloadedSourceRef.current?.key === key) preloadedSourceRef.current = null;
       });
 
