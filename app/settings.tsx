@@ -146,8 +146,15 @@ export default function SettingsScreen() {
   };
 
   const signOutNow = async () => {
-    await signOut();
-    router.replace('/(tabs)');
+    try {
+      await signOut();
+      router.replace('/(tabs)');
+    } catch {
+      Alert.alert(
+        'Sign out incomplete',
+        'Harmonia could not remove the saved session from this phone. Please try again.'
+      );
+    }
   };
 
   return (

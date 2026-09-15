@@ -304,10 +304,10 @@ async function withTimeout<T>(
   }, timeoutMs);
   try {
     return await operation(controller.signal);
-  } catch (error) {
+  } catch (error: any) {
     // Do not let a timeout owned by this provider masquerade as the caller's
     // AbortSignal. The caller may still have another client/provider to try.
-    if (timedOut && !parentSignal?.aborted) {
+    if (timedOut && !parentSignal?.aborted && error?.name === 'AbortError') {
       const timeoutError = new Error('YouTube Music request timed out.');
       timeoutError.name = 'TimeoutError';
       throw timeoutError;
@@ -371,7 +371,11 @@ export async function searchDirectYouTubeMusic(
   if (!cleanQuery) return [];
 
   try {
-    const visitor = await visitorData(fetchImpl, signal).catch(() => null);
+    const visitor = await visitorData(
+      fetchImpl,
+      signal,
+      Math.min(timeoutMs, 4500)
+    );
     const payload = await withTimeout(async (innerSignal) => {
       const response = await fetchImpl(YOUTUBE_MUSIC_SEARCH_URL, {
         method: 'POST',
@@ -520,7 +524,11 @@ export async function resolveDirectYouTubeMusicTrack(
   const cleanId = String(videoId || '').trim();
   if (!/^[A-Za-z0-9_-]{11}$/.test(cleanId)) return null;
 
-  const visitor = await visitorData(fetchImpl, signal).catch(() => null);
+  const visitor = await visitorData(
+    fetchImpl,
+    signal,
+    Math.min(timeoutMs, 4500)
+  );
 
   for (const client of PLAYER_CLIENTS) {
     if (signal?.aborted) {

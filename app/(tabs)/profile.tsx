@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -64,6 +65,18 @@ export default function ProfileScreen() {
 
   const doRefresh = async () => {
     await Promise.all([refreshUser().catch(() => {}), refresh()]);
+  };
+
+  const doSignOut = async () => {
+    try {
+      await signOut();
+      router.replace('/(tabs)');
+    } catch {
+      Alert.alert(
+        'Sign out incomplete',
+        'Harmonia could not remove the saved session from this phone. Please try again.'
+      );
+    }
   };
 
   return (
@@ -142,10 +155,7 @@ export default function ProfileScreen() {
         </View>
 
         <Pressable
-          onPress={async () => {
-            await signOut();
-            router.replace('/(tabs)');
-          }}
+          onPress={() => void doSignOut()}
           style={styles.logout}
         >
           <Text style={styles.logoutText}>Sign out</Text>

@@ -51,7 +51,10 @@ test('API requests have a bounded timeout and preserve caller cancellation', asy
   assert.match(source, /DEFAULT_API_TIMEOUT_MS = 15_000/);
   assert.match(source, /parentSignal\?\.addEventListener\('abort'/);
   assert.match(source, /Request timed out\. Check your connection and try again\./);
-  assert.match(source, /parentSignal\?\.aborted \|\| cause\?\.name === 'AbortError'/);
+  assert.match(
+    source,
+    /catch \(cause: any\) \{[\s\S]*?if \(parentSignal\?\.aborted\)[\s\S]*?if \(timedOut && cause\?\.name === 'AbortError'\)/
+  );
 });
 
 test('library responses are generation guarded against account-switch races', async () => {
@@ -666,4 +669,47 @@ test('session persistence is ordered and startup restore cannot replace a newer 
   assert.match(source, /sessionGenerationRef\.current !== startupGeneration/);
   assert.match(source, /tokenRef\.current = accessToken/);
   assert.match(source, /tokenRef\.current = null/);
+});
+
+test('provider timeouts only relabel abort failures', async () => {
+  for (const path of [
+    'src/lib/playback/jiosaavnDirect.ts',
+    'src/lib/playback/youtubeMusicDirect.ts',
+  ]) {
+    const source = await readFile(path, 'utf8');
+    assert.match(source, /timedOut && ![^\n]+\.aborted && error\?\.name === 'AbortError'/);
+  }
+
+  const youtube = await readFile('src/lib/playback/youtubeMusicDirect.ts', 'utf8');
+  assert.match(youtube, /visitorData\([\s\S]*?Math\.min\(timeoutMs, 4500\)/);
+  assert.doesNotMatch(youtube, /visitorData\([\s\S]{0,150}?\.catch\(\(\) => null\)/);
+
+  const resolver = await readFile('src/lib/playback/streamResolver.ts', 'utf8');
+  assert.match(resolver, /if \(parentSignal\?\.aborted\) throw classifyPlaybackError\(error\)/);
+  assert.match(resolver, /timedOut && error\?\.name === 'AbortError'/);
+});
+
+test('newest-started authentication wins and failed sign-out is recoverable', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+  const signIn = source.match(/const signIn = useCallback\([\s\S]*?\n  \}, \[adoptSession\]\);/)?.[0] || '';
+  const signOut = source.match(/const signOut = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/)?.[0] || '';
+
+  assert.ok(signIn.indexOf('++sessionGenerationRef.current') < signIn.indexOf('loginWithPassword'));
+  assert.match(source, /adoptSession\(result\.accessToken, result\.user, generation\)/);
+  assert.match(source, /committedTokenRef/);
+  assert.match(source, /const previousToken = committedTokenRef\.current/);
+  assert.match(source, /await writeCachedUser\(nextUser\);[\s\S]*?await clearCachedUser\(\);/);
+  assert.match(signOut, /await clearAccessToken\(\);/);
+  assert.doesNotMatch(signOut, /clearAccessToken\(\)\.catch/);
+  assert.match(signOut, /setToken\(previousToken\)/);
+  assert.match(signOut, /throw cause/);
+});
+
+test('playback refs only follow committed native status', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+
+  assert.match(
+    source,
+    /useEffect\(\(\) => \{[\s\S]*?currentTimeRef\.current = Number\(status\.currentTime \|\| 0\);[\s\S]*?nativePlayingRef\.current = Boolean\(status\.playing\);[\s\S]*?\}, \[status\.currentTime, status\.playing\]\)/
+  );
 });

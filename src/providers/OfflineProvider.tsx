@@ -68,8 +68,6 @@ export function OfflineProvider({ children }: PropsWithChildren) {
   const progressUpdatedAtRef = useRef(new Map<string, number>());
   const mountedRef = useRef(true);
 
-  downloadsRef.current = downloads;
-
   const persist = useCallback(async (next: DownloadedTrack[]) => {
     downloadsMutationRef.current += 1;
     downloadsRef.current = next;

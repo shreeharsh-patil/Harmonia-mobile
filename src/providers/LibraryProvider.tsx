@@ -57,7 +57,10 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const loadGenerationRef = useRef(0);
   const mutationKeysRef = useRef(new Set<string>());
   const tokenRef = useRef(token);
-  tokenRef.current = token;
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   const load = useCallback(async (manual = false) => {
     const generation = ++loadGenerationRef.current;

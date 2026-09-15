@@ -240,11 +240,15 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
 
     return payload as T;
   } catch (cause: any) {
-    if (timedOut) {
+    if (parentSignal?.aborted) {
+      throw cause;
+    }
+
+    if (timedOut && cause?.name === 'AbortError') {
       throw new ApiError('Request timed out. Check your connection and try again.', 408);
     }
 
-    if (parentSignal?.aborted || cause?.name === 'AbortError') {
+    if (cause?.name === 'AbortError') {
       throw cause;
     }
 

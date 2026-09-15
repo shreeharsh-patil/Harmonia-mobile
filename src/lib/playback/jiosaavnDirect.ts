@@ -149,11 +149,11 @@ async function requestJson(
     });
     if (!response.ok) return null;
     return response.json().catch(() => null);
-  } catch (error) {
+  } catch (error: any) {
     // An internal provider timeout is a provider failure, not a caller
     // cancellation. Keeping those cases distinct lets the stream resolver try
     // the next provider while still stopping immediately when the caller aborts.
-    if (timedOut && !signal?.aborted) {
+    if (timedOut && !signal?.aborted && error?.name === 'AbortError') {
       const timeoutError = new Error('JioSaavn request timed out.');
       timeoutError.name = 'TimeoutError';
       throw timeoutError;

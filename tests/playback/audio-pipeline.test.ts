@@ -1177,16 +1177,19 @@ test('47 provider timeouts remain fallback failures instead of caller cancellati
   });
   assert.deepEqual(saavn, []);
 
+  let timedYouTubeRequests = 0;
   const youtube = await searchDirectYouTubeMusic('timeout test', {
     timeoutMs: 5,
     fetchImpl: async (input, init) => {
-      if (String(input).includes('music.youtube.com/')) {
+      if (String(input).includes('/sw.js_data')) {
         return new Response('', { status: 200 });
       }
+      timedYouTubeRequests += 1;
       return waitForAbort(init?.signal);
     },
   });
   assert.deepEqual(youtube, []);
+  assert.equal(timedYouTubeRequests, 1);
 });
 
 test('48 caller cancellation still stops direct providers immediately', async () => {
@@ -1198,4 +1201,16 @@ test('48 caller cancellation still stops direct providers immediately', async ()
   });
   controller.abort();
   await assert.rejects(pending, (error: any) => error?.name === 'AbortError');
+
+  const youtubeController = new AbortController();
+  const youtubePending = searchDirectYouTubeMusic('cancel test', {
+    timeoutMs: 1_000,
+    signal: youtubeController.signal,
+    fetchImpl: async (_input, init) => waitForAbort(init?.signal),
+  });
+  youtubeController.abort();
+  await assert.rejects(
+    youtubePending,
+    (error: any) => error?.name === 'AbortError'
+  );
 });
