@@ -502,7 +502,7 @@ type TrendingHomeContent = {
 };
 
 const HOME_SECTIONS_TTL_MS = 10 * 60_000;
-const TRENDING_HOME_TTL_MS = 60 * 60_000;
+const TRENDING_HOME_TTL_MS = 15 * 60_000;
 
 let homeSectionsCache: { data: MusicSection[]; expiresAt: number } | null = null;
 let homeSectionsRequest: Promise<MusicSection[]> | null = null;
@@ -547,18 +547,150 @@ export async function fetchHomeSections(
   }
 }
 
-async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
-  const [albumResult, songResult] = await Promise.allSettled([
-    searchMusic('Latest Hindi Songs', 30),
-    searchMusic('Top Songs India', 30),
+function normalizeTrendingTrack(track: any): Song | null {
+  const id = String(track?.id || track?.songId || track?.sourceId || '').trim();
+  const name = String(track?.name || track?.title || '').trim();
+  if (!id || !name) return null;
+
+  const rawPrimary = Array.isArray(track?.artists?.primary)
+    ? track.artists.primary
+    : Array.isArray(track?.artists)
+      ? track.artists
+      : typeof track?.artists === 'string'
+        ? [{ name: track.artists }]
+        : [];
+
+  const primary = rawPrimary
+    .map((artist: any) => typeof artist === 'string' ? { name: artist } : artist)
+    .filter((artist: any) => Boolean(artist?.name));
+
+  const fallbackArtist = String(
+    track?.primaryArtists ||
+    track?.artist ||
+    (typeof track?.subtitle === 'string' ? track.subtitle.split(' - ')[0] : '') ||
+    ''
+  ).trim();
+  const artists = primary.length ? primary : (fallbackArtist ? [{ name: fallbackArtist }] : []);
+
+  const image = Array.isArray(track?.image) && track.image.length
+    ? track.image
+    : track?.cover
+      ? [{ quality: '500x500', url: track.cover }]
+      : Array.isArray(track?.spotifyImages)
+        ? track.spotifyImages
+        : [];
+
+  return normalizeSong({
+    ...track,
+    id,
+    songId: track?.songId || id,
+    sourceId: track?.sourceId || track?.saavnId || id,
+    name,
+    title: name,
+    artists: {
+      primary: artists,
+      featured: Array.isArray(track?.artists?.featured) ? track.artists.featured : [],
+      all: Array.isArray(track?.artists?.all) && track.artists.all.length
+        ? track.artists.all
+        : artists,
+    },
+    primaryArtists: track?.primaryArtists || artists.map((artist: any) => artist.name).join(', '),
+    album: track?.album?.name
+      ? track.album
+      : typeof track?.album === 'string'
+        ? { name: track.album }
+        : track?.album,
+    duration: Number(track?.duration || 0) || Math.round(Number(track?.duration_ms || 0) / 1000) || undefined,
+    image,
+    downloadUrl: Array.isArray(track?.downloadUrl) ? track.downloadUrl : [],
+    source: track?.source || 'jiosaavn',
+    provider: track?.provider || 'jiosaavn',
+  } as any);
+}
+
+function trendingPlaylistScore(title: string) {
+  const value = String(title || '').toLowerCase();
+  let score = 0;
+  if (/\btop\b/.test(value)) score += 5;
+  if (/\b50\b/.test(value)) score += 5;
+  if (/india|hindi/.test(value)) score += 5;
+  if (/trending|viral|chart|hits/.test(value)) score += 2;
+  if (/podcast|devotional|bhajan/.test(value)) score -= 6;
+  return score;
+}
+
+async function fetchDirectTrendingSongs(limit = 30): Promise<Song[]> {
+  const queryResults = await Promise.allSettled([
+    searchDirectJioSaavnPlaylists('Top 50 India', { limit: 6 }),
+    searchDirectJioSaavnPlaylists('India Top 50', { limit: 6 }),
+    searchDirectJioSaavnPlaylists('Trending Hindi', { limit: 6 }),
   ]);
 
-  const albums = albumResult.status === 'fulfilled'
-    ? (albumResult.value.albums?.results || []).slice(0, 20)
-    : [];
-  const songs = songResult.status === 'fulfilled'
-    ? (songResult.value.songs?.results || []).slice(0, 30)
-    : [];
+  const candidates = new Map<string, { id: string; title: string }>();
+  for (const result of queryResults) {
+    if (result.status !== 'fulfilled') continue;
+    for (const playlist of result.value) {
+      const id = String(playlist.id || '').trim();
+      if (!id || candidates.has(id)) continue;
+      candidates.set(id, { id, title: playlist.title || '' });
+    }
+  }
+
+  const ranked = [...candidates.values()]
+    .sort((a, b) => trendingPlaylistScore(b.title) - trendingPlaylistScore(a.title));
+
+  for (const candidate of ranked.slice(0, 4)) {
+    try {
+      const playlist = await fetchDirectJioSaavnPlaylist(candidate.id);
+      const songs = (playlist?.tracks || []).map(directTrackToSong);
+      if (songs.length >= 8) return mergeSongs(songs, [], limit);
+    } catch {}
+  }
+
+  return [];
+}
+
+async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
+  const albumPromise = searchMusic('Latest Hindi Songs', 30);
+
+  let songs: Song[] = [];
+
+  // Match Harmonia Web first: use the dedicated India chart endpoint whenever
+  // the configured Harmonia API exposes it. This preserves chart ordering and
+  // track-level artwork instead of treating a text search as a popularity chart.
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{
+        success: true;
+        data?: { tracks?: any[] };
+      }>('/api/trending-songs?playlist=india&limit=30&v=9', { timeoutMs: 8_000 });
+      songs = (payload.data?.tracks || [])
+        .map(normalizeTrendingTrack)
+        .filter((song): song is Song => Boolean(song))
+        .slice(0, 30);
+    } catch {
+      // A lightweight deployment may not expose the chart endpoint.
+    }
+  }
+
+  // Native fallback: resolve an editorial Top 50 / trending playlist directly
+  // from JioSaavn. Unlike searchMusic("Top Songs India"), this retains playlist
+  // rank order and avoids stale static-catalog search matches appearing as
+  // "trending".
+  if (!songs.length) {
+    songs = await fetchDirectTrendingSongs(30);
+  }
+
+  // Last-resort provider search keeps Home usable when editorial playlists are
+  // temporarily unavailable, without letting static catalog results lead the
+  // chart.
+  if (!songs.length) {
+    const direct = await searchDirectJioSaavn('Latest Hindi Songs', { limit: 30 });
+    songs = mergeSongs(direct.map(directTrackToSong), [], 30);
+  }
+
+  const albumResult = await Promise.resolve(albumPromise).catch(() => null);
+  const albums = (albumResult?.albums?.results || []).slice(0, 20);
 
   return { albums, songs };
 }
