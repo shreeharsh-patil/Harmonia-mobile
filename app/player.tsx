@@ -29,6 +29,8 @@ import { colors } from '@/src/theme';
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
 
 const PLAYER_FONT = Platform.OS === 'android' ? 'sans-serif' : undefined;
+const PLAYER_BACKGROUND_FADE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAIACAYAAACl/81BAAAAmElEQVR42u2XQRKAIAwDA+ML/P9jvTpeuEBN0nBk7LYUSGQAuPEaE5/Ra+ICMLK4VEresRSWm91lcTEc1bRHsuyANmf0ShuGLzReqbq365AdX6xDjtRRA60prBdDuKdOZ71GP3QcmcUKdITNbWIG6rCVLN7AopZOshWVOnNvnRgRNoE/R+GnOe1LnFaCaUPSD4pDVwP9SaUesKAGpjLrUecAAAAASUVORK5CYII=';
 
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
@@ -224,8 +226,8 @@ export default function PlayerScreen() {
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
-  const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
-  const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
+  const artworkSize = compactArtwork ? Math.min(244, playerContentWidth) : playerContentWidth;
+  const controlsFixedWidth = 40 + 50 + 64 + 50 + 40;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
@@ -288,9 +290,13 @@ export default function PlayerScreen() {
           recyclingKey={String(currentSong.id || cover)}
         />
       )}
-      <View style={styles.backdropTopWash} />
-      <View style={styles.backdropMiddleWash} />
-      <View style={styles.backdropBottomWash} />
+      <View style={styles.backdropTint} />
+      <Image
+        source={{ uri: PLAYER_BACKGROUND_FADE }}
+        contentFit="fill"
+        style={StyleSheet.absoluteFill}
+        cachePolicy="memory"
+      />
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
@@ -307,15 +313,22 @@ export default function PlayerScreen() {
         </View>
 
         <ScrollView
+          style={styles.playerScroll}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, panel === 'none' && styles.scrollNowPlaying]}
           bounces={false}
         >
-          <View style={[styles.artworkWrap, compactArtwork && styles.artworkWrapCompact]}>
+          <View
+            style={[
+              styles.artworkWrap,
+              panel === 'none' && styles.artworkWrapExpanded,
+              compactArtwork && styles.artworkWrapCompact,
+            ]}
+          >
             <ArtworkRenderer
               song={currentSong}
               size={artworkSize}
-              radius={0}
+              radius={14}
               enableMotion={panel === 'none'}
               style={styles.artwork}
             />
@@ -357,25 +370,25 @@ export default function PlayerScreen() {
             <Pressable onPress={toggleShuffle} style={styles.modeControl} accessibilityLabel="Shuffle">
               <Ionicons
                 name="shuffle"
-                size={24}
+                size={22}
                 color={shuffleEnabled ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
-              <Ionicons name="play-skip-back" size={42} color="#FFF" />
+              <Ionicons name="play-skip-back" size={34} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
                 ? <ActivityIndicator color="#080808" size="large" />
-                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
-              <Ionicons name="play-skip-forward" size={42} color="#FFF" />
+              <Ionicons name="play-skip-forward" size={34} color="#FFF" />
             </Pressable>
             <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
               <Ionicons
                 name="repeat"
-                size={24}
+                size={22}
                 color={repeatMode !== 'off' ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
               {repeatMode === 'one' && (
@@ -871,12 +884,12 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#121212' },
-  backdropImage: { opacity: 0.66, transform: [{ scale: 1.46 }] },
-  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.28)' },
-  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '34%', bottom: '32%', backgroundColor: 'rgba(0,0,0,0.46)' },
-  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '58%', backgroundColor: 'rgba(0,0,0,0.82)' },
+  backdropImage: { opacity: 0.94, transform: [{ scale: 1.55 }] },
+  backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.08)' },
   safe: { flex: 1, paddingHorizontal: 16 },
-  scroll: { paddingBottom: 16 },
+  playerScroll: { flex: 1 },
+  scroll: { paddingBottom: 8 },
+  scrollNowPlaying: { flexGrow: 1 },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundButton: {
     width: 40,
@@ -889,7 +902,8 @@ const styles = StyleSheet.create({
   playingFrom: { color: 'rgba(255,255,255,0.82)', fontSize: 14, fontWeight: '600', fontFamily: PLAYER_FONT },
   album: { color: 'rgba(255,255,255,0.60)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 1, maxWidth: 210 },
   artworkWrap: { minHeight: 404, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 26 },
-  artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
+  artworkWrapExpanded: { flexGrow: 1, minHeight: 430, paddingTop: 30, paddingBottom: 48 },
+  artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12, flexGrow: 0 },
   lyricsOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 50,
@@ -1094,12 +1108,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
   },
-  meta: { paddingTop: 16, flexDirection: 'row', alignItems: 'center' },
+  meta: { paddingTop: 12, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   likeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFF', fontSize: 20, fontWeight: '800', fontFamily: PLAYER_FONT, letterSpacing: -0.35 },
   artist: { color: 'rgba(255,255,255,0.70)', fontSize: 14, fontFamily: PLAYER_FONT, marginTop: 3 },
-  timeline: { paddingTop: 16 },
+  timeline: { paddingTop: 14 },
   track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' },
   fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
@@ -1107,10 +1121,10 @@ const styles = StyleSheet.create({
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 14, paddingBottom: 8 },
-  modeControl: { width: 42, height: 52, alignItems: 'center', justifyContent: 'center' },
-  skip: { width: 52, height: 58, alignItems: 'center', justifyContent: 'center' },
-  play: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 12, paddingBottom: 4 },
+  modeControl: { width: 40, height: 50, alignItems: 'center', justifyContent: 'center' },
+  skip: { width: 50, height: 56, alignItems: 'center', justifyContent: 'center' },
+  play: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   playIcon: { marginLeft: 3 },
   repeatBadge: {
     position: 'absolute',
@@ -1129,8 +1143,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 0,
     paddingHorizontal: 8,
+    paddingBottom: 2,
   },
   secondaryControl: {
     width: 42,
