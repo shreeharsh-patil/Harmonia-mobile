@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -280,17 +281,15 @@ export default function PlayerScreen() {
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.roundButton}>
-            <Text style={styles.down}>⌄</Text>
+          <Pressable onPress={() => router.back()} style={styles.roundButton} accessibilityLabel="Close player">
+            <Ionicons name="chevron-down" size={22} color="#FFF" />
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.playingFrom}>NOW PLAYING</Text>
+            <Text style={styles.playingFrom}>Playing from</Text>
             <Text numberOfLines={1} style={styles.album}>{albumName(currentSong) || 'Harmonia'}</Text>
           </View>
-          <Pressable onPress={handleLike} style={styles.roundButton}>
-            <Text style={[styles.heart, isLiked(currentSong.id) && styles.heartActive]}>
-              {isLiked(currentSong.id) ? '♥' : '♡'}
-            </Text>
+          <Pressable onPress={() => togglePanel('tools')} style={styles.roundButton} accessibilityLabel="More options">
+            <Ionicons name="ellipsis-horizontal" size={22} color="#FFF" />
           </Pressable>
         </View>
 
@@ -303,15 +302,24 @@ export default function PlayerScreen() {
             <ArtworkRenderer
               song={currentSong}
               size={artworkSize}
-              radius={compactArtwork ? 20 : 25}
+              radius={16}
               enableMotion={panel === 'none'}
               style={styles.artwork}
             />
           </View>
 
           <View style={styles.meta}>
-            <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
-            <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
+            <View style={styles.metaCopy}>
+              <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
+              <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
+            </View>
+            <Pressable onPress={handleLike} style={styles.likeButton} accessibilityLabel={isLiked(currentSong.id) ? 'Unlike song' : 'Like song'}>
+              <Ionicons
+                name={isLiked(currentSong.id) ? 'heart' : 'heart-outline'}
+                size={25}
+                color={isLiked(currentSong.id) ? '#EF4444' : 'rgba(255,255,255,0.62)'}
+              />
+            </Pressable>
           </View>
 
           <View style={styles.timeline}>
@@ -333,36 +341,58 @@ export default function PlayerScreen() {
           {!!error && <Text style={styles.error}>{error}</Text>}
 
           <View style={[styles.controls, { gap: controlGap }]}>
-            <Pressable onPress={toggleShuffle} style={styles.modeControl}>
-              <Text style={[styles.modeText, shuffleEnabled && styles.modeTextActive]}>⇄</Text>
+            <Pressable onPress={toggleShuffle} style={styles.modeControl} accessibilityLabel="Shuffle">
+              <Ionicons
+                name="shuffle"
+                size={24}
+                color={shuffleEnabled ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
+              />
             </Pressable>
-            <Pressable onPress={() => void previous()} style={styles.skip}>
-              <Text style={styles.skipText}>|‹</Text>
+            <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
+              <Ionicons name="play-skip-back" size={38} color="#FFF" />
             </Pressable>
-            <Pressable onPress={() => void togglePlayback()} style={styles.play}>
+            <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
                 ? <ActivityIndicator color="#080808" size="large" />
-                : <Text style={styles.playText}>{isPlaying ? 'Ⅱ' : '▶'}</Text>}
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
-            <Pressable onPress={() => void next()} style={styles.skip}>
-              <Text style={styles.skipText}>›|</Text>
+            <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
+              <Ionicons name="play-skip-forward" size={38} color="#FFF" />
             </Pressable>
-            <Pressable onPress={toggleRepeat} style={styles.modeControl}>
-              <Text style={[styles.modeText, repeatMode !== 'off' && styles.modeTextActive]}>
-                {repeatMode === 'one' ? '↻1' : '↻'}
-              </Text>
+            <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
+              <Ionicons
+                name="repeat"
+                size={24}
+                color={repeatMode !== 'off' ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
+              />
+              {repeatMode === 'one' && (
+                <View style={styles.repeatBadge}><Text style={styles.repeatBadgeText}>1</Text></View>
+              )}
             </Pressable>
           </View>
 
-          <View style={styles.panelTabs}>
-            <Pressable onPress={() => togglePanel('lyrics')} style={[styles.panelTab, panel === 'lyrics' && styles.panelTabActive]}>
-              <Text style={[styles.panelTabText, panel === 'lyrics' && styles.panelTabTextActive]}>Lyrics</Text>
+          <View style={styles.secondaryControls}>
+            <Pressable
+              onPress={() => togglePanel('queue')}
+              style={styles.secondaryControl}
+              accessibilityLabel="Queue"
+            >
+              <Ionicons
+                name="list"
+                size={20}
+                color={panel === 'queue' ? '#FFF' : 'rgba(255,255,255,0.62)'}
+              />
             </Pressable>
-            <Pressable onPress={() => togglePanel('queue')} style={[styles.panelTab, panel === 'queue' && styles.panelTabActive]}>
-              <Text style={[styles.panelTabText, panel === 'queue' && styles.panelTabTextActive]}>Queue · {queue.length}</Text>
-            </Pressable>
-            <Pressable onPress={() => togglePanel('tools')} style={[styles.panelTab, panel === 'tools' && styles.panelTabActive]}>
-              <Text style={[styles.panelTabText, panel === 'tools' && styles.panelTabTextActive]}>Tools</Text>
+            <Pressable
+              onPress={() => togglePanel('lyrics')}
+              style={styles.secondaryControl}
+              accessibilityLabel="Lyrics"
+            >
+              <Ionicons
+                name="mic"
+                size={19}
+                color={panel === 'lyrics' ? '#FFF' : 'rgba(255,255,255,0.62)'}
+              />
             </Pressable>
           </View>
 
@@ -722,18 +752,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(20,20,20,0.76)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  down: { color: '#FFF', fontSize: 26, marginTop: -7 },
-  heart: { color: '#D5D5D5', fontSize: 23 },
-  heartActive: { color: '#FFF' },
   headerCopy: { alignItems: 'center', flex: 1, paddingHorizontal: 12 },
-  playingFrom: { color: '#828282', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
-  album: { color: '#D3D3D3', fontSize: 12, fontWeight: '700', marginTop: 3, maxWidth: 190 },
+  playingFrom: { color: 'rgba(255,255,255,0.80)', fontSize: 14, fontWeight: '500' },
+  album: { color: 'rgba(255,255,255,0.60)', fontSize: 12, fontWeight: '500', marginTop: 1, maxWidth: 190 },
   artworkWrap: { minHeight: 390, justifyContent: 'center', alignItems: 'center' },
   artworkWrapCompact: { minHeight: 275 },
   artwork: {
@@ -743,9 +767,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     elevation: 18,
   },
-  meta: { paddingTop: 10 },
-  title: { color: '#FFF', fontSize: 25, fontWeight: '800', letterSpacing: -0.7 },
-  artist: { color: '#A3A3A3', fontSize: 16, marginTop: 5 },
+  meta: { paddingTop: 10, flexDirection: 'row', alignItems: 'center' },
+  metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
+  likeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#FFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.35 },
+  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 15, marginTop: 3 },
   timeline: { paddingTop: 24 },
   track: { height: 20, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
@@ -756,26 +782,34 @@ const styles = StyleSheet.create({
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
   modeControl: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
-  modeText: { color: '#686868', fontSize: 20, fontWeight: '800' },
-  modeTextActive: { color: '#FFF' },
   skip: { width: 52, height: 58, alignItems: 'center', justifyContent: 'center' },
-  skipText: { color: '#FFF', fontSize: 31, fontWeight: '700', letterSpacing: -5 },
-  play: { width: 74, height: 74, borderRadius: 37, backgroundColor: '#F5F5F5', alignItems: 'center', justifyContent: 'center' },
-  playText: { color: '#080808', fontSize: 28, fontWeight: '900' },
-  panelTabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  panelTab: {
-    flex: 1,
-    height: 38,
-    borderRadius: 13,
-    backgroundColor: 'rgba(18,18,18,0.72)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
+  play: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
+  playIcon: { marginLeft: 3 },
+  repeatBadge: {
+    position: 'absolute',
+    right: 7,
+    top: 7,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4ADE80',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  panelTabActive: { backgroundColor: '#EDEDED', borderColor: '#EDEDED' },
-  panelTabText: { color: '#9A9A9A', fontSize: 11, fontWeight: '800' },
-  panelTabTextActive: { color: '#080808' },
+  repeatBadgeText: { color: '#07120B', fontSize: 8, fontWeight: '900' },
+  secondaryControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  secondaryControl: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   panel: {
     minHeight: 178,
     borderRadius: 20,

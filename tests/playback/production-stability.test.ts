@@ -138,7 +138,7 @@ test('radio suggestions fall back to local catalog and direct JioSaavn when back
 
 test('search UI no longer downgrades backend-free discovery to song-only copy', async () => {
   const source = await readFile('app/(tabs)/search.tsx', 'utf8');
-  assert.match(source, /placeholder="Songs, artists, albums, playlists"/);
+  assert.ok(source.includes('placeholder="What do you want to listen to?"'));
   assert.match(source, /Bundled Harmonia discovery plus direct JioSaavn/);
 });
 

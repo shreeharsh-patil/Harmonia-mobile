@@ -17,6 +17,7 @@ import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 
 function localDayKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -168,12 +169,23 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
+  safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { paddingHorizontal: 20, paddingTop: 14 },
-  pageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 25 },
-  pageTitle: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
-  settingsButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
+  content: { paddingHorizontal: 16, paddingTop: 0 },
+  pageHeader: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: -16,
+    marginBottom: 24,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+  },
+  pageTitle: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  settingsButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   identity: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#151515' },
   avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECECEC' },
@@ -182,7 +194,7 @@ const styles = StyleSheet.create({
   editButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
   name: { color: '#F4F4F4', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
   email: { color: '#777', fontSize: 13, marginTop: 5 },
-  stats: { height: 90, flexDirection: 'row', alignItems: 'center', backgroundColor: '#101010', borderRadius: 19, marginTop: 26, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424' },
+  stats: { height: 90, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, marginTop: 26, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   stat: { flex: 1, alignItems: 'center' },
   statValue: { color: '#F2F2F2', fontSize: 23, fontWeight: '800' },
   statLabel: { color: '#6D6D6D', fontSize: 11, fontWeight: '600', marginTop: 4 },
@@ -194,7 +206,7 @@ const styles = StyleSheet.create({
   librarySummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
   librarySummaryText: { color: '#686868', fontSize: 11, fontWeight: '600' },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#444' },
-  card: { backgroundColor: '#101010', borderRadius: 19, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', padding: 18, marginTop: 16 },
+  card: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 18, marginTop: 16 },
   cardKicker: { color: '#5F5F5F', fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },
   cardTitle: { color: '#EDEDED', fontSize: 18, fontWeight: '800', marginTop: 7 },
   cardBody: { color: '#747474', fontSize: 13, lineHeight: 20, marginTop: 7 },

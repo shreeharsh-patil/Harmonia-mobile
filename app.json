@@ -46,7 +46,8 @@
       "package": "com.harmonia.app",
       "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#070707"
+        "backgroundColor": "#070707",
+        "foregroundImage": "./assets/harmonia-icon.png"
       }
     },
     "ios": {
@@ -59,6 +60,7 @@
     },
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "icon": "./assets/harmonia-icon.png"
   }
 }

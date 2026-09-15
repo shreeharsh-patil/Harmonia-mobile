@@ -12,15 +12,15 @@ import { artistNames } from '@/src/lib/song';
 import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
-export const MINI_PLAYER_HEIGHT = 64;
-export const TAB_BAR_HEIGHT = 58;
-export const TAB_BAR_MIN_BOTTOM = 8;
-export const TAB_BAR_TO_MINI_GAP = 8;
-export const TAB_CONTENT_EXTRA_GAP = 24;
+export const MINI_PLAYER_HEIGHT = 56;
+export const TAB_BAR_HEIGHT = 64;
+export const TAB_BAR_MIN_BOTTOM = 0;
+export const TAB_BAR_TO_MINI_GAP = 6;
+export const TAB_CONTENT_EXTRA_GAP = 18;
 
 export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boolean) {
-  const navBottom = Math.max(bottomInset, TAB_BAR_MIN_BOTTOM);
-  return navBottom +
+  const safeBottom = Math.max(bottomInset, TAB_BAR_MIN_BOTTOM);
+  return safeBottom +
     TAB_BAR_HEIGHT +
     TAB_BAR_TO_MINI_GAP +
     (hasMiniPlayer ? MINI_PLAYER_HEIGHT + TAB_BAR_TO_MINI_GAP : 0) +
@@ -39,16 +39,14 @@ export function MiniPlayer() {
   const { position, duration } = usePlaybackProgress();
 
   if (!currentSong) return null;
+
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
 
   return (
     <View style={styles.shell}>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progress, { width: `${progress * 100}%` }]} />
-      </View>
       <View style={styles.row}>
         <Pressable onPress={() => router.push('/player')} style={styles.info}>
-          <TrackArtwork song={currentSong} size={46} radius={11} />
+          <TrackArtwork song={currentSong} size={40} radius={4} />
           <View style={styles.copy}>
             <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
             <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
@@ -57,17 +55,36 @@ export function MiniPlayer() {
 
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel="Lyrics"
+          onPress={() => router.push({ pathname: '/player', params: { panel: 'lyrics' } })}
+          style={styles.smallControl}
+        >
+          <Ionicons name="mic-outline" size={17} color="rgba(255,255,255,0.68)" />
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
           onPress={() => void togglePlayback()}
-          style={styles.control}
+          style={styles.playControl}
         >
           {isBuffering || isLoadingTrack
             ? <ActivityIndicator size="small" color="#FFF" />
-            : <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color={colors.textStrong} />}
+            : <Ionicons name={isPlaying ? 'pause' : 'play'} size={29} color={colors.textStrong} />}
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Next" onPress={() => void next()} style={styles.control}>
-          <Ionicons name="play-skip-forward" size={21} color={colors.textStrong} />
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Next"
+          onPress={() => void next()}
+          style={styles.nextControl}
+        >
+          <Ionicons name="play-skip-forward" size={26} color={colors.textStrong} />
         </Pressable>
+      </View>
+
+      <View style={styles.progressTrack}>
+        <View style={[styles.progress, { width: `${progress * 100}%` }]} />
       </View>
     </View>
   );
@@ -76,23 +93,39 @@ export function MiniPlayer() {
 const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
-    backgroundColor: 'rgba(10,10,10,0.98)',
-    borderRadius: 18,
+    backgroundColor: 'rgb(30,30,30)',
+    borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
     shadowColor: '#000',
     shadowOpacity: 0.22,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  progressTrack: { height: 2, backgroundColor: 'rgba(255,255,255,0.08)' },
-  progress: { height: 2, backgroundColor: colors.accent },
-  row: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
+  row: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
-  copy: { flex: 1, marginLeft: 10, minWidth: 0 },
-  title: { color: colors.text, fontWeight: '700', fontSize: 14 },
-  artist: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  control: { width: 42, height: 44, alignItems: 'center', justifyContent: 'center' },
+  copy: { flex: 1, marginLeft: 8, minWidth: 0 },
+  title: { color: '#FFF', fontWeight: '600', fontSize: 13, lineHeight: 16 },
+  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 12, marginTop: 1, lineHeight: 14 },
+  smallControl: { width: 27, height: 36, alignItems: 'center', justifyContent: 'center' },
+  playControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
+  nextControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
+  progressTrack: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 0,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progress: { height: 2, backgroundColor: '#FFF' },
 });

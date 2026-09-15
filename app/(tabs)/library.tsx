@@ -32,6 +32,7 @@ import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 import type { Playlist, Song } from '@/src/types';
 
 type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
@@ -169,7 +170,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Your Library</Text>
+        <Text style={styles.title}>My Playlists</Text>
         <View style={styles.headerActions}>
           {tab === 'playlists' && (
             <Pressable
@@ -503,27 +504,52 @@ function HistoryStat({ value, label }: { value: number; label: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
+  safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  header: { paddingHorizontal: 18, paddingTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: '#FFF', fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  refresh: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
-  tabsScroller: { flexGrow: 0, marginTop: 14, marginBottom: 5 },
-  tabs: { gap: 8, paddingHorizontal: 18, paddingVertical: 4 },
-  chip: { paddingHorizontal: 15, height: 34, borderRadius: 17, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center' },
-  chipActive: { backgroundColor: '#EEEEEE' },
-  chipText: { color: '#888', fontSize: 12, fontWeight: '700' },
-  chipTextActive: { color: '#090909' },
+  header: {
+    height: 56,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+  },
+  title: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  refresh: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  tabsScroller: { flexGrow: 0, marginTop: 10, marginBottom: 5 },
+  tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 4 },
+  chip: {
+    paddingHorizontal: 15,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: { backgroundColor: colors.textStrong, borderColor: colors.textStrong },
+  chipText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  chipTextActive: { color: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scrollContent: { paddingHorizontal: 18, paddingTop: 8 },
   savedContent: { paddingHorizontal: 18, paddingTop: 10 },
   songList: { paddingHorizontal: 18, paddingTop: 6, flexGrow: 1 },
-  createBox: { backgroundColor: '#101010', borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', padding: 14, marginBottom: 18 },
-  createTitle: { color: '#777', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 10 },
-  createRow: { flexDirection: 'row', gap: 9 },
-  input: { flex: 1, height: 46, borderRadius: 13, backgroundColor: '#181818', color: '#FFF', paddingHorizontal: 14, fontSize: 14 },
-  createButton: { width: 46, height: 46, borderRadius: 13, backgroundColor: '#EFEFEF', alignItems: 'center', justifyContent: 'center' },
+  createBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 18,
+  },
+  createTitle: { color: colors.muted, fontSize: 10, fontWeight: '700', letterSpacing: 0.9, marginBottom: 9 },
+  createRow: { flexDirection: 'row', gap: 8 },
+  input: { flex: 1, height: 44, borderRadius: 8, backgroundColor: colors.surfaceRaised, color: colors.textStrong, paddingHorizontal: 13, fontSize: 14 },
+  createButton: { width: 44, height: 44, borderRadius: 8, backgroundColor: colors.textStrong, alignItems: 'center', justifyContent: 'center' },
   playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
   playlistGridRow: { gap: 12 },
   playlistGridCard: { marginBottom: 8 },
