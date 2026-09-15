@@ -28,10 +28,28 @@ import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import {
+  usePlaybackActivity,
+  usePlayer,
+  type PlaybackHistoryEntry,
+} from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
+function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
+  const seen = new Set<string>();
+  const songs: Song[] = [];
+
+  for (const entry of history) {
+    const id = String(entry.song?.id || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    songs.push(entry.song);
+    if (songs.length >= limit) break;
+  }
+
+  return songs;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -39,6 +57,7 @@ export default function HomeScreen() {
   const { token } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, playSong } = usePlayer();
+  const { history } = usePlaybackActivity();
 
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
@@ -51,6 +70,7 @@ export default function HomeScreen() {
   const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
+  const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -138,6 +158,7 @@ export default function HomeScreen() {
 
   const hasContent =
     sections.some((section) => section.playlists?.length) ||
+    recentSongs.length > 0 ||
     recentPlaylists.length > 0 ||
     trendingAlbums.length > 0 ||
     trendingSongs.length > 0;
@@ -277,9 +298,18 @@ export default function HomeScreen() {
                   </View>
                 )}
 
+                {!!recentSongs.length && (
+                  <SongRail
+                    title="Recently Played"
+                    songs={recentSongs}
+                    currentSongId={currentSong?.id}
+                    onPress={(song) => void playSong(song, recentSongs)}
+                  />
+                )}
+
                 {!!recentPlaylists.length && (
                   <PlaylistRail
-                    title="Recently Played"
+                    title="Recently Played Playlists"
                     data={recentPlaylists}
                     onPress={openPlaylist}
                     showAll
@@ -389,6 +419,53 @@ function PlaylistRail({
         renderItem={({ item }) => (
           <PlaylistCard playlist={item} size={116} onPress={() => onPress(item)} />
         )}
+      />
+    </View>
+  );
+}
+
+function SongRail({
+  title,
+  songs,
+  currentSongId,
+  onPress,
+}: {
+  title: string;
+  songs: Song[];
+  currentSongId?: string;
+  onPress: (song: Song) => void;
+}) {
+  if (!songs.length) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={title} />
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={songs}
+        keyExtractor={(item, index) => String(item.id || `recent-song-${index}`)}
+        initialNumToRender={RAIL_INITIAL_RENDER}
+        maxToRenderPerBatch={RAIL_BATCH_SIZE}
+        windowSize={RAIL_WINDOW_SIZE}
+        contentContainerStyle={styles.rail}
+        renderItem={({ item }) => {
+          const active = String(currentSongId || '') === String(item.id || '');
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Play ${item.name || item.title || 'song'}`}
+              onPress={() => onPress(item)}
+              style={({ pressed }) => [styles.recentSongCard, pressed && styles.pressed]}
+            >
+              <TrackArtwork song={item} size={116} radius={8} />
+              <Text numberOfLines={1} style={[styles.recentSongTitle, active && styles.recentSongTitleActive]}>
+                {item.name || item.title || 'Untitled Track'}
+              </Text>
+              <Text numberOfLines={1} style={styles.recentSongArtist}>{artistNames(item)}</Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -550,6 +627,10 @@ const styles = StyleSheet.create({
   sectionSubtitle: { color: '#777', fontSize: 9, marginTop: 1 },
   showAll: { color: '#8F8F8F', fontSize: 10, fontWeight: '700' },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
+  recentSongCard: { width: 116, marginRight: 12 },
+  recentSongTitle: { color: '#E8E8E8', fontSize: 11, fontWeight: '700', marginTop: 7 },
+  recentSongTitleActive: { color: '#A78BFA' },
+  recentSongArtist: { color: '#777', fontSize: 9, marginTop: 2 },
   albumCard: { width: 116, marginRight: 12 },
   albumArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
