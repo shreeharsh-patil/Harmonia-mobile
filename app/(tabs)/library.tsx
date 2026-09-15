@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,8 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
-import { SongActionsSheet } from '@/src/components/SongActionsSheet';
-import { SongRow } from '@/src/components/SongRow';
 import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
@@ -29,26 +26,19 @@ import {
 } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
-import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
-import type { Playlist, Song } from '@/src/types';
+import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist } from '@/src/types';
 
-type LibraryTab = 'playlists' | 'saved' | 'liked' | 'downloads' | 'local' | 'history';
+type LibraryTab = 'playlists' | 'albums' | 'artists';
 type LibraryViewMode = 'list' | 'grid';
 
 const LIBRARY_VIEW_KEY = 'harmonia.mobile.library-view.v1';
 
-function formatBytes(bytes: number) {
-  if (!bytes) return '0 MB';
-  return `${(bytes / (1024 * 1024)).toFixed(bytes > 100 * 1024 * 1024 ? 0 : 1)} MB`;
-}
-
 export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const {
     playlists,
     likedSongs,
@@ -59,33 +49,21 @@ export default function LibraryScreen() {
     refreshing,
     error,
     refresh,
-    toggleLike,
     createPlaylist,
   } = useLibrary();
-  const { downloads, totalBytes, removeDownload } = useOffline();
-  const {
-    songs: localSongs,
-    loading: localLoading,
-    permissionDenied,
-    scan: scanLocalMusic,
-  } = useLocalMusic();
-  const {
-    currentSong,
-    playSong,
-  } = usePlayer();
-  const {
-    history,
-    listeningStats,
-    clearHistory,
-  } = usePlaybackActivity();
+  const { currentSong, playSong } = usePlayer();
+  usePlaybackActivity();
 
   const [tab, setTab] = useState<LibraryTab>('playlists');
-  const [viewMode, setViewMode] = useState<LibraryViewMode>('list');
+  const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
   const [newPlaylist, setNewPlaylist] = useState('');
   const [creating, setCreating] = useState(false);
-  const [actionSong, setActionSong] = useState<Song | null>(null);
   const viewModeMutationRef = useRef(0);
-  const gridArtworkSize = Math.max(132, Math.floor((width - 48) / 2));
+
+  const gridArtworkSize = Math.max(136, Math.floor((width - 44) / 2));
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   useEffect(() => {
@@ -113,493 +91,416 @@ export default function LibraryScreen() {
     if (!newPlaylist.trim() || creating) return;
     setCreating(true);
     try {
-      const result = await createPlaylist(newPlaylist);
-      if (result) {
+      const created = await createPlaylist(newPlaylist);
+      if (created) {
         setNewPlaylist('');
-        const id = String(result._id || result.id || '');
-        if (id) router.push({ pathname: '/playlist/[id]', params: { id } });
+        setShowCreate(false);
       }
     } finally {
       setCreating(false);
     }
   };
 
+  const normalizedQuery = query.trim().toLowerCase();
+
+  const libraryPlaylists = useMemo(() => {
+    const seen = new Set<string>();
+    const merged = [...playlists, ...likedPlaylists].filter((playlist) => {
+      const id = String(playlist.id || playlist._id || '');
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    const filtered = normalizedQuery
+      ? merged.filter((playlist) => String(playlist.name || '').toLowerCase().includes(normalizedQuery))
+      : merged;
+
+    const likedCard = {
+      id: 'liked-songs',
+      _id: 'liked-songs',
+      name: 'Liked Songs',
+      description: 'Playlist',
+      songCount: likedSongs.length,
+    } as Playlist;
+
+    return [likedCard, ...filtered];
+  }, [likedPlaylists, likedSongs.length, normalizedQuery, playlists]);
+
+  const filteredAlbums = useMemo(
+    () => normalizedQuery
+      ? likedAlbums.filter((album) => albumTitle(album).toLowerCase().includes(normalizedQuery))
+      : likedAlbums,
+    [likedAlbums, normalizedQuery]
+  );
+
+  const filteredArtists = useMemo(
+    () => normalizedQuery
+      ? likedArtists.filter((artist) => artistTitle(artist).toLowerCase().includes(normalizedQuery))
+      : likedArtists,
+    [likedArtists, normalizedQuery]
+  );
+
+  const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
+
   const accountGate = (
     <View style={[styles.accountGate, { paddingBottom: contentBottomInset }]}>
-      <Text style={styles.gateKicker}>HARMONIA ACCOUNT</Text>
-      <Text style={styles.gateTitle}>Keep your library in sync.</Text>
-      <Text style={styles.gateBody}>Liked songs, saved albums, followed artists and playlists use the same account as Harmonia Web.</Text>
+      <Text style={styles.gateTitle}>Your library, everywhere.</Text>
+      <Text style={styles.gateBody}>Sign in to sync liked songs, playlists, saved albums and artists with Harmonia Web.</Text>
       <Pressable onPress={() => router.push('/login')} style={styles.signIn}>
         <Text style={styles.signInText}>Sign in</Text>
       </Pressable>
     </View>
   );
 
-  const renderSongList = (
-    data: Song[],
-    emptyTitle: string,
-    emptyBody: string,
-    trailing?: (song: Song) => React.ReactNode
-  ) => (
-    <FlatList
-      data={data}
-      keyExtractor={(item, index) => item.id || String(index)}
-      initialNumToRender={SONG_LIST_INITIAL_RENDER}
-      maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
-      updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
-      windowSize={SONG_LIST_WINDOW_SIZE}
-      contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-          <Text style={styles.emptyBody}>{emptyBody}</Text>
-        </View>
-      }
-      renderItem={({ item }) => (
-        <SongRow
-          song={item}
-          active={currentSong?.id === item.id}
-          onPress={() => void playSong(item, data)}
-          onMorePress={() => setActionSong(item)}
-          trailing={trailing?.(item)}
-        />
-      )}
-    />
-  );
+  const openPlaylist = (playlist: Playlist) => {
+    const id = String(playlist.id || playlist._id || '');
+    if (id === 'liked-songs') {
+      if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
+      return;
+    }
+    if (id) router.push({ pathname: '/playlist/[id]', params: { id } });
+  };
+
+  const renderPlaylist = ({ item }: { item: Playlist }) => {
+    const id = String(item.id || item._id || '');
+    const liked = id === 'liked-songs';
+    const count = liked ? likedSongs.length : (item.songCount ?? item.songIds?.length ?? 0);
+
+    if (viewMode === 'list') {
+      return (
+        <Pressable onPress={() => openPlaylist(item)} style={({ pressed }) => [styles.listRow, pressed && styles.pressed]}>
+          {liked ? (
+            <View style={styles.likedListArtwork}>
+              <Ionicons name="heart" size={25} color="#FFF" />
+            </View>
+          ) : (
+            <PlaylistArtwork playlist={item} size={62} radius={2} />
+          )}
+          <View style={styles.listCopy}>
+            <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
+            <Text numberOfLines={1} style={styles.itemMeta}>{liked ? 'Playlist' : `${count} songs`}</Text>
+          </View>
+        </Pressable>
+      );
+    }
+
+    return (
+      <Pressable
+        onPress={() => openPlaylist(item)}
+        style={({ pressed }) => [styles.gridCard, { width: gridArtworkSize }, pressed && styles.pressed]}
+      >
+        {liked ? (
+          <View style={[styles.likedArtwork, { width: gridArtworkSize, height: gridArtworkSize }]}>
+            <Ionicons name="heart" size={68} color="#FFF" />
+          </View>
+        ) : (
+          <PlaylistArtwork playlist={item} size={gridArtworkSize} radius={0} />
+        )}
+        <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
+        <Text numberOfLines={1} style={styles.itemMeta}>{liked ? `Playlist · ${likedSongs.length} songs` : `${count} songs`}</Text>
+      </Pressable>
+    );
+  };
+
+  const renderAlbum = ({ item }: { item: HarmoniaAlbum }) => {
+    const id = String(item.id || '');
+    const cover = imageUrl(item.image as any, gridArtworkSize);
+    return (
+      <Pressable
+        disabled={!id}
+        onPress={() => id && router.push({ pathname: '/album/[id]', params: { id } })}
+        style={({ pressed }) => [styles.gridCard, { width: gridArtworkSize }, pressed && styles.pressed]}
+      >
+        {cover ? (
+          <Image source={{ uri: cover }} style={{ width: gridArtworkSize, height: gridArtworkSize }} contentFit="cover" cachePolicy="memory-disk" />
+        ) : (
+          <View style={[styles.entityFallback, { width: gridArtworkSize, height: gridArtworkSize }]}>
+            <Ionicons name="disc-outline" size={46} color="#777" />
+          </View>
+        )}
+        <Text numberOfLines={1} style={styles.itemTitle}>{albumTitle(item)}</Text>
+        <Text numberOfLines={1} style={styles.itemMeta}>{item.primaryArtists || item.year || 'Album'}</Text>
+      </Pressable>
+    );
+  };
+
+  const renderArtist = ({ item }: { item: HarmoniaArtistEntity }) => {
+    const id = String(item.id || '');
+    const cover = imageUrl(item.image as any, gridArtworkSize);
+    return (
+      <Pressable
+        disabled={!id}
+        onPress={() => id && router.push({ pathname: '/artist/[id]', params: { id } })}
+        style={({ pressed }) => [styles.gridCard, { width: gridArtworkSize }, pressed && styles.pressed]}
+      >
+        {cover ? (
+          <Image source={{ uri: cover }} style={[styles.artistArtwork, { width: gridArtworkSize, height: gridArtworkSize }]} contentFit="cover" cachePolicy="memory-disk" />
+        ) : (
+          <View style={[styles.entityFallback, styles.artistArtwork, { width: gridArtworkSize, height: gridArtworkSize }]}>
+            <Ionicons name="person-outline" size={46} color="#777" />
+          </View>
+        )}
+        <Text numberOfLines={1} style={styles.itemTitle}>{artistTitle(item)}</Text>
+        <Text numberOfLines={1} style={styles.itemMeta}>Artist</Text>
+      </Pressable>
+    );
+  };
+
+  const sharedListProps = {
+    initialNumToRender: SONG_LIST_INITIAL_RENDER,
+    maxToRenderPerBatch: SONG_LIST_BATCH_SIZE,
+    updateCellsBatchingPeriod: SONG_LIST_BATCHING_PERIOD_MS,
+    windowSize: SONG_LIST_WINDOW_SIZE,
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Playlists</Text>
-        <View style={styles.headerActions}>
-          {tab === 'playlists' && (
-            <Pressable
-              onPress={toggleViewMode}
-              style={styles.refresh}
-              accessibilityLabel={viewMode === 'list' ? 'Use grid view' : 'Use list view'}
-            >
-              <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={19} color="#A0A0A0" />
-            </Pressable>
+      <View style={styles.topBar}>
+        <Pressable onPress={() => router.push('/(tabs)/profile')} accessibilityLabel="Open profile">
+          {user?.image ? (
+            <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
           )}
-          {token && (
-            <Pressable onPress={() => void refresh()} style={styles.refresh} accessibilityLabel="Sync library">
-              {refreshing ? <ActivityIndicator color="#AAA" size="small" /> : <Ionicons name="refresh" size={20} color="#A0A0A0" />}
-            </Pressable>
-          )}
+        </Pressable>
+
+        <Text style={styles.title}>Your Library</Text>
+
+        <View style={styles.topActions}>
+          <Pressable
+            onPress={() => {
+              setSearchOpen((value) => !value);
+              if (searchOpen) setQuery('');
+            }}
+            style={styles.iconButton}
+            accessibilityLabel="Search library"
+          >
+            <Ionicons name="search-outline" size={29} color="#E6E6E6" />
+          </Pressable>
+          <Pressable onPress={() => setShowCreate((value) => !value)} style={styles.iconButton} accessibilityLabel="Create playlist">
+            <Ionicons name="add" size={34} color="#E6E6E6" />
+          </Pressable>
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroller}>
-        {([
-          ['playlists', 'Playlists'],
-          ['saved', 'Saved'],
-          ['liked', 'Liked Songs'],
-          ['downloads', `Downloads · ${downloads.length}`],
-          ['local', 'On device'],
-          ['history', 'History'],
-        ] as [LibraryTab, string][]).map(([value, label]) => (
-          <Pressable key={value} onPress={() => setTab(value)} style={[styles.chip, tab === value && styles.chipActive]}>
-            <Text style={[styles.chipText, tab === value && styles.chipTextActive]}>{label}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {tab === 'playlists' && (
-        !token ? accountGate : loading ? (
-          <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
-        ) : (
-          <FlatList<Playlist>
-            key={`playlists-${viewMode}`}
-            data={playlists}
-            numColumns={viewMode === 'grid' ? 2 : 1}
-            keyExtractor={(playlist, index) => String(playlist._id || playlist.id || `playlist-${index}`)}
-            initialNumToRender={SONG_LIST_INITIAL_RENDER}
-            maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
-            updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
-            windowSize={SONG_LIST_WINDOW_SIZE}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomInset }]}
-            columnWrapperStyle={viewMode === 'grid' ? styles.playlistGridRow : undefined}
-            ListHeaderComponent={
-              <>
-                <View style={styles.createBox}>
-                  <Text style={styles.createTitle}>NEW PLAYLIST</Text>
-                  <View style={styles.createRow}>
-                    <TextInput
-                      value={newPlaylist}
-                      onChangeText={setNewPlaylist}
-                      placeholder="Playlist name"
-                      placeholderTextColor="#5E5E5E"
-                      style={styles.input}
-                      onSubmitEditing={() => void submitPlaylist()}
-                    />
-                    <Pressable disabled={creating || !newPlaylist.trim()} onPress={() => void submitPlaylist()} style={styles.createButton}>
-                      {creating ? <ActivityIndicator color="#080808" size="small" /> : <Ionicons name="add" size={22} color="#080808" />}
-                    </Pressable>
-                  </View>
-                </View>
-                {!!error && <Text style={styles.error}>{error}</Text>}
-              </>
-            }
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>No playlists yet</Text>
-                <Text style={styles.emptyBody}>Create one here and it will also appear in Harmonia Web.</Text>
-              </View>
-            }
-            renderItem={({ item: playlist }) => {
-              const id = String(playlist._id || playlist.id || '');
-              if (viewMode === 'grid') {
-                return (
-                  <Pressable
-                    disabled={!id}
-                    onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                    style={({ pressed }) => [
-                      styles.playlistGridCard,
-                      { width: gridArtworkSize },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <PlaylistArtwork playlist={playlist} size={gridArtworkSize} radius={16} />
-                    <Text numberOfLines={1} style={styles.playlistGridName}>{playlist.name}</Text>
-                    <Text numberOfLines={1} style={styles.playlistGridMeta}>
-                      {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
-                    </Text>
-                  </Pressable>
-                );
-              }
-
-              return (
-                <Pressable
-                  disabled={!id}
-                  onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                  style={({ pressed }) => [styles.playlistRow, pressed && styles.pressed]}
-                >
-                  <PlaylistArtwork playlist={playlist} size={68} radius={13} />
-                  <View style={styles.playlistCopy}>
-                    <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
-                    <Text numberOfLines={1} style={styles.playlistMeta}>
-                      {playlist.description || `${playlist.songCount ?? playlist.songIds?.length ?? 0} songs`}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#585858" />
-                </Pressable>
-              );
-            }}
+      {searchOpen && (
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={18} color="#777" />
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search your library"
+            placeholderTextColor="#777"
+            style={styles.searchInput}
           />
-        )
-      )}
-
-      {tab === 'saved' && (
-        !token ? accountGate : loading ? (
-          <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
-        ) : (
-          <ScrollView contentContainerStyle={[styles.savedContent, { paddingBottom: contentBottomInset }]} showsVerticalScrollIndicator={false}>
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <SavedSection title="Saved playlists" count={likedPlaylists.length}>
-              {likedPlaylists.length ? likedPlaylists.map((playlist, index) => {
-                const id = String(playlist.id || playlist._id || '');
-                return (
-                  <Pressable
-                    key={id || `saved-playlist-${index}`}
-                    disabled={!id}
-                    onPress={() => router.push({ pathname: '/playlist/[id]', params: { id } })}
-                    style={styles.savedRow}
-                  >
-                    <PlaylistArtwork playlist={playlist} size={58} radius={12} />
-                    <View style={styles.savedCopy}>
-                      <Text numberOfLines={1} style={styles.savedTitle}>{playlist.name}</Text>
-                      <Text numberOfLines={1} style={styles.savedMeta}>{playlist.owner || 'Harmonia'}{playlist.songCount ? ` · ${playlist.songCount} songs` : ''}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color="#555" />
-                  </Pressable>
-                );
-              }) : <SavedEmpty text="Playlists you save on web or mobile appear here." />}
-            </SavedSection>
-
-            <SavedSection title="Albums" count={likedAlbums.length}>
-              {likedAlbums.length ? likedAlbums.map((album, index) => {
-                const id = String(album.id || '');
-                const cover = imageUrl(album.image as any, 58);
-                return (
-                  <Pressable
-                    key={id || `album-${index}`}
-                    disabled={!id}
-                    onPress={() => router.push({ pathname: '/album/[id]', params: { id } })}
-                    style={styles.savedRow}
-                  >
-                    {cover ? <Image source={{ uri: cover }} style={styles.savedImage} contentFit="cover" cachePolicy="memory-disk" /> : <EntityFallback icon="disc-outline" />}
-                    <View style={styles.savedCopy}>
-                      <Text numberOfLines={1} style={styles.savedTitle}>{albumTitle(album)}</Text>
-                      <Text numberOfLines={1} style={styles.savedMeta}>{album.primaryArtists || album.year || 'Album'}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color="#555" />
-                  </Pressable>
-                );
-              }) : <SavedEmpty text="Albums you save in Harmonia appear here." />}
-            </SavedSection>
-
-            <SavedSection title="Artists" count={likedArtists.length}>
-              {likedArtists.length ? likedArtists.map((artist, index) => {
-                const id = String(artist.id || '');
-                const cover = imageUrl(artist.image as any, 58);
-                return (
-                  <Pressable
-                    key={id || `artist-${index}`}
-                    disabled={!id}
-                    onPress={() => router.push({ pathname: '/artist/[id]', params: { id } })}
-                    style={styles.savedRow}
-                  >
-                    {cover ? <Image source={{ uri: cover }} style={[styles.savedImage, styles.roundImage]} contentFit="cover" cachePolicy="memory-disk" /> : <EntityFallback icon="person-outline" round />}
-                    <View style={styles.savedCopy}>
-                      <Text numberOfLines={1} style={styles.savedTitle}>{artistTitle(artist)}</Text>
-                      <Text numberOfLines={1} style={styles.savedMeta}>{artist.followerCount ? `${Number(artist.followerCount).toLocaleString()} followers` : 'Artist'}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color="#555" />
-                  </Pressable>
-                );
-              }) : <SavedEmpty text="Artists you follow in Harmonia appear here." />}
-            </SavedSection>
-          </ScrollView>
-        )
-      )}
-
-      {tab === 'liked' && (
-        !token ? accountGate : renderSongList(
-          likedSongs,
-          'No liked songs yet',
-          'Like songs from Search or Now Playing and they will stay synchronized with Harmonia Web.',
-          (song) => (
-            <Pressable onPress={() => void toggleLike(song)} style={styles.rowAction} accessibilityLabel="Unlike song">
-              <Ionicons name="heart" size={19} color="#F1F1F1" />
+          {!!query && (
+            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={19} color="#777" />
             </Pressable>
-          )
-        )
-      )}
-
-      {tab === 'downloads' && (
-        <View style={styles.flex}>
-          <View style={styles.summary}>
-            <View>
-              <Text style={styles.summaryKicker}>OFFLINE MUSIC</Text>
-              <Text style={styles.summaryValue}>{formatBytes(totalBytes)}</Text>
-            </View>
-            <Text style={styles.summaryMeta}>{downloads.length} track{downloads.length === 1 ? '' : 's'}</Text>
-          </View>
-          {renderSongList(
-            downloads.map((item) => item.song),
-            'Nothing downloaded',
-            'Open Now Playing → Tools and download a track. Harmonia uses the local copy when available.',
-            (song) => (
-              <Pressable onPress={() => void removeDownload(song.id)} style={styles.rowAction} accessibilityLabel="Remove download">
-                <Ionicons name="trash-outline" size={19} color="#858585" />
-              </Pressable>
-            )
           )}
         </View>
       )}
 
-      {tab === 'history' && (
-        <View style={styles.flex}>
-          <View style={styles.historySummary}>
-            <HistoryStat value={Math.round(listeningStats.totalSeconds / 60)} label="Minutes" />
-            <View style={styles.historyRule} />
-            <HistoryStat value={listeningStats.playCount} label="Plays" />
-            <View style={styles.historyRule} />
-            <HistoryStat value={Object.keys(listeningStats.trackCounts).length} label="Tracks" />
-          </View>
+      <View style={styles.filters}>
+        {([
+          ['playlists', 'Playlists'],
+          ['albums', 'Albums'],
+          ['artists', 'Artists'],
+        ] as [LibraryTab, string][]).map(([value, label]) => (
+          <Pressable key={value} onPress={() => setTab(value)} style={[styles.filterChip, tab === value && styles.filterChipActive]}>
+            <Text style={styles.filterText}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
 
-          <View style={styles.historyHead}>
-            <View>
-              <Text style={styles.summaryKicker}>RECENTLY PLAYED</Text>
-              <Text style={styles.historyTitle}>Listening history on this phone</Text>
-            </View>
-            {!!history.length && (
-              <Pressable onPress={() => void clearHistory()} style={styles.clearHistory}>
-                <Text style={styles.clearHistoryText}>Clear</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <FlatList
-            data={history}
-            keyExtractor={(item) => item.entryId}
-            initialNumToRender={SONG_LIST_INITIAL_RENDER}
-            maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
-            updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
-            windowSize={SONG_LIST_WINDOW_SIZE}
-            contentContainerStyle={[styles.songList, { paddingBottom: contentBottomInset }]}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>No listening history yet</Text>
-                <Text style={styles.emptyBody}>Tracks you play in Harmonia will appear here.</Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <SongRow
-                song={item.song}
-                active={currentSong?.id === item.song.id}
-                onPress={() => void playSong(item.song)}
-                trailing={<Text style={styles.historyTime}>{new Date(item.playedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Text>}
-              />
-            )}
+      {showCreate && (
+        <View style={styles.createPanel}>
+          <TextInput
+            value={newPlaylist}
+            onChangeText={setNewPlaylist}
+            placeholder="Playlist name"
+            placeholderTextColor="#6A6A6A"
+            style={styles.createInput}
+            onSubmitEditing={() => void submitPlaylist()}
           />
+          <Pressable
+            disabled={creating || !newPlaylist.trim()}
+            onPress={() => void submitPlaylist()}
+            style={[styles.createButton, (!newPlaylist.trim() || creating) && styles.createButtonDisabled]}
+          >
+            {creating ? <ActivityIndicator color="#111" size="small" /> : <Text style={styles.createButtonText}>Create</Text>}
+          </Pressable>
         </View>
       )}
 
-      {tab === 'local' && (
-        <View style={styles.flex}>
-          <View style={styles.localHeader}>
-            <View style={styles.localCopy}>
-              <Text style={styles.summaryKicker}>LOCAL MUSIC</Text>
-              <Text style={styles.localTitle}>{localSongs.length ? `${localSongs.length} tracks on this phone` : 'Play music already on your phone'}</Text>
-            </View>
-            <Pressable disabled={localLoading} onPress={() => void scanLocalMusic()} style={styles.scanButton}>
-              {localLoading ? <ActivityIndicator color="#080808" size="small" /> : <Text style={styles.scanButtonText}>{localSongs.length ? 'Rescan' : 'Scan'}</Text>}
-            </Pressable>
-          </View>
-          {permissionDenied && <Text style={styles.permissionError}>Audio-library permission is required to show music stored on this device.</Text>}
-          {renderSongList(localSongs, 'No local tracks loaded', 'Tap Scan to let Harmonia find audio stored on this phone.')}
-        </View>
+      <View style={styles.divider} />
+
+      <View style={styles.sortRow}>
+        <Pressable onPress={() => void refresh()} style={styles.sortButton} accessibilityLabel="Refresh library">
+          {refreshing ? <ActivityIndicator color="#CFCFCF" size="small" /> : <Ionicons name="swap-vertical" size={21} color="#E4E4E4" />}
+          <Text style={styles.sortText}>Recents</Text>
+        </Pressable>
+        <Pressable onPress={toggleViewMode} style={styles.viewButton} accessibilityLabel={viewMode === 'grid' ? 'Use list view' : 'Use grid view'}>
+          <Ionicons name={viewMode === 'grid' ? 'list-outline' : 'grid-outline'} size={28} color="#D3D3D3" />
+        </Pressable>
+      </View>
+
+      {!token ? accountGate : loading ? (
+        <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
+      ) : tab === 'playlists' ? (
+        <FlatList<Playlist>
+          key={`playlists-${viewMode}`}
+          data={libraryPlaylists}
+          numColumns={viewMode === 'grid' ? 2 : 1}
+          keyExtractor={(item, index) => String(item.id || item._id || index)}
+          renderItem={renderPlaylist}
+          columnWrapperStyle={viewMode === 'grid' ? styles.gridRow : undefined}
+          contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<LibraryEmpty title="No playlists yet" />}
+          {...sharedListProps}
+        />
+      ) : tab === 'albums' ? (
+        <FlatList<HarmoniaAlbum>
+          key="albums-grid"
+          data={filteredAlbums}
+          numColumns={2}
+          keyExtractor={(item, index) => String(item.id || index)}
+          renderItem={renderAlbum}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<LibraryEmpty title="No saved albums yet" />}
+          {...sharedListProps}
+        />
+      ) : (
+        <FlatList<HarmoniaArtistEntity>
+          key="artists-grid"
+          data={filteredArtists}
+          numColumns={2}
+          keyExtractor={(item, index) => String(item.id || index)}
+          renderItem={renderArtist}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<LibraryEmpty title="No followed artists yet" />}
+          {...sharedListProps}
+        />
       )}
 
-      <SongActionsSheet song={actionSong} visible={actionSong != null} onClose={() => setActionSong(null)} />
+      {!!error && <Text numberOfLines={1} style={styles.error}>{error}</Text>}
     </SafeAreaView>
   );
 }
 
-function SavedSection({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
+function LibraryEmpty({ title }: { title: string }) {
   return (
-    <View style={styles.savedSection}>
-      <View style={styles.savedHeader}>
-        <Text style={styles.savedHeaderTitle}>{title}</Text>
-        <Text style={styles.savedHeaderCount}>{count}</Text>
-      </View>
-      {children}
-    </View>
-  );
-}
-
-function SavedEmpty({ text }: { text: string }) {
-  return <Text style={styles.savedEmpty}>{text}</Text>;
-}
-
-function EntityFallback({ icon, round = false }: { icon: keyof typeof Ionicons.glyphMap; round?: boolean }) {
-  return (
-    <View style={[styles.savedImage, styles.entityFallback, round && styles.roundImage]}>
-      <Ionicons name={icon} size={24} color="#5B5B5B" />
-    </View>
-  );
-}
-
-function HistoryStat({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={styles.historyStat}>
-      <Text style={styles.historyValue}>{value}</Text>
-      <Text style={styles.historyLabel}>{label}</Text>
+    <View style={styles.empty}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyBody}>Save something in Harmonia and it will appear here.</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  flex: { flex: 1 },
-  header: {
-    height: 56,
+  safe: { flex: 1, backgroundColor: '#0D0D0D' },
+  topBar: {
+    minHeight: 82,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#222' },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#273047' },
+  avatarText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  title: { color: '#F7F7F7', fontSize: 30, fontWeight: '900', letterSpacing: -0.9, marginLeft: 14, flex: 1 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  searchWrap: {
+    height: 46,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 13,
+    borderRadius: 10,
+    backgroundColor: '#1A1A1A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  searchInput: { flex: 1, color: '#F0F0F0', fontSize: 15, paddingVertical: 0 },
+  filters: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 18 },
+  filterChip: {
+    height: 50,
+    minWidth: 112,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    backgroundColor: '#272727',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipActive: { backgroundColor: '#303030' },
+  filterText: { color: '#F0F0F0', fontSize: 16, fontWeight: '800' },
+  createPanel: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    flexDirection: 'row',
+    gap: 9,
+  },
+  createInput: {
+    flex: 1,
+    height: 44,
+    borderRadius: 11,
+    backgroundColor: '#181818',
+    color: '#F5F5F5',
+    paddingHorizontal: 13,
+    fontSize: 14,
+  },
+  createButton: {
+    height: 44,
+    minWidth: 76,
+    paddingHorizontal: 16,
+    borderRadius: 11,
+    backgroundColor: '#EFEFEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButtonDisabled: { opacity: 0.45 },
+  createButtonText: { color: '#111', fontSize: 13, fontWeight: '800' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: '#232323' },
+  sortRow: {
+    height: 72,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: 'rgba(0,0,0,0.96)',
   },
-  title: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  refresh: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  tabsScroller: { flexGrow: 0, marginTop: 10, marginBottom: 5 },
-  tabs: { gap: 8, paddingHorizontal: 16, paddingVertical: 4 },
-  chip: {
-    paddingHorizontal: 15,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipActive: { backgroundColor: colors.textStrong, borderColor: colors.textStrong },
-  chipText: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  chipTextActive: { color: colors.background },
+  sortButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sortText: { color: '#DADADA', fontSize: 16, fontWeight: '800' },
+  viewButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  content: { paddingHorizontal: 16, paddingBottom: 24 },
+  gridRow: { justifyContent: 'space-between' },
+  gridCard: { marginBottom: 20 },
+  likedArtwork: { backgroundColor: '#6266F2', alignItems: 'center', justifyContent: 'center' },
+  likedListArtwork: { width: 62, height: 62, backgroundColor: '#6266F2', alignItems: 'center', justifyContent: 'center' },
+  artistArtwork: { borderRadius: 999 },
+  entityFallback: { backgroundColor: '#202020', alignItems: 'center', justifyContent: 'center' },
+  itemTitle: { color: '#F1F1F1', fontSize: 17, fontWeight: '800', marginTop: 9 },
+  itemMeta: { color: '#8B8B8B', fontSize: 14, fontWeight: '500', marginTop: 4 },
+  listRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  listCopy: { flex: 1, minWidth: 0, marginLeft: 13 },
+  pressed: { opacity: 0.72 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scrollContent: { paddingHorizontal: 18, paddingTop: 8 },
-  savedContent: { paddingHorizontal: 18, paddingTop: 10 },
-  songList: { paddingHorizontal: 18, paddingTop: 6, flexGrow: 1 },
-  createBox: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 18,
-  },
-  createTitle: { color: colors.muted, fontSize: 10, fontWeight: '700', letterSpacing: 0.9, marginBottom: 9 },
-  createRow: { flexDirection: 'row', gap: 8 },
-  input: { flex: 1, height: 44, borderRadius: 8, backgroundColor: colors.surfaceRaised, color: colors.textStrong, paddingHorizontal: 13, fontSize: 14 },
-  createButton: { width: 44, height: 44, borderRadius: 8, backgroundColor: colors.textStrong, alignItems: 'center', justifyContent: 'center' },
-  playlistRow: { minHeight: 86, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
-  playlistGridRow: { gap: 12 },
-  playlistGridCard: { marginBottom: 8 },
-  playlistGridName: { color: '#F0F0F0', fontSize: 14, fontWeight: '750' as any, marginTop: 9 },
-  playlistGridMeta: { color: '#686868', fontSize: 11, marginTop: 3 },
-  playlistCopy: { flex: 1, marginLeft: 13, minWidth: 0 },
-  playlistName: { color: '#F0F0F0', fontSize: 15, fontWeight: '700' },
-  playlistMeta: { color: '#6E6E6E', fontSize: 12, marginTop: 4 },
-  savedSection: { marginBottom: 26 },
-  savedHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 },
-  savedHeaderTitle: { color: '#EDEDED', fontSize: 18, fontWeight: '800' },
-  savedHeaderCount: { color: '#5D5D5D', fontSize: 11, fontWeight: '700' },
-  savedRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#171717' },
-  savedImage: { width: 58, height: 58, borderRadius: 12, backgroundColor: '#111' },
-  roundImage: { borderRadius: 29 },
-  entityFallback: { alignItems: 'center', justifyContent: 'center' },
-  savedCopy: { flex: 1, minWidth: 0, marginLeft: 12 },
-  savedTitle: { color: '#E9E9E9', fontSize: 14, fontWeight: '700' },
-  savedMeta: { color: '#6A6A6A', fontSize: 11, marginTop: 3 },
-  savedEmpty: { color: '#666', fontSize: 12, lineHeight: 18, paddingVertical: 14 },
-  rowAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  empty: { paddingVertical: 60, alignItems: 'center', paddingHorizontal: 30 },
-  emptyTitle: { color: '#D8D8D8', fontSize: 17, fontWeight: '800' },
-  emptyBody: { color: '#6F6F6F', fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 7 },
-  error: { color: '#EA8383', fontSize: 12, marginBottom: 10 },
-  pressed: { opacity: 0.65 },
-  accountGate: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
-  gateKicker: { color: '#555', fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
-  gateTitle: { color: '#F1F1F1', fontSize: 27, lineHeight: 32, fontWeight: '800', letterSpacing: -0.7, marginTop: 8 },
-  gateBody: { color: '#747474', fontSize: 14, lineHeight: 21, marginTop: 9 },
-  signIn: { height: 50, borderRadius: 15, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center', marginTop: 22 },
-  signInText: { color: '#080808', fontSize: 14, fontWeight: '800' },
-  summary: { marginHorizontal: 18, marginTop: 9, marginBottom: 7, minHeight: 78, borderRadius: 18, backgroundColor: '#101010', borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', padding: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  summaryKicker: { color: '#626262', fontSize: 9, fontWeight: '800', letterSpacing: 1.4 },
-  summaryValue: { color: '#F1F1F1', fontSize: 22, fontWeight: '800', marginTop: 4 },
-  summaryMeta: { color: '#747474', fontSize: 12 },
-  localHeader: { marginHorizontal: 18, marginTop: 9, marginBottom: 7, minHeight: 78, borderRadius: 18, backgroundColor: '#101010', borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  localCopy: { flex: 1, minWidth: 0 },
-  localTitle: { color: '#DCDCDC', fontSize: 14, fontWeight: '700', marginTop: 5 },
-  scanButton: { minWidth: 66, height: 38, borderRadius: 12, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
-  scanButtonText: { color: '#080808', fontSize: 11, fontWeight: '800' },
-  permissionError: { color: '#E38A8A', fontSize: 12, lineHeight: 18, paddingHorizontal: 20, paddingVertical: 8 },
-  historySummary: { marginHorizontal: 18, marginTop: 9, minHeight: 86, borderRadius: 18, backgroundColor: '#101010', borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', flexDirection: 'row', alignItems: 'center' },
-  historyStat: { flex: 1, alignItems: 'center' },
-  historyValue: { color: '#F1F1F1', fontSize: 21, fontWeight: '800' },
-  historyLabel: { color: '#686868', fontSize: 10, fontWeight: '700', marginTop: 3 },
-  historyRule: { width: StyleSheet.hairlineWidth, height: 42, backgroundColor: '#292929' },
-  historyHead: { marginHorizontal: 18, marginTop: 18, marginBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  historyTitle: { color: '#D8D8D8', fontSize: 14, fontWeight: '700', marginTop: 4 },
-  clearHistory: { minWidth: 54, height: 34, borderRadius: 11, backgroundColor: '#171717', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  clearHistoryText: { color: '#999', fontSize: 11, fontWeight: '700' },
-  historyTime: { color: '#636363', fontSize: 10, fontWeight: '700', paddingHorizontal: 4 },
+  empty: { paddingVertical: 72, alignItems: 'center', paddingHorizontal: 30 },
+  emptyTitle: { color: '#E8E8E8', fontSize: 18, fontWeight: '800' },
+  emptyBody: { color: '#737373', fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 7 },
+  accountGate: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  gateTitle: { color: '#F2F2F2', fontSize: 28, lineHeight: 33, fontWeight: '900', letterSpacing: -0.7 },
+  gateBody: { color: '#777', fontSize: 14, lineHeight: 21, marginTop: 10 },
+  signIn: { height: 50, marginTop: 22, borderRadius: 15, backgroundColor: '#EFEFEF', alignItems: 'center', justifyContent: 'center' },
+  signInText: { color: '#101010', fontSize: 14, fontWeight: '800' },
+  error: { position: 'absolute', left: 16, right: 16, bottom: 12, color: '#E89494', fontSize: 11, backgroundColor: '#1A1010', borderRadius: 10, padding: 9 },
 });
