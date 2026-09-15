@@ -683,10 +683,13 @@ test('now playing uses responsive artwork and control spacing on narrow phones',
   const source = await readFile('app/player.tsx', 'utf8');
   assert.match(source, /useWindowDimensions/);
   assert.match(source, /playerContentWidth = Math\.max\(0, width - 32\)/);
-  assert.match(source, /artworkSize = Math\.min\(compactArtwork \? 244 : 360, playerContentWidth\)/);
-  assert.match(source, /controlsFixedWidth = 42 \+ 52 \+ 76 \+ 52 \+ 42/);
+  assert.match(source, /artworkSize = compactArtwork \? Math\.min\(244, playerContentWidth\) : playerContentWidth/);
+  assert.match(source, /controlsFixedWidth = 40 \+ 50 \+ 64 \+ 50 \+ 40/);
   assert.match(source, /Math\.min\(34, \(playerContentWidth - controlsFixedWidth\) \/ 4\)/);
   assert.match(source, /style=\{\[styles\.controls, \{ gap: controlGap \}\]\}/);
+  assert.match(source, /scrollNowPlaying: \{ flexGrow: 1 \}/);
+  assert.match(source, /artworkWrapExpanded: \{ flexGrow: 1/);
+  assert.match(source, /PLAYER_BACKGROUND_FADE/);
 });
 
 test('sleep countdown no longer invalidates the core player context every second', async () => {
