@@ -27,6 +27,7 @@ import {
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist } from '@/src/types';
 
 type LibraryTab = 'playlists' | 'albums' | 'artists';
