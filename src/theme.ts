@@ -9,8 +9,8 @@ export const colors = {
   textStrong: '#FFFFFF',
   muted: '#808080',
   mutedDim: '#5D5D5D',
-  accent: '#A78BFA',
-  accentDark: '#450AF5',
+  accent: '#10B981',
+  accentDark: '#006239',
   danger: '#F3727F',
 } as const;
 

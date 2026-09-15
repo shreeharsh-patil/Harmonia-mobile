@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
+import { colors } from '@/src/theme';
 import type { Song } from '@/src/types';
 
 export function SongRow({
@@ -52,7 +53,7 @@ const styles = StyleSheet.create({
   row: { minHeight: 68, flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
   copy: { flex: 1, minWidth: 0, marginLeft: 12 },
   title: { color: '#ECECEC', fontSize: 15, fontWeight: '700' },
-  active: { color: '#A78BFA' },
+  active: { color: colors.accent },
   artist: { color: '#8A8A8A', fontSize: 13, marginTop: 4 },
   play: { marginHorizontal: 10 },
   more: { width: 44, height: 48, alignItems: 'center', justifyContent: 'center' },

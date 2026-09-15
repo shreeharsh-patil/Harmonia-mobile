@@ -17,7 +17,7 @@ import {
   fetchRecommendedMixes,
 } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
-import { usePlaybackActivity, usePlayer, type PlaybackHistoryEntry } from '@/src/providers/PlayerProvider';
+import { usePlaybackHistory, usePlayer, type PlaybackHistoryEntry } from '@/src/providers/PlayerProvider';
 import type { MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
 function uniqueRecentSongs(history: PlaybackHistoryEntry[]) {
@@ -36,7 +36,7 @@ function uniqueRecentSongs(history: PlaybackHistoryEntry[]) {
 export default function ExploreScreen() {
   const { token } = useAuth();
   const { currentSong, playSong } = usePlayer();
-  const { history } = usePlaybackActivity();
+  const { history } = usePlaybackHistory();
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function ExploreScreen() {
     setError(null);
 
     const [homeResult, mixResult] = await Promise.allSettled([
-      fetchHomeSections(),
+      fetchHomeSections({ forceRefresh: refresh }),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
     ]);
 

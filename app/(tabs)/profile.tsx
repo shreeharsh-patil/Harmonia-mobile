@@ -16,7 +16,7 @@ import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
+import { useListeningStats, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
 function localDayKey(date = new Date()) {
@@ -29,7 +29,7 @@ export default function ProfileScreen() {
   const { user, token, loading, signOut, refreshUser } = useAuth();
   const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
   const { currentSong } = usePlayer();
-  const { listeningStats } = usePlaybackActivity();
+  const { listeningStats } = useListeningStats();
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   if (loading) {

@@ -36,11 +36,8 @@ export function MiniPlayer() {
     togglePlayback,
     next,
   } = usePlayer();
-  const { position, duration } = usePlaybackProgress();
 
   if (!currentSong) return null;
-
-  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
 
   return (
     <View style={styles.shell}>
@@ -88,9 +85,18 @@ export function MiniPlayer() {
         </Pressable>
       </View>
 
-      <View style={styles.progressTrack}>
-        <View style={[styles.progress, { width: `${progress * 100}%` }]} />
-      </View>
+      <MiniPlayerProgress />
+    </View>
+  );
+}
+
+function MiniPlayerProgress() {
+  const { position, duration } = usePlaybackProgress();
+  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progress, { width: `${progress * 100}%` }]} />
     </View>
   );
 }

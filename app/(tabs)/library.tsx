@@ -26,8 +26,7 @@ import {
 } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
-import { colors } from '@/src/theme';
+import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist } from '@/src/types';
 
 type LibraryTab = 'playlists' | 'albums' | 'artists';
@@ -52,7 +51,6 @@ export default function LibraryScreen() {
     createPlaylist,
   } = useLibrary();
   const { currentSong, playSong } = usePlayer();
-  usePlaybackActivity();
 
   const [tab, setTab] = useState<LibraryTab>('playlists');
   const [viewMode, setViewMode] = useState<LibraryViewMode>('grid');

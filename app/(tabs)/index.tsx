@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -29,7 +29,7 @@ import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/li
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import {
-  usePlaybackActivity,
+  usePlaybackHistory,
   usePlayer,
   type PlaybackHistoryEntry,
 } from '@/src/providers/PlayerProvider';
@@ -51,19 +51,13 @@ function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
   return songs;
 }
 
-function greetingForHour(hour: number) {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, playSong } = usePlayer();
-  const { history } = usePlaybackActivity();
+  const { history } = usePlaybackHistory();
 
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
@@ -77,8 +71,7 @@ export default function HomeScreen() {
   const loadGenerationRef = useRef(0);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
-  const greeting = greetingForHour(new Date().getHours());
-  const profileInitial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
+  const quickCardWidth = Math.floor((width - 32) / 2);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -87,10 +80,10 @@ export default function HomeScreen() {
     setError(null);
 
     const [publicResult, recentResult, mixResult, trendingResult] = await Promise.allSettled([
-      fetchHomeSections(),
+      fetchHomeSections({ forceRefresh: refresh }),
       token ? fetchRecentlyPlayedPlaylists(token) : Promise.resolve<Playlist[]>([]),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
-      fetchTrendingHomeContent(),
+      fetchTrendingHomeContent({ forceRefresh: refresh }),
     ]);
 
     if (generation !== loadGenerationRef.current) return;
@@ -118,34 +111,38 @@ export default function HomeScreen() {
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
   }, [load]);
 
-  const openPlaylist = (playlist: Playlist) => {
+  const openPlaylist = useCallback((playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (!id) return;
     router.push({ pathname: '/playlist/[id]', params: { id } });
-  };
+  }, []);
 
-  const openAlbum = (album: HarmoniaAlbum) => {
+  const openAlbum = useCallback((album: HarmoniaAlbum) => {
     const id = String(album.id || '');
     if (!id) return;
     router.push({ pathname: '/album/[id]', params: { id } });
-  };
+  }, []);
 
-  const openMix = (mix: RecommendedMix) => {
+  const openMix = useCallback((mix: RecommendedMix) => {
     const id = String(mix._mixId || mix.id || '');
     if (!id) return;
     router.push({ pathname: '/mix/[id]', params: { id } });
-  };
+  }, []);
 
   const featuredFallback = useMemo(
     () => sections.flatMap((section) => section.playlists || []).slice(0, 5),
     [sections]
   );
 
-  const quickPlaylists = recentPlaylists.length
-    ? recentPlaylists.slice(0, 5)
-    : featuredFallback;
+  const quickPlaylists = useMemo(
+    () => recentPlaylists.length ? recentPlaylists.slice(0, 5) : featuredFallback,
+    [featuredFallback, recentPlaylists]
+  );
 
   const topColumns = useMemo(() => {
     const columns: Song[][] = [];
@@ -156,6 +153,10 @@ export default function HomeScreen() {
   }, [trendingSongs]);
 
   const topColumnWidth = Math.min(342, Math.max(282, width - 54));
+
+  const playRecentSong = useCallback((song: Song) => {
+    void playSong(song, recentSongs);
+  }, [playSong, recentSongs]);
 
   const scrollTopSongs = (direction: -1 | 1) => {
     if (!topColumns.length) return;
@@ -176,32 +177,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <View style={styles.topCopy}>
-          <Text style={styles.eyebrow}>HARMONIA</Text>
-          <Text style={styles.topTitle}>{greeting}</Text>
-        </View>
-        <View style={styles.topActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Search"
-            onPress={() => router.push('/(tabs)/search')}
-            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="search" size={22} color="#F2F2F2" />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            onPress={() => router.push('/(tabs)/profile')}
-            style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
-          >
-            {user?.image ? (
-              <Image source={{ uri: user.image }} style={styles.profileImage} contentFit="cover" cachePolicy="memory-disk" />
-            ) : (
-              <Text style={styles.profileInitial}>{profileInitial}</Text>
-            )}
-          </Pressable>
-        </View>
+        <Text style={styles.topTitle}>Discover</Text>
       </View>
 
       <ScrollView
@@ -225,7 +201,7 @@ export default function HomeScreen() {
                   if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
                   else router.push('/(tabs)/library');
                 }}
-                style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.quickCard, { width: quickCardWidth }, pressed && styles.pressed]}
               >
                 <View style={styles.likedArtwork}>
                   <Ionicons name="heart" size={20} color="#FF3B4D" />
@@ -237,7 +213,8 @@ export default function HomeScreen() {
                 <QuickPlaylistCard
                   key={String(playlist.id || playlist._id || `quick-${index}`)}
                   playlist={playlist}
-                  onPress={() => openPlaylist(playlist)}
+                  width={quickCardWidth}
+                  onPress={openPlaylist}
                 />
               ))}
             </View>
@@ -340,7 +317,7 @@ export default function HomeScreen() {
                     title="Recently Played"
                     songs={recentSongs}
                     currentSongId={currentSong?.id}
-                    onPress={(song) => void playSong(song, recentSongs)}
+                    onPress={playRecentSong}
                   />
                 )}
 
@@ -374,7 +351,7 @@ export default function HomeScreen() {
                       windowSize={RAIL_WINDOW_SIZE}
                       contentContainerStyle={styles.rail}
                       renderItem={({ item }) => (
-                        <PlaylistCard playlist={item} size={138} onPress={() => openMix(item)} />
+                        <PlaylistCard playlist={item} size={140} onPress={() => openMix(item)} />
                       )}
                     />
                   </View>
@@ -393,27 +370,29 @@ export default function HomeScreen() {
   );
 }
 
-function QuickPlaylistCard({
+const QuickPlaylistCard = memo(function QuickPlaylistCard({
   playlist,
+  width,
   onPress,
 }: {
   playlist: Playlist;
-  onPress: () => void;
+  width: number;
+  onPress: (playlist: Playlist) => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Open ${playlist.name || playlist.title || 'playlist'}`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+      onPress={() => onPress(playlist)}
+      style={({ pressed }) => [styles.quickCard, { width }, pressed && styles.pressed]}
     >
-      <PlaylistArtwork playlist={playlist} size={52} radius={7} />
+      <PlaylistArtwork playlist={playlist} size={52} radius={12} />
       <Text numberOfLines={2} style={styles.quickTitle}>
         {playlist.name || playlist.title || 'Playlist'}
       </Text>
     </Pressable>
   );
-}
+});
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -423,7 +402,7 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function PlaylistRail({
+const PlaylistRail = memo(function PlaylistRail({
   title,
   data,
   onPress,
@@ -447,14 +426,14 @@ function PlaylistRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => (
-          <PlaylistCard playlist={item} size={138} onPress={() => onPress(item)} />
+          <PlaylistCard playlist={item} size={140} onPress={() => onPress(item)} />
         )}
       />
     </View>
   );
-}
+});
 
-function SongRail({
+const SongRail = memo(function SongRail({
   title,
   songs,
   currentSongId,
@@ -488,7 +467,7 @@ function SongRail({
               onPress={() => onPress(item)}
               style={({ pressed }) => [styles.recentSongCard, pressed && styles.pressed]}
             >
-              <TrackArtwork song={item} size={138} radius={8} />
+              <TrackArtwork song={item} size={140} radius={8} />
               <Text numberOfLines={1} style={[styles.recentSongTitle, active && styles.recentSongTitleActive]}>
                 {item.name || item.title || 'Untitled Track'}
               </Text>
@@ -499,9 +478,9 @@ function SongRail({
       />
     </View>
   );
-}
+});
 
-function AlbumRail({
+const AlbumRail = memo(function AlbumRail({
   title,
   albums,
   onPress,
@@ -523,7 +502,7 @@ function AlbumRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => {
-          const cover = imageUrl(item.image as any, 138);
+          const cover = imageUrl(item.image as any, 140);
           return (
             <Pressable
               onPress={() => onPress(item)}
@@ -551,7 +530,7 @@ function AlbumRail({
       />
     </View>
   );
-}
+});
 
 function HomeSkeleton() {
   return (
@@ -576,66 +555,57 @@ function HomeSkeleton() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
-    minHeight: 72,
+    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.background,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
     zIndex: 4,
   },
-  topCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { color: '#777', fontSize: 10, lineHeight: 14, fontWeight: '800', letterSpacing: 1.8 },
   topTitle: {
     color: colors.textStrong,
-    fontSize: 27,
-    lineHeight: 32,
-    fontWeight: '900',
-    letterSpacing: -0.8,
-    marginTop: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
   },
-  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  profileButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECECEC', overflow: 'hidden' },
-  profileImage: { width: 36, height: 36 },
-  profileInitial: { color: '#090909', fontSize: 15, fontWeight: '900' },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 16,
   },
   ambientGlow: {
     position: 'absolute',
-    top: -70,
-    left: -50,
-    width: 270,
-    height: 220,
-    borderRadius: 140,
-    backgroundColor: 'rgba(69,10,245,0.08)',
+    top: 0,
+    left: -12,
+    right: -12,
+    height: 260,
+    backgroundColor: 'rgba(69,10,245,0.10)',
   },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   quickCard: {
-    width: '49%',
     minHeight: 56,
-    borderRadius: 8,
+    borderRadius: 16,
     padding: 2,
     paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181818',
+    backgroundColor: 'rgba(23,23,23,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(41,41,41,0.72)',
   },
   likedArtwork: {
     width: 52,
     height: 52,
-    borderRadius: 7,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6A65F2',
+    backgroundColor: '#450AF5',
   },
   quickTitle: {
     flex: 1,
@@ -646,7 +616,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginLeft: 10,
   },
-  section: { marginBottom: 32 },
+  section: { marginBottom: 24 },
   sectionHead: {
     minHeight: 32,
     flexDirection: 'row',
@@ -659,19 +629,19 @@ const styles = StyleSheet.create({
   sectionTitle: {
     flexShrink: 1,
     color: '#F0F0F0',
-    fontSize: 22,
-    lineHeight: 27,
-    fontWeight: '900',
-    letterSpacing: -0.5,
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: '800',
+    letterSpacing: -0.4,
   },
   sectionSubtitle: { color: '#8A8A8A', fontSize: 12, marginTop: 2 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
-  recentSongCard: { width: 138, marginRight: 14 },
+  recentSongCard: { width: 140, marginRight: 16 },
   recentSongTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
-  recentSongTitleActive: { color: '#A78BFA' },
+  recentSongTitleActive: { color: colors.accent },
   recentSongArtist: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, marginTop: 2 },
-  albumCard: { width: 138, marginRight: 14 },
-  albumArtwork: { width: 138, height: 138, borderRadius: 8, backgroundColor: '#171717' },
+  albumCard: { width: 140, marginRight: 16 },
+  albumArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: '#171717' },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
   albumTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
   albumMeta: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, fontWeight: '500', marginTop: 2 },
@@ -729,7 +699,7 @@ const styles = StyleSheet.create({
   skeletonWrap: { paddingTop: 2 },
   skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: '#171717', marginBottom: 9 },
   skeletonRail: { flexDirection: 'row', gap: 12 },
-  skeletonCard: { width: 138 },
-  skeletonArtwork: { width: 138, height: 138, borderRadius: 8, backgroundColor: '#171717' },
+  skeletonCard: { width: 140 },
+  skeletonArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: '#171717' },
   skeletonLine: { width: 90, height: 10, borderRadius: 4, backgroundColor: '#171717', marginTop: 8 },
 });
