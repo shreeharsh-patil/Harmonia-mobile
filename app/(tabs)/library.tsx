@@ -246,17 +246,10 @@ export default function LibraryScreen() {
     );
   };
 
-  const sharedListProps = {
-    initialNumToRender: SONG_LIST_INITIAL_RENDER,
-    maxToRenderPerBatch: SONG_LIST_BATCH_SIZE,
-    updateCellsBatchingPeriod: SONG_LIST_BATCHING_PERIOD_MS,
-    windowSize: SONG_LIST_WINDOW_SIZE,
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.push('/(tabs)/profile')} accessibilityLabel="Open profile">
+        <Pressable onPress={() => router.push('/profile')} accessibilityLabel="Open profile">
           {user?.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
@@ -361,8 +354,11 @@ export default function LibraryScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
           ListEmptyComponent={<LibraryEmpty title="No playlists yet" />}
-          {...sharedListProps}
         />
       ) : tab === 'albums' ? (
         <FlatList<HarmoniaAlbum>
@@ -374,8 +370,11 @@ export default function LibraryScreen() {
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
           ListEmptyComponent={<LibraryEmpty title="No saved albums yet" />}
-          {...sharedListProps}
         />
       ) : (
         <FlatList<HarmoniaArtistEntity>
@@ -387,8 +386,11 @@ export default function LibraryScreen() {
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
           ListEmptyComponent={<LibraryEmpty title="No followed artists yet" />}
-          {...sharedListProps}
         />
       )}
 
