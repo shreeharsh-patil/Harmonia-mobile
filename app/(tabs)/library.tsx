@@ -145,8 +145,8 @@ export default function LibraryScreen() {
   const accountGate = (
     <View style={[styles.accountGate, { paddingBottom: contentBottomInset }]}>
       <Text style={styles.gateTitle}>Your library, everywhere.</Text>
-      <Text style={styles.gateBody}>Sign in to sync liked songs, playlists, saved albums and artists with Harmonia Web.</Text>
-      <Pressable onPress={() => router.push('/login')} style={styles.signIn}>
+      <Text style={styles.gateBody}>Sign in to keep your liked songs, playlists, saved albums, and followed artists in sync.</Text>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/login')} style={styles.signIn}>
         <Text style={styles.signInText}>Sign in</Text>
       </Pressable>
     </View>
@@ -178,7 +178,7 @@ export default function LibraryScreen() {
           )}
           <View style={styles.listCopy}>
             <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
-            <Text numberOfLines={1} style={styles.itemMeta}>{liked ? 'Playlist' : `${count} songs`}</Text>
+            <Text numberOfLines={1} style={styles.itemMeta}>{liked ? 'Playlist' : `${count} ${count === 1 ? 'song' : 'songs'}`}</Text>
           </View>
         </Pressable>
       );
@@ -197,7 +197,11 @@ export default function LibraryScreen() {
           <PlaylistArtwork playlist={item} size={gridArtworkSize} radius={0} />
         )}
         <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
-        <Text numberOfLines={1} style={styles.itemMeta}>{liked ? `Playlist · ${likedSongs.length} songs` : `${count} songs`}</Text>
+        <Text numberOfLines={1} style={styles.itemMeta}>
+          {liked
+            ? `Playlist · ${likedSongs.length} ${likedSongs.length === 1 ? 'song' : 'songs'}`
+            : `${count} ${count === 1 ? 'song' : 'songs'}`}
+        </Text>
       </Pressable>
     );
   };
@@ -249,7 +253,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.push('/profile')} accessibilityLabel="Open profile">
+        <Pressable accessibilityRole="button" onPress={() => router.push('/profile')} accessibilityLabel="Open profile">
           {user?.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
@@ -303,8 +307,14 @@ export default function LibraryScreen() {
           ['albums', 'Albums'],
           ['artists', 'Artists'],
         ] as [LibraryTab, string][]).map(([value, label]) => (
-          <Pressable key={value} onPress={() => setTab(value)} style={[styles.filterChip, tab === value && styles.filterChipActive]}>
-            <Text style={styles.filterText}>{label}</Text>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === value }}
+            key={value}
+            onPress={() => setTab(value)}
+            style={[styles.filterChip, tab === value && styles.filterChipActive]}
+          >
+            <Text style={[styles.filterText, tab === value && styles.filterTextActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -333,8 +343,8 @@ export default function LibraryScreen() {
 
       <View style={styles.sortRow}>
         <Pressable onPress={() => void refresh()} style={styles.sortButton} accessibilityLabel="Refresh library">
-          {refreshing ? <ActivityIndicator color="#CFCFCF" size="small" /> : <Ionicons name="swap-vertical" size={21} color="#E4E4E4" />}
-          <Text style={styles.sortText}>Recents</Text>
+          {refreshing ? <ActivityIndicator color="#CFCFCF" size="small" /> : <Ionicons name="refresh" size={20} color="#E4E4E4" />}
+          <Text style={styles.sortText}>Refresh</Text>
         </Pressable>
         <Pressable onPress={toggleViewMode} style={styles.viewButton} accessibilityLabel={viewMode === 'grid' ? 'Use list view' : 'Use grid view'}>
           <Ionicons name={viewMode === 'grid' ? 'list-outline' : 'grid-outline'} size={28} color="#D3D3D3" />
@@ -444,8 +454,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterChipActive: { backgroundColor: '#303030' },
-  filterText: { color: '#F0F0F0', fontSize: 16, fontWeight: '800' },
+  filterChipActive: { backgroundColor: '#F0F0F0' },
+  filterText: { color: '#D5D5D5', fontSize: 14, fontWeight: '700' },
+  filterTextActive: { color: '#111111' },
   createPanel: {
     marginHorizontal: 16,
     marginBottom: 14,
@@ -481,7 +492,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sortButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sortText: { color: '#DADADA', fontSize: 16, fontWeight: '800' },
+  sortText: { color: '#DADADA', fontSize: 14, fontWeight: '700' },
   viewButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   gridRow: { justifyContent: 'space-between' },

@@ -173,8 +173,8 @@ export default function SettingsScreen() {
             <>
               <StaticRow icon="person-outline" title={user.name || 'Harmonia account'} detail={user.email} />
               <ActionRow icon="create-outline" title="Edit profile" detail="Update your name and profile picture" onPress={() => router.push('/edit-profile')} />
-              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist into Harmonia" onPress={() => router.push('/import-playlist')} />
-              <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from the phone" destructive onPress={() => void signOutNow()} />
+              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist to Harmonia" onPress={() => router.push('/import-playlist')} />
+              <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from this phone" destructive onPress={() => void signOutNow()} />
             </>
           ) : (
             <ActionRow icon="log-in-outline" title="Sign in" detail="Sync your Harmonia account" onPress={() => router.push('/login')} />
@@ -340,7 +340,7 @@ export default function SettingsScreen() {
           <ActionRow
             icon="cloud-download-outline"
             title="Check for updates"
-            detail={checkingUpdate ? 'Checking GitHub Releases…' : 'Compare this build with the latest published release'}
+            detail={checkingUpdate ? 'Checking for updates…' : 'Compare this build with the latest published release'}
             disabled={checkingUpdate}
             onPress={() => void checkUpdates()}
           />
@@ -352,7 +352,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Text style={styles.footer}>Native Expo player · Harmonia account and catalog backend</Text>
+        <Text style={styles.footer}>Harmonia Mobile · Built for uninterrupted listening</Text>
       </ScrollView>
     </SafeAreaView>
   );

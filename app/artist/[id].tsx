@@ -50,7 +50,7 @@ export default function ArtistScreen() {
       setSongs([]);
       setAlbums([]);
       setLoading(false);
-      setError('Artist ID is missing');
+      setError('This artist link is incomplete.');
       return;
     }
 
@@ -224,7 +224,7 @@ export default function ArtistScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No playable tracks</Text>
-            <Text style={styles.emptyBody}>Harmonia did not return songs for this artist.</Text>
+            <Text style={styles.emptyBody}>No playable tracks are available for this artist.</Text>
           </View>
         }
         renderItem={({ item, index }) => (

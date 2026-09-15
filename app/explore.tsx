@@ -62,7 +62,7 @@ export default function ExploreScreen() {
     if (homeResult.status === 'fulfilled') {
       setSections(homeResult.value);
     } else {
-      setError(homeResult.reason?.message || 'Unable to load Explore');
+      setError(homeResult.reason?.message || 'Unable to load recommendations');
     }
 
     setMixes(mixResult.status === 'fulfilled' ? mixResult.value : []);

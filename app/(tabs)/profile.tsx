@@ -42,8 +42,8 @@ export default function ProfileScreen() {
         <View style={[styles.guest, { paddingBottom: contentBottomInset }]}>
           <Text style={styles.kicker}>HARMONIA ACCOUNT</Text>
           <Text style={styles.guestTitle}>Keep your music in sync.</Text>
-          <Text style={styles.body}>One account for your web player, phone library, liked songs and playlists.</Text>
-          <Pressable onPress={() => router.push('/login')} style={styles.primary}>
+          <Text style={styles.body}>One account keeps your library, liked songs, and playlists available across Harmonia.</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/login')} style={styles.primary}>
             <Text style={styles.primaryText}>Sign in</Text>
           </Pressable>
         </View>
@@ -121,7 +121,7 @@ export default function ProfileScreen() {
           <View style={styles.rule} />
           <View style={styles.stat}>
             <Text style={styles.statValue}>{todayMinutes}</Text>
-            <Text style={styles.statLabel}>Today min</Text>
+            <Text style={styles.statLabel}>Min today</Text>
           </View>
         </View>
 
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.listeningMetric}>
             <Text style={styles.listeningValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
-            <Text style={styles.listeningLabel}>Minutes overall</Text>
+            <Text style={styles.listeningLabel}>Total minutes</Text>
           </View>
           <View style={styles.listeningMetric}>
             <Text style={styles.listeningValue}>{listeningStats.playCount}</Text>
@@ -149,7 +149,7 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardKicker}>SYNC</Text>
           <Text style={styles.cardTitle}>Connected to Harmonia</Text>
-          <Text style={styles.cardBody}>Changes to your liked songs and playlists are stored on your account and shared with the web player.</Text>
+          <Text style={styles.cardBody}>Your liked songs and playlists are safely synced across your Harmonia devices.</Text>
           <Pressable onPress={() => void doRefresh()} style={styles.secondary}>
             <Text style={styles.secondaryText}>Sync now</Text>
           </Pressable>
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: 'rgba(0,0,0,0.96)',
   },
-  pageTitle: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  pageTitle: { color: colors.textStrong, fontSize: 28, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
   settingsButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   identity: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#151515' },

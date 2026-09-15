@@ -11,19 +11,24 @@ export function PlaylistCard({
   onPress: () => void;
   size?: number;
 }) {
+  const name = playlist.name || playlist.title || 'Playlist';
+  const songCount = Number(playlist.songCount || 0);
+
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${name}`}
       onPress={onPress}
       style={({ pressed }) => [styles.card, { width: size }, pressed && styles.pressed]}
     >
       <PlaylistArtwork playlist={playlist} size={size} radius={8} />
       <Text numberOfLines={1} style={styles.title}>
-        {playlist.name || playlist.title || 'Playlist'}
+        {name}
       </Text>
       {!!(playlist.songCount || playlist.subtitle || playlist.owner) && (
         <Text numberOfLines={1} style={styles.subtitle}>
-          {playlist.songCount
-            ? `${playlist.songCount} songs`
+          {songCount
+            ? `${songCount} ${songCount === 1 ? 'song' : 'songs'}`
             : playlist.subtitle || playlist.owner}
         </Text>
       )}
@@ -32,7 +37,7 @@ export function PlaylistCard({
 }
 
 const styles = StyleSheet.create({
-  card: { marginRight: 16 },
+  card: { marginRight: 14 },
   title: {
     color: '#E8E8E8',
     fontSize: 13,
@@ -42,10 +47,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 1,
   },
   subtitle: {
-    color: '#808080',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
+    color: '#8B8B8B',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
     marginTop: 2,
     paddingHorizontal: 1,
   },

@@ -80,7 +80,7 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <View style={styles.root}>
-        <Pressable accessibilityLabel="Close song actions" style={styles.scrim} onPress={close} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Close song actions" style={styles.scrim} onPress={close} />
         <View style={[styles.sheet, { paddingBottom: Math.max(28, insets.bottom + 16) }]}>
           <View style={styles.handle} />
           <View style={styles.trackHeader}>
@@ -104,6 +104,7 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
               <ScrollView style={styles.playlistList} showsVerticalScrollIndicator={false}>
                 {playlists.length ? playlists.map((playlist) => {
                   const id = playlistId(playlist);
+                  const count = playlist.songCount ?? playlist.songIds?.length ?? 0;
                   return (
                     <Pressable
                       key={id}
@@ -124,18 +125,18 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
                       <View style={styles.playlistMark}><Text style={styles.playlistMarkText}>♫</Text></View>
                       <View style={styles.playlistCopy}>
                         <Text numberOfLines={1} style={styles.playlistName}>{playlist.name}</Text>
-                        <Text style={styles.playlistMeta}>{playlist.songCount ?? playlist.songIds?.length ?? 0} songs</Text>
+                        <Text style={styles.playlistMeta}>{count} {count === 1 ? 'song' : 'songs'}</Text>
                       </View>
                       {busyPlaylist === id ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.chevron}>›</Text>}
                     </Pressable>
                   );
-                }) : <Text style={styles.empty}>Create a playlist in Library first.</Text>}
+                }) : <Text style={styles.empty}>Create a playlist in Your Library first.</Text>}
               </ScrollView>
             </View>
           ) : (
             <View style={styles.actions}>
-              <Action label="Play next" detail="Move behind the current track" glyph="↳" onPress={() => finish(() => playNext(song), 'Playing next')} />
-              <Action label="Add to queue" detail="Place at the end of the queue" glyph="+" onPress={() => finish(() => addToQueue(song), 'Added to queue')} />
+              <Action label="Play next" detail="Play after the current track" glyph="↳" onPress={() => finish(() => playNext(song), 'Playing next')} />
+              <Action label="Add to queue" detail="Add to the end of your queue" glyph="+" onPress={() => finish(() => addToQueue(song), 'Added to queue')} />
               <Action label="Share" detail="Send this track with the native share sheet" glyph="↗" onPress={() => { void shareSong(song); close(); }} />
               <Action
                 label={isLiked(song.id) ? 'Remove from Liked Songs' : 'Add to Liked Songs'}

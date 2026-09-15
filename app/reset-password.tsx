@@ -42,7 +42,7 @@ export default function ResetPasswordScreen() {
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <Text style={styles.kicker}>NEW PASSWORD</Text>
           <Text style={styles.title}>Choose a new password.</Text>
-          {!token && <Text style={styles.error}>This reset link is missing its token. Open the link from your reset email again.</Text>}
+          {!token && <Text style={styles.error}>This reset link is incomplete. Open the link from your reset email again.</Text>}
         </View>
         <View style={styles.form}>
           <TextInput value={password} onChangeText={setPassword} placeholder="New password" placeholderTextColor="#666" secureTextEntry autoComplete="new-password" style={styles.input} />

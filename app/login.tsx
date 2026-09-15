@@ -34,11 +34,12 @@ export default function LoginScreen() {
           <View style={styles.mark}><Text style={styles.markText}>H</Text></View>
           <Text style={styles.eyebrow}>HARMONIA</Text>
           <Text style={styles.title}>Your music follows you.</Text>
-          <Text style={styles.subtitle}>Sign in to sync playlists, liked songs and your library.</Text>
+          <Text style={styles.subtitle}>Sign in to sync your playlists, liked songs, and library.</Text>
         </View>
 
         <View style={styles.form}>
           <TextInput
+            accessibilityLabel="Email address"
             value={email}
             onChangeText={setEmail}
             placeholder="Email"
@@ -49,6 +50,7 @@ export default function LoginScreen() {
             style={styles.input}
           />
           <TextInput
+            accessibilityLabel="Password"
             value={password}
             onChangeText={setPassword}
             placeholder="Password"
@@ -58,12 +60,13 @@ export default function LoginScreen() {
             style={styles.input}
             onSubmitEditing={submit}
           />
-          <Pressable onPress={() => router.push('/forgot-password')} style={styles.forgot}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/forgot-password')} style={styles.forgot}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </Pressable>
           {!!error && <Text style={styles.error}>{error}</Text>}
 
           <Pressable
+            accessibilityRole="button"
             disabled={authenticating}
             onPress={submit}
             style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
@@ -78,6 +81,7 @@ export default function LoginScreen() {
           </View>
 
           <Pressable
+            accessibilityRole="button"
             disabled={authenticating}
             onPress={() => signInWithProvider('google')}
             style={({ pressed }) => [styles.social, pressed && styles.pressed]}
@@ -85,13 +89,14 @@ export default function LoginScreen() {
             <Text style={styles.socialText}>Continue with Google</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
             disabled={authenticating}
             onPress={() => signInWithProvider('github')}
             style={({ pressed }) => [styles.social, pressed && styles.pressed]}
           >
             <Text style={styles.socialText}>Continue with GitHub</Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/signup')} style={styles.signup}>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/signup')} style={styles.signup}>
             <Text style={styles.signupText}>New to Harmonia? Create account</Text>
           </Pressable>
         </View>

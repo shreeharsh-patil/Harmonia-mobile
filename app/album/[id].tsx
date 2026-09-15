@@ -51,7 +51,7 @@ export default function AlbumScreen() {
     if (!id) {
       setAlbum(null);
       setLoading(false);
-      setError('Album ID is missing');
+      setError('This album link is incomplete.');
       return;
     }
 
@@ -123,7 +123,10 @@ export default function AlbumScreen() {
     (songs[0] ? artistNames(songs[0]) : '') ||
     String((album as any).artist || 'Various artists');
   const release = album.releaseDate || album.year;
-  const meta = [release ? String(release) : '', songs.length ? `${songs.length} songs` : ''].filter(Boolean).join(' · ');
+  const meta = [
+    release ? String(release) : '',
+    songs.length ? `${songs.length} ${songs.length === 1 ? 'song' : 'songs'}` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -187,7 +190,7 @@ export default function AlbumScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No playable tracks</Text>
-            <Text style={styles.emptyBody}>Harmonia did not return tracks for this album.</Text>
+            <Text style={styles.emptyBody}>No playable tracks are available for this album.</Text>
           </View>
         }
         renderItem={({ item, index }) => (

@@ -51,10 +51,16 @@ function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
   return songs;
 }
 
+function greetingForHour(hour: number) {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const { history } = usePlaybackActivity();
@@ -71,6 +77,8 @@ export default function HomeScreen() {
   const loadGenerationRef = useRef(0);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
+  const greeting = greetingForHour(new Date().getHours());
+  const profileInitial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -168,7 +176,32 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Text style={styles.topTitle}>Discover</Text>
+        <View style={styles.topCopy}>
+          <Text style={styles.eyebrow}>HARMONIA</Text>
+          <Text style={styles.topTitle}>{greeting}</Text>
+        </View>
+        <View style={styles.topActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Search"
+            onPress={() => router.push('/(tabs)/search')}
+            style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="search" size={22} color="#F2F2F2" />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open profile"
+            onPress={() => router.push('/(tabs)/profile')}
+            style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
+          >
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.profileImage} contentFit="cover" cachePolicy="memory-disk" />
+            ) : (
+              <Text style={styles.profileInitial}>{profileInitial}</Text>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -186,6 +219,8 @@ export default function HomeScreen() {
 
             <View style={styles.quickGrid}>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={likedSongs.length ? 'Play liked songs' : 'Open your library'}
                 onPress={() => {
                   if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
                   else router.push('/(tabs)/library');
@@ -232,7 +267,7 @@ export default function HomeScreen() {
                       <View style={styles.sectionHeadCopy}>
                         <Text style={styles.sectionTitle}>Top Songs</Text>
                         <Text numberOfLines={1} style={styles.sectionSubtitle}>
-                          The most popular tracks right now ({trendingSongs.length} songs)
+                          The most popular tracks right now ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
                         </Text>
                       </View>
                       <View style={styles.chartActions}>
@@ -242,7 +277,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex === 0 && styles.chartArrowDisabled]}
                           accessibilityLabel="Previous top songs"
                         >
-                          <Ionicons name="chevron-back" size={16} color="#DADADA" />
+                          <Ionicons name="chevron-back" size={18} color="#DADADA" />
                         </Pressable>
                         <Pressable
                           onPress={() => scrollTopSongs(1)}
@@ -250,7 +285,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex >= topColumns.length - 1 && styles.chartArrowDisabled]}
                           accessibilityLabel="Next top songs"
                         >
-                          <Ionicons name="chevron-forward" size={16} color="#DADADA" />
+                          <Ionicons name="chevron-forward" size={18} color="#DADADA" />
                         </Pressable>
                       </View>
                     </View>
@@ -281,10 +316,12 @@ export default function HomeScreen() {
                           {songs.map((song, localIndex) => (
                             <Pressable
                               key={String(song.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Play ${song.name || 'song'}`}
                               onPress={() => void playSong(song, trendingSongs)}
                               style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
                             >
-                              <TrackArtwork song={song} size={46} radius={8} />
+                              <TrackArtwork song={song} size={52} radius={8} />
                               <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
                               <View style={styles.chartCopy}>
                                 <Text numberOfLines={1} style={styles.chartTitle}>{song.name}</Text>
@@ -312,7 +349,6 @@ export default function HomeScreen() {
                     title="Recently Played Playlists"
                     data={recentPlaylists}
                     onPress={openPlaylist}
-                    showAll
                   />
                 )}
 
@@ -322,13 +358,12 @@ export default function HomeScreen() {
                     title={section.name}
                     data={section.playlists || []}
                     onPress={openPlaylist}
-                    showAll
                   />
                 ))}
 
                 {!!mixes.length && (
                   <View style={styles.section}>
-                    <SectionHeader title="Recommended for You" showAll />
+                    <SectionHeader title="Recommended for You" />
                     <FlatList
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -339,7 +374,7 @@ export default function HomeScreen() {
                       windowSize={RAIL_WINDOW_SIZE}
                       contentContainerStyle={styles.rail}
                       renderItem={({ item }) => (
-                        <PlaylistCard playlist={item} size={116} onPress={() => openMix(item)} />
+                        <PlaylistCard playlist={item} size={138} onPress={() => openMix(item)} />
                       )}
                     />
                   </View>
@@ -367,10 +402,12 @@ function QuickPlaylistCard({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${playlist.name || playlist.title || 'playlist'}`}
       onPress={onPress}
       style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
     >
-      <PlaylistArtwork playlist={playlist} size={44} radius={7} />
+      <PlaylistArtwork playlist={playlist} size={52} radius={7} />
       <Text numberOfLines={2} style={styles.quickTitle}>
         {playlist.name || playlist.title || 'Playlist'}
       </Text>
@@ -378,15 +415,10 @@ function QuickPlaylistCard({
   );
 }
 
-function SectionHeader({ title, showAll = false }: { title: string; showAll?: boolean }) {
+function SectionHeader({ title }: { title: string }) {
   return (
     <View style={styles.sectionHead}>
       <Text numberOfLines={1} style={styles.sectionTitle}>{title}</Text>
-      {showAll && (
-        <Pressable onPress={() => router.push('/(tabs)/search')} hitSlop={8}>
-          <Text style={styles.showAll}>Show all</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -395,18 +427,16 @@ function PlaylistRail({
   title,
   data,
   onPress,
-  showAll = false,
 }: {
   title: string;
   data: Playlist[];
   onPress: (playlist: Playlist) => void;
-  showAll?: boolean;
 }) {
   if (!data.length) return null;
 
   return (
     <View style={styles.section}>
-      <SectionHeader title={title} showAll={showAll} />
+      <SectionHeader title={title} />
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -417,7 +447,7 @@ function PlaylistRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => (
-          <PlaylistCard playlist={item} size={116} onPress={() => onPress(item)} />
+          <PlaylistCard playlist={item} size={138} onPress={() => onPress(item)} />
         )}
       />
     </View>
@@ -458,7 +488,7 @@ function SongRail({
               onPress={() => onPress(item)}
               style={({ pressed }) => [styles.recentSongCard, pressed && styles.pressed]}
             >
-              <TrackArtwork song={item} size={116} radius={8} />
+              <TrackArtwork song={item} size={138} radius={8} />
               <Text numberOfLines={1} style={[styles.recentSongTitle, active && styles.recentSongTitleActive]}>
                 {item.name || item.title || 'Untitled Track'}
               </Text>
@@ -493,7 +523,7 @@ function AlbumRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => {
-          const cover = imageUrl(item.image as any, 116);
+          const cover = imageUrl(item.image as any, 138);
           return (
             <Pressable
               onPress={() => onPress(item)}
@@ -544,25 +574,35 @@ function HomeSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0C0C0C' },
+  safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
-    height: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#242424',
-    backgroundColor: '#0D0D0D',
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.background,
     zIndex: 4,
   },
+  topCopy: { flex: 1, minWidth: 0 },
+  eyebrow: { color: '#777', fontSize: 10, lineHeight: 14, fontWeight: '800', letterSpacing: 1.8 },
   topTitle: {
-    color: '#EDEDED',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '500',
+    color: colors.textStrong,
+    fontSize: 27,
+    lineHeight: 32,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+    marginTop: 1,
   },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  profileButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECECEC', overflow: 'hidden' },
+  profileImage: { width: 36, height: 36 },
+  profileInitial: { color: '#090909', fontSize: 15, fontWeight: '900' },
   content: {
-    paddingHorizontal: 8,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   ambientGlow: {
     position: 'absolute',
@@ -576,22 +616,22 @@ const styles = StyleSheet.create({
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 28,
   },
   quickCard: {
     width: '49%',
-    minHeight: 48,
+    minHeight: 56,
     borderRadius: 8,
     padding: 2,
     paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111111',
+    backgroundColor: '#181818',
   },
   likedArtwork: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
@@ -601,53 +641,52 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: '#E7E7E7',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-    marginLeft: 7,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '800',
+    marginLeft: 10,
   },
-  section: { marginBottom: 24 },
+  section: { marginBottom: 32 },
   sectionHead: {
-    minHeight: 28,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
     paddingHorizontal: 1,
   },
   sectionHeadCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
   sectionTitle: {
     flexShrink: 1,
     color: '#F0F0F0',
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '800',
-    letterSpacing: -0.25,
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
-  sectionSubtitle: { color: '#777', fontSize: 9, marginTop: 1 },
-  showAll: { color: '#8F8F8F', fontSize: 10, fontWeight: '700' },
+  sectionSubtitle: { color: '#8A8A8A', fontSize: 12, marginTop: 2 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
-  recentSongCard: { width: 116, marginRight: 12 },
-  recentSongTitle: { color: '#E8E8E8', fontSize: 11, fontWeight: '700', marginTop: 7 },
+  recentSongCard: { width: 138, marginRight: 14 },
+  recentSongTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
   recentSongTitleActive: { color: '#A78BFA' },
-  recentSongArtist: { color: '#777', fontSize: 9, marginTop: 2 },
-  albumCard: { width: 116, marginRight: 12 },
-  albumArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  recentSongArtist: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, marginTop: 2 },
+  albumCard: { width: 138, marginRight: 14 },
+  albumArtwork: { width: 138, height: 138, borderRadius: 8, backgroundColor: '#171717' },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
-  albumTitle: { color: '#E8E8E8', fontSize: 11, fontWeight: '700', marginTop: 7 },
-  albumMeta: { color: '#777', fontSize: 9, fontWeight: '500', marginTop: 2 },
+  albumTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
+  albumMeta: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, fontWeight: '500', marginTop: 2 },
   topSongsHead: {
     minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 7,
+    marginBottom: 11,
   },
   chartActions: { flexDirection: 'row', gap: 6 },
   chartArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#181818',
     alignItems: 'center',
     justifyContent: 'center',
@@ -656,7 +695,7 @@ const styles = StyleSheet.create({
   chartRail: { gap: 10, paddingRight: 8 },
   chartColumn: { gap: 6 },
   chartRow: {
-    minHeight: 58,
+    minHeight: 64,
     borderRadius: 11,
     backgroundColor: '#111111',
     padding: 6,
@@ -664,25 +703,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chartNumber: {
-    width: 24,
+    width: 28,
     textAlign: 'center',
     color: '#7A7A7A',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   chartCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
-  chartTitle: { color: '#ECECEC', fontSize: 11, fontWeight: '800' },
-  chartArtist: { color: '#777', fontSize: 9, marginTop: 2 },
+  chartTitle: { color: '#ECECEC', fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  chartArtist: { color: '#8A8A8A', fontSize: 12, lineHeight: 16, marginTop: 2 },
   errorBox: {
     borderRadius: 9,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(243,114,127,0.22)',
     backgroundColor: 'rgba(84,28,21,0.28)',
-    padding: 10,
+    padding: 14,
     marginBottom: 18,
   },
-  error: { color: colors.danger, fontSize: 11, fontWeight: '600' },
-  retry: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  retry: { color: colors.muted, fontSize: 11, marginTop: 4 },
   empty: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: '#E7E7E7', fontSize: 15, fontWeight: '800' },
   emptyBody: { color: '#777', fontSize: 11, marginTop: 5 },
@@ -690,7 +729,7 @@ const styles = StyleSheet.create({
   skeletonWrap: { paddingTop: 2 },
   skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: '#171717', marginBottom: 9 },
   skeletonRail: { flexDirection: 'row', gap: 12 },
-  skeletonCard: { width: 116 },
-  skeletonArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  skeletonCard: { width: 138 },
+  skeletonArtwork: { width: 138, height: 138, borderRadius: 8, backgroundColor: '#171717' },
   skeletonLine: { width: 90, height: 10, borderRadius: 4, backgroundColor: '#171717', marginTop: 8 },
 });

@@ -193,7 +193,7 @@ type RequestOptions = RequestInit & {
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (!HAS_HARMONIA_API) {
     throw new ApiError(
-      'This feature needs your Harmonia backend. Configure EXPO_PUBLIC_HARMONIA_API_URL for account/catalog sync.',
+      'Account sync is unavailable in this build. You can continue listening without signing in.',
       503
     );
   }
