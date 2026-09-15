@@ -63,7 +63,7 @@ jobs:
           fi
           gh release create phone-build Harmonia-mobile.apk \
             --target "${GITHUB_SHA}" \
-            --title "Harmonia Mobile APK" \
-            --notes "Standalone Android APK built from the current main branch. Download Harmonia-mobile.apk on your Android phone and install it."
+            --title "Harmonia Mobile 0.3.4 APK" \
+            --notes "Latest standalone Android APK with the Harmonia player/lyrics gradient refinements and official India trending-chart update. Download Harmonia-mobile.apk on your Android phone and install it."
 
-# Release trigger: 2026-09-15-player-gradient-layout-v035
+# Release trigger: 2026-09-15-v034-latest

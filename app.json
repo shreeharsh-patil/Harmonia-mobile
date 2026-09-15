@@ -2,7 +2,7 @@
   "expo": {
     "name": "Harmonia",
     "slug": "harmonia-mobile",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "orientation": "portrait",
     "scheme": [
       "harmonia",
@@ -44,7 +44,7 @@
     ],
     "android": {
       "package": "com.harmonia.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#070707",
         "foregroundImage": "./assets/harmonia-icon.png"
@@ -52,7 +52,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.harmonia.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "supportsTablet": false,
       "config": {
         "usesNonExemptEncryption": false
