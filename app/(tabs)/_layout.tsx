@@ -61,8 +61,8 @@ export default function TabsLayout() {
             elevation: 0,
           },
           tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '500',
+            fontSize: 9,
+            fontWeight: '600',
             letterSpacing: 0,
           },
           tabBarItemStyle: {
@@ -91,9 +91,18 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="library"
           options={{
+            title: 'Your Library',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon active="library" inactive="library-outline" color={String(color)} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="create"
+          options={{
             title: 'Create',
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon active="add-circle" inactive="add-circle-outline" color={String(color)} focused={focused} />
+              <TabIcon active="add" inactive="add" color={String(color)} focused={focused} />
             ),
           }}
         />
