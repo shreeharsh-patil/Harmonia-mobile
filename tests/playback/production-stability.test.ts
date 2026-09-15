@@ -136,17 +136,36 @@ test('radio suggestions fall back to local catalog and direct JioSaavn when back
   assert.match(source, /diversifySuggestions\(seed, candidates/);
 });
 
-test('search UI keeps full Harmonia discovery and web-parity browse categories', async () => {
+test('search UI keeps full Harmonia discovery and opens dedicated browse catalogs', async () => {
   const source = await readFile('app/(tabs)/search.tsx', 'utf8');
+  const catalogs = await readFile('src/lib/browseCatalog.ts', 'utf8');
   assert.ok(source.includes('placeholder="What do you want to listen to?"'));
-  assert.match(source, /BROWSE_CATEGORIES/);
+  assert.match(source, /BROWSE_CATALOGS/);
   assert.match(source, />Browse all</);
-  assert.match(source, /name: 'Live Radio'/);
-  assert.match(source, /name: 'Rock'/);
-  assert.match(source, /BROWSE_CATEGORIES\.map/);
+  assert.match(source, /pathname: '\/catalog\/\[id\]'/);
+  assert.doesNotMatch(catalogs, /name: 'Live Radio'/);
+  assert.doesNotMatch(catalogs, /id: 'radio'/);
+  assert.match(catalogs, /name: 'Rock'/);
+  assert.match(source, /BROWSE_CATALOGS\.map/);
   assert.doesNotMatch(source, /showAllCategories/);
   assert.match(source, /height: 112/);
   assert.match(source, /searchMusic\(trimmed, 30, controller\.signal\)/);
+});
+
+test('browse catalogs use grouped shelves, working Show all routes, and bounded caching', async () => {
+  const catalog = await readFile('app/(tabs)/catalog/[id]/index.tsx', 'utf8');
+  const section = await readFile('app/(tabs)/catalog/[id]/section/[sectionId].tsx', 'utf8');
+  const tabs = await readFile('app/(tabs)/_layout.tsx', 'utf8');
+  const data = await readFile('src/lib/browseCatalog.ts', 'utf8');
+
+  assert.match(catalog, /backgroundColor: catalog\.color/);
+  assert.match(catalog, />Show all</);
+  assert.match(catalog, /pathname: '\/catalog\/\[id\]\/section\/\[sectionId\]'/);
+  assert.match(section, /numColumns=\{2\}/);
+  assert.match(tabs, /name="catalog" options=\{\{ href: null \}\}/);
+  assert.match(data, /Promise\.allSettled/);
+  assert.match(data, /CATALOG_TTL_MS/);
+  assert.match(data, /catalogRequests/);
 });
 
 test('bottom navigation excludes the removed Create tab', async () => {
