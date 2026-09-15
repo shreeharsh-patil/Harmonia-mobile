@@ -20,9 +20,9 @@ import {
   findDirectYouTubeMusicTrack,
   resolveDirectYouTubeMusicTrack,
 } from '@/src/lib/playback/youtubeMusicDirect';
+import { streamHostname } from '@/src/lib/playback/streamDiagnostics';
 
 export { isResolvedStreamFresh } from '@/src/lib/playback/streamCache';
-import { streamHostname } from '@/src/lib/playback/streamDiagnostics';
 
 export type StreamQuality = 'automatic' | 'data-saver' | 'normal' | 'high' | 'maximum';
 export type StreamResolverProviderId =
@@ -383,14 +383,6 @@ async function fetchJson(
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', abortParent);
   }
-}
-
-function firstSongFromPayload(payload: any) {
-  if (Array.isArray(payload?.data)) return payload.data[0] || null;
-  if (Array.isArray(payload?.data?.results)) return payload.data.results[0] || null;
-  if (Array.isArray(payload?.results)) return payload.results[0] || null;
-  if (payload?.data && typeof payload.data === 'object') return payload.data;
-  return null;
 }
 
 export function createHarmoniaProviders({
@@ -764,7 +756,7 @@ export class StreamResolver {
     if (options.forceFresh) this.cache.invalidate(trackId);
 
     const excluded = new Set((options.excludeProviders || []).map((value) => String(value).toLowerCase()));
-    const errors: Array<{ provider: string; type: string; status: number; message: string }> = [];
+    const errors: { provider: string; type: string; status: number; message: string }[] = [];
 
     for (const provider of sourceOrderForTrack(track, this.providers)) {
       if (excluded.has(provider.id)) continue;

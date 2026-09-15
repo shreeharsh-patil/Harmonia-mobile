@@ -632,3 +632,38 @@ test('sleep countdown no longer invalidates the core player context every second
   assert.match(provider, /sleepRemaining,[\s\S]*?\[currentSong\?\.duration, sleepRemaining, status\.currentTime, status\.duration\]/);
   assert.match(player, /const \{ position, duration, sleepRemaining \} = usePlaybackProgress\(\)/);
 });
+
+test('high-frequency playback progress cannot recreate core player actions', async () => {
+  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  const previousCallback = source.match(/const previous = useCallback\([\s\S]*?\n  \}, \[[^\]]*\]\);/)?.[0] || '';
+
+  assert.match(previousCallback, /currentTimeRef\.current > 3/);
+  assert.doesNotMatch(previousCallback, /status\.currentTime/);
+  assert.doesNotMatch(previousCallback, /\[.*status\.currentTime/);
+  assert.match(source, /activeResolutionAbortRef\.current\?\.abort\(\)/);
+  assert.match(source, /loadGenerationRef\.current \+= 1/);
+});
+
+test('download progress is throttled away from the playback context', async () => {
+  const source = await readFile('src/providers/OfflineProvider.tsx', 'utf8');
+  const player = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+
+  assert.match(source, /DOWNLOAD_PROGRESS_UPDATE_MS = 250/);
+  assert.match(source, /now - lastUpdate < DOWNLOAD_PROGRESS_UPDATE_MS/);
+  assert.match(source, /OfflinePlaybackContext/);
+  assert.match(source, /const activeTasks = activeDownloadTasksRef\.current/);
+  assert.match(source, /for \(const \[id, task\] of activeTasks\)/);
+  assert.match(player, /useOfflinePlayback\(\)/);
+  assert.doesNotMatch(player, /useOffline\(\)/);
+});
+
+test('session persistence is ordered and startup restore cannot replace a newer login', async () => {
+  const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
+
+  assert.match(source, /sessionGenerationRef/);
+  assert.match(source, /sessionWriteChainRef/);
+  assert.match(source, /enqueueSessionWrite/);
+  assert.match(source, /sessionGenerationRef\.current !== startupGeneration/);
+  assert.match(source, /tokenRef\.current = accessToken/);
+  assert.match(source, /tokenRef\.current = null/);
+});

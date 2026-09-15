@@ -59,7 +59,7 @@ export function getPlaybackRecoveryPolicy(
   return { action: 'fail' as const, delayMs: 0 };
 }
 
-export function captureRecoveryPosition(...values: Array<number | null | undefined>) {
+export function captureRecoveryPosition(...values: (number | null | undefined)[]) {
   return Math.max(
     0,
     ...values.map((value) => {

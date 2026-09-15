@@ -58,7 +58,7 @@ export type Song = {
   duration?: number;
   image?: HarmoniaImage[] | string;
   cover?: string;
-  spotifyImages?: Array<{ url: string; width?: number; height?: number }>;
+  spotifyImages?: { url: string; width?: number; height?: number }[];
   downloadUrl?: DownloadSource[];
   source?: string;
   provider?: string;

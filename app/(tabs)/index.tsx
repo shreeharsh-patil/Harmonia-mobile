@@ -40,7 +40,8 @@ export default function HomeScreen() {
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
-    refresh ? setRefreshing(true) : setLoading(true);
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
 
     const publicRequest = fetchHomeSections();

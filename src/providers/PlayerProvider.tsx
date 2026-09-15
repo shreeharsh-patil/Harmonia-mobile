@@ -49,7 +49,7 @@ import {
   persistenceSafeSong,
 } from '@/src/lib/song';
 import type { Song } from '@/src/types';
-import { useOffline } from '@/src/providers/OfflineProvider';
+import { useOfflinePlayback } from '@/src/providers/OfflineProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 import {
   createAdaptivePipeline,
@@ -241,7 +241,7 @@ const PlaybackProgressContext = createContext<PlaybackProgressValue | null>(null
 const PlaybackActivityContext = createContext<PlaybackActivityValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
-  const { getOfflineUri } = useOffline();
+  const { getOfflineUri } = useOfflinePlayback();
   const { batterySaver, qualityFor, networkConnected } = usePreferences();
   const player = useAudioPlayer(null, { updateInterval: 500, preferredForwardBufferDuration: 12 });
   const status = useAudioPlayerStatus(player);
@@ -277,6 +277,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const finishing = useRef(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
+  const currentTimeRef = useRef(0);
+  const nativePlayingRef = useRef(false);
   const qualityRef = useRef<StreamQuality>('automatic');
   const effectiveQualityRef = useRef<StreamQuality>('automatic');
   const rateRef = useRef(1);
@@ -319,6 +321,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   queueRef.current = queue;
   indexRef.current = currentIndex;
+  currentTimeRef.current = Number(status.currentTime || 0);
+  nativePlayingRef.current = Boolean(status.playing);
 
   const currentSong = currentIndex >= 0 ? queue[currentIndex] || null : null;
 
@@ -812,7 +816,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         // A newer track load aborts it, which also cancels any late quality promotion.
       }
     }
-  }, [getOfflineUri, player, recordHistory, setLockScreenMetadata]);
+  }, [getOfflineUri, player, setLockScreenMetadata]);
 
   useEffect(() => {
     const next = qualityFor(streamQuality);
@@ -833,9 +837,9 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
       const resumeAt = Math.max(
         0,
-        Number(status.currentTime || lastKnownPositionRef.current || 0)
+        Number(currentTimeRef.current || lastKnownPositionRef.current || 0)
       );
-      const shouldResume = Boolean(status.playing || playbackIntentRef.current);
+      const shouldResume = Boolean(nativePlayingRef.current || playbackIntentRef.current);
 
       invalidateResolvedStream(stable.id);
       await loadIndex(index, shouldResume, resumeAt, {
@@ -844,7 +848,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         skipAdaptive: true,
       });
     };
-  }, [getOfflineUri, loadIndex, status.currentTime, status.playing]);
+  }, [getOfflineUri, loadIndex]);
 
   const playAt = useCallback(async (index: number) => {
     if (index < 0 || index >= queueRef.current.length) return;
@@ -1020,8 +1024,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [loadIndex, player]);
 
   const previous = useCallback(async () => {
-    if (status.currentTime > 3) {
+    if (currentTimeRef.current > 3) {
       await player.seekTo(0);
+      currentTimeRef.current = 0;
+      lastKnownPositionRef.current = 0;
       return;
     }
     const previousIndex = indexRef.current - 1;
@@ -1030,7 +1036,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       return;
     }
     await loadIndex(Math.max(0, previousIndex), true, 0);
-  }, [loadIndex, player, status.currentTime]);
+  }, [loadIndex, player]);
 
   const togglePlayback = useCallback(async () => {
     const song = queueRef.current[indexRef.current];
@@ -1408,6 +1414,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     return () => {
+      loadGenerationRef.current += 1;
+      activeResolutionAbortRef.current?.abort();
+      activeResolutionAbortRef.current = null;
+      playbackIntentRef.current = false;
       const previous = preloadedSourceRef.current;
       preloadedSourceRef.current = null;
       if (previous) clearPreloadedSource(previous.source).catch(() => {});
@@ -1592,13 +1602,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const hasResolutionFailure = Boolean(error && playbackErrorType);
     const hasNativeFailure = Boolean(status.error);
+    const trackId = currentSong?.id;
     if (
       (!hasResolutionFailure && !hasNativeFailure) ||
-      !currentSong?.id ||
+      !trackId ||
       recoveryInFlightRef.current
     ) return;
 
-    const trackId = currentSong.id;
     if (recoveryStateRef.current.trackId !== trackId) {
       recoveryStateRef.current = { trackId, attempts: 0 };
     }
@@ -1630,8 +1640,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         ) {
           const completedAttempts = recoveryStateRef.current.attempts;
           const nextEmbeddedCandidateIndex = completedAttempts + 1;
+          const recoverySong = queueRef.current[indexRef.current];
+          if (!recoverySong || recoverySong.id !== trackId) return;
           const embeddedCandidates = getAudioCandidates(
-            currentSong,
+            recoverySong,
             effectiveQualityRef.current
           );
           const hasNextCandidate =
@@ -1672,7 +1684,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           invalidateResolvedStream(trackId);
 
           const resumeAt = captureRecoveryPosition(
-            status.currentTime,
+            currentTimeRef.current,
             lastKnownPositionRef.current,
             restoredPosition.current
           );
@@ -1737,7 +1749,6 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     loadIndex,
     networkConnected,
     playbackErrorType,
-    status.currentTime,
     status.error,
   ]);
 
