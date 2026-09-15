@@ -106,6 +106,7 @@ export default function TabsLayout() {
             ),
           }}
         />
+        <Tabs.Screen name="catalog" options={{ href: null }} />
       </Tabs>
 
       <View
