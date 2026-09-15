@@ -234,7 +234,7 @@ export default function PlayerScreen() {
   }
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
-  const compactArtwork = panel !== 'none';
+  const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
   const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
   const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
@@ -324,13 +324,88 @@ export default function PlayerScreen() {
           bounces={false}
         >
           <View style={[styles.artworkWrap, compactArtwork && styles.artworkWrapCompact]}>
-            <ArtworkRenderer
-              song={currentSong}
-              size={artworkSize}
-              radius={14}
-              enableMotion={panel === 'none'}
-              style={styles.artwork}
-            />
+            {panel === 'lyrics' ? (
+              <View style={styles.lyricsStage}>
+                <View style={styles.lyricsStageHeader}>
+                  <View>
+                    <Text style={styles.lyricsStageTitle}>Lyrics</Text>
+                    <Text style={styles.lyricsStageProvider}>{lyrics?.lyricsProvider || 'Harmonia'}</Text>
+                  </View>
+                  <Pressable onPress={() => togglePanel('lyrics')} hitSlop={10} accessibilityLabel="Close lyrics">
+                    <Ionicons name="close" size={22} color="rgba(255,255,255,0.78)" />
+                  </Pressable>
+                </View>
+
+                {lyricsLoading ? (
+                  <View style={styles.lyricsStageLoading}>
+                    {[82, 64, 91, 70, 86].map((widthValue, index) => (
+                      <View
+                        key={widthValue}
+                        style={[styles.lyricsStageSkeleton, { width: `${widthValue}%`, opacity: 1 - index * 0.12 }]}
+                      />
+                    ))}
+                  </View>
+                ) : syncedLines.length ? (
+                  <ScrollView
+                    ref={lyricsScrollRef}
+                    style={styles.lyricsStageScroll}
+                    contentContainerStyle={styles.lyricsStageContent}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {syncedLines.map((line, index) => {
+                      const active = index === activeLine;
+                      return (
+                        <Pressable
+                          key={`${line.time}-${index}`}
+                          onPress={() => void seek(line.time)}
+                          style={styles.lyricTap}
+                        >
+                          <Text style={[styles.lyricLine, active && styles.lyricActive]}>
+                            {line.words?.length
+                              ? line.words.map((word, wordIndex) => (
+                                  <Text
+                                    key={`${word.time}-${wordIndex}`}
+                                    style={[
+                                      styles.lyricWord,
+                                      active && wordIndex <= activeWord && styles.lyricWordActive,
+                                    ]}
+                                  >
+                                    {word.text}
+                                  </Text>
+                                ))
+                              : line.text}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : lyrics?.plainLyrics ? (
+                  <ScrollView
+                    style={styles.lyricsStageScroll}
+                    contentContainerStyle={styles.lyricsStageContent}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <Text style={styles.plainLyrics}>{lyrics.plainLyrics}</Text>
+                  </ScrollView>
+                ) : (
+                  <View style={styles.lyricsStageEmpty}>
+                    <Ionicons name="mic-outline" size={42} color="rgba(255,255,255,0.25)" />
+                    <Text style={styles.lyricsStageEmptyTitle}>No lyrics found</Text>
+                    <Text style={styles.lyricsStageEmptyBody}>Lyrics may not be available for this release yet.</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <ArtworkRenderer
+                song={currentSong}
+                size={artworkSize}
+                radius={14}
+                enableMotion={panel === 'none'}
+                style={styles.artwork}
+              />
+            )}
           </View>
 
           <View style={styles.meta}>
@@ -449,56 +524,6 @@ export default function PlayerScreen() {
             </Pressable>
           )}
 
-          {panel === 'lyrics' && (
-            <View style={styles.panel}>
-              <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>Lyrics</Text>
-                <Text style={styles.panelMeta}>{lyrics?.lyricsProvider || 'Harmonia'}</Text>
-              </View>
-              {lyricsLoading ? (
-                <View style={styles.panelLoading}><ActivityIndicator color="#FFF" /></View>
-              ) : syncedLines.length ? (
-                <ScrollView
-                  ref={lyricsScrollRef}
-                  style={styles.lyricsScroll}
-                  contentContainerStyle={styles.lyrics}
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator={false}
-                >
-                  {syncedLines.map((line, index) => {
-                    const active = index === activeLine;
-                    return (
-                      <Pressable
-                        key={`${line.time}-${index}`}
-                        onPress={() => void seek(line.time)}
-                        style={styles.lyricTap}
-                      >
-                        <Text style={[styles.lyricLine, active && styles.lyricActive]}>
-                          {line.words?.length
-                            ? line.words.map((word, wordIndex) => (
-                                <Text
-                                  key={`${word.time}-${wordIndex}`}
-                                  style={[
-                                    styles.lyricWord,
-                                    active && wordIndex <= activeWord && styles.lyricWordActive,
-                                  ]}
-                                >
-                                  {word.text}
-                                </Text>
-                              ))
-                            : line.text}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              ) : lyrics?.plainLyrics ? (
-                <Text style={styles.plainLyrics}>{lyrics.plainLyrics}</Text>
-              ) : (
-                <Text style={styles.panelEmpty}>No lyrics found for this track.</Text>
-              )}
-            </View>
-          )}
 
           {panel === 'queue' && (
             <View style={styles.panel}>
@@ -816,6 +841,17 @@ const styles = StyleSheet.create({
   album: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 2, maxWidth: 210 },
   artworkWrap: { minHeight: 408, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 34 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
+  lyricsStage: { width: '100%', height: 380, paddingHorizontal: 10, paddingTop: 12, paddingBottom: 4 },
+  lyricsStageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 10 },
+  lyricsStageTitle: { color: '#FFF', fontSize: 22, fontWeight: '800', fontFamily: PLAYER_FONT },
+  lyricsStageProvider: { color: 'rgba(255,255,255,0.46)', fontSize: 9, fontWeight: '700', fontFamily: PLAYER_FONT, textTransform: 'uppercase', letterSpacing: 0.9, marginTop: 2 },
+  lyricsStageScroll: { flex: 1 },
+  lyricsStageContent: { paddingTop: 54, paddingBottom: 130, gap: 15 },
+  lyricsStageLoading: { flex: 1, justifyContent: 'center', gap: 16, paddingHorizontal: 4 },
+  lyricsStageSkeleton: { height: 16, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.13)' },
+  lyricsStageEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  lyricsStageEmptyTitle: { color: 'rgba(255,255,255,0.72)', fontSize: 18, fontWeight: '800', fontFamily: PLAYER_FONT, marginTop: 12 },
+  lyricsStageEmptyBody: { color: 'rgba(255,255,255,0.42)', fontSize: 12, lineHeight: 18, fontFamily: PLAYER_FONT, textAlign: 'center', marginTop: 5 },
   artwork: {
     shadowColor: '#000',
     shadowOpacity: 0.42,
