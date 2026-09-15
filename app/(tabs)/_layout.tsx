@@ -99,12 +99,7 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="create"
-          options={{
-            title: 'Create',
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon active="add" inactive="add" color={String(color)} focused={focused} />
-            ),
-          }}
+          options={{ href: null }}
         />
         <Tabs.Screen
           name="profile"
