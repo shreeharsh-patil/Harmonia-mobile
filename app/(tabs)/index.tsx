@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -28,10 +28,28 @@ import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlayer } from '@/src/providers/PlayerProvider';
+import {
+  usePlaybackHistory,
+  usePlayer,
+  type PlaybackHistoryEntry,
+} from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
+function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
+  const seen = new Set<string>();
+  const songs: Song[] = [];
+
+  for (const entry of history) {
+    const id = String(entry.song?.id || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    songs.push(entry.song);
+    if (songs.length >= limit) break;
+  }
+
+  return songs;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -39,6 +57,7 @@ export default function HomeScreen() {
   const { token } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, playSong } = usePlayer();
+  const { history } = usePlaybackHistory();
 
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
@@ -51,6 +70,8 @@ export default function HomeScreen() {
   const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
+  const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
+  const quickCardWidth = Math.floor((width - 32) / 2);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -59,10 +80,10 @@ export default function HomeScreen() {
     setError(null);
 
     const [publicResult, recentResult, mixResult, trendingResult] = await Promise.allSettled([
-      fetchHomeSections(),
+      fetchHomeSections({ forceRefresh: refresh }),
       token ? fetchRecentlyPlayedPlaylists(token) : Promise.resolve<Playlist[]>([]),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
-      fetchTrendingHomeContent(),
+      fetchTrendingHomeContent({ forceRefresh: refresh }),
     ]);
 
     if (generation !== loadGenerationRef.current) return;
@@ -90,34 +111,38 @@ export default function HomeScreen() {
 
   useEffect(() => {
     void load();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
   }, [load]);
 
-  const openPlaylist = (playlist: Playlist) => {
+  const openPlaylist = useCallback((playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (!id) return;
     router.push({ pathname: '/playlist/[id]', params: { id } });
-  };
+  }, []);
 
-  const openAlbum = (album: HarmoniaAlbum) => {
+  const openAlbum = useCallback((album: HarmoniaAlbum) => {
     const id = String(album.id || '');
     if (!id) return;
     router.push({ pathname: '/album/[id]', params: { id } });
-  };
+  }, []);
 
-  const openMix = (mix: RecommendedMix) => {
+  const openMix = useCallback((mix: RecommendedMix) => {
     const id = String(mix._mixId || mix.id || '');
     if (!id) return;
     router.push({ pathname: '/mix/[id]', params: { id } });
-  };
+  }, []);
 
   const featuredFallback = useMemo(
     () => sections.flatMap((section) => section.playlists || []).slice(0, 5),
     [sections]
   );
 
-  const quickPlaylists = recentPlaylists.length
-    ? recentPlaylists.slice(0, 5)
-    : featuredFallback;
+  const quickPlaylists = useMemo(
+    () => recentPlaylists.length ? recentPlaylists.slice(0, 5) : featuredFallback,
+    [featuredFallback, recentPlaylists]
+  );
 
   const topColumns = useMemo(() => {
     const columns: Song[][] = [];
@@ -129,6 +154,10 @@ export default function HomeScreen() {
 
   const topColumnWidth = Math.min(342, Math.max(282, width - 54));
 
+  const playRecentSong = useCallback((song: Song) => {
+    void playSong(song, recentSongs);
+  }, [playSong, recentSongs]);
+
   const scrollTopSongs = (direction: -1 | 1) => {
     if (!topColumns.length) return;
     const nextIndex = Math.max(0, Math.min(topColumns.length - 1, topColumnIndex + direction));
@@ -138,6 +167,7 @@ export default function HomeScreen() {
 
   const hasContent =
     sections.some((section) => section.playlists?.length) ||
+    recentSongs.length > 0 ||
     recentPlaylists.length > 0 ||
     trendingAlbums.length > 0 ||
     trendingSongs.length > 0;
@@ -165,11 +195,13 @@ export default function HomeScreen() {
 
             <View style={styles.quickGrid}>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={likedSongs.length ? 'Play liked songs' : 'Open your library'}
                 onPress={() => {
                   if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
                   else router.push('/(tabs)/library');
                 }}
-                style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.quickCard, { width: quickCardWidth }, pressed && styles.pressed]}
               >
                 <View style={styles.likedArtwork}>
                   <Ionicons name="heart" size={20} color="#FF3B4D" />
@@ -181,7 +213,8 @@ export default function HomeScreen() {
                 <QuickPlaylistCard
                   key={String(playlist.id || playlist._id || `quick-${index}`)}
                   playlist={playlist}
-                  onPress={() => openPlaylist(playlist)}
+                  width={quickCardWidth}
+                  onPress={openPlaylist}
                 />
               ))}
             </View>
@@ -211,7 +244,7 @@ export default function HomeScreen() {
                       <View style={styles.sectionHeadCopy}>
                         <Text style={styles.sectionTitle}>Top Songs</Text>
                         <Text numberOfLines={1} style={styles.sectionSubtitle}>
-                          The most popular tracks right now ({trendingSongs.length} songs)
+                          The most popular tracks right now ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
                         </Text>
                       </View>
                       <View style={styles.chartActions}>
@@ -221,7 +254,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex === 0 && styles.chartArrowDisabled]}
                           accessibilityLabel="Previous top songs"
                         >
-                          <Ionicons name="chevron-back" size={16} color="#DADADA" />
+                          <Ionicons name="chevron-back" size={18} color="#DADADA" />
                         </Pressable>
                         <Pressable
                           onPress={() => scrollTopSongs(1)}
@@ -229,7 +262,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex >= topColumns.length - 1 && styles.chartArrowDisabled]}
                           accessibilityLabel="Next top songs"
                         >
-                          <Ionicons name="chevron-forward" size={16} color="#DADADA" />
+                          <Ionicons name="chevron-forward" size={18} color="#DADADA" />
                         </Pressable>
                       </View>
                     </View>
@@ -260,10 +293,12 @@ export default function HomeScreen() {
                           {songs.map((song, localIndex) => (
                             <Pressable
                               key={String(song.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Play ${song.name || 'song'}`}
                               onPress={() => void playSong(song, trendingSongs)}
                               style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
                             >
-                              <TrackArtwork song={song} size={46} radius={8} />
+                              <TrackArtwork song={song} size={52} radius={8} />
                               <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
                               <View style={styles.chartCopy}>
                                 <Text numberOfLines={1} style={styles.chartTitle}>{song.name}</Text>
@@ -277,12 +312,20 @@ export default function HomeScreen() {
                   </View>
                 )}
 
+                {!!recentSongs.length && (
+                  <SongRail
+                    title="Recently Played"
+                    songs={recentSongs}
+                    currentSongId={currentSong?.id}
+                    onPress={playRecentSong}
+                  />
+                )}
+
                 {!!recentPlaylists.length && (
                   <PlaylistRail
-                    title="Recently Played"
+                    title="Recently Played Playlists"
                     data={recentPlaylists}
                     onPress={openPlaylist}
-                    showAll
                   />
                 )}
 
@@ -292,13 +335,12 @@ export default function HomeScreen() {
                     title={section.name}
                     data={section.playlists || []}
                     onPress={openPlaylist}
-                    showAll
                   />
                 ))}
 
                 {!!mixes.length && (
                   <View style={styles.section}>
-                    <SectionHeader title="Recommended for You" showAll />
+                    <SectionHeader title="Recommended for You" />
                     <FlatList
                       horizontal
                       showsHorizontalScrollIndicator={false}
@@ -309,7 +351,7 @@ export default function HomeScreen() {
                       windowSize={RAIL_WINDOW_SIZE}
                       contentContainerStyle={styles.rail}
                       renderItem={({ item }) => (
-                        <PlaylistCard playlist={item} size={116} onPress={() => openMix(item)} />
+                        <PlaylistCard playlist={item} size={140} onPress={() => openMix(item)} />
                       )}
                     />
                   </View>
@@ -328,55 +370,52 @@ export default function HomeScreen() {
   );
 }
 
-function QuickPlaylistCard({
+const QuickPlaylistCard = memo(function QuickPlaylistCard({
   playlist,
+  width,
   onPress,
 }: {
   playlist: Playlist;
-  onPress: () => void;
+  width: number;
+  onPress: (playlist: Playlist) => void;
 }) {
   return (
     <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${playlist.name || playlist.title || 'playlist'}`}
+      onPress={() => onPress(playlist)}
+      style={({ pressed }) => [styles.quickCard, { width }, pressed && styles.pressed]}
     >
-      <PlaylistArtwork playlist={playlist} size={44} radius={7} />
+      <PlaylistArtwork playlist={playlist} size={52} radius={12} />
       <Text numberOfLines={2} style={styles.quickTitle}>
         {playlist.name || playlist.title || 'Playlist'}
       </Text>
     </Pressable>
   );
-}
+});
 
-function SectionHeader({ title, showAll = false }: { title: string; showAll?: boolean }) {
+function SectionHeader({ title }: { title: string }) {
   return (
     <View style={styles.sectionHead}>
       <Text numberOfLines={1} style={styles.sectionTitle}>{title}</Text>
-      {showAll && (
-        <Pressable onPress={() => router.push('/(tabs)/search')} hitSlop={8}>
-          <Text style={styles.showAll}>Show all</Text>
-        </Pressable>
-      )}
     </View>
   );
 }
 
-function PlaylistRail({
+const PlaylistRail = memo(function PlaylistRail({
   title,
   data,
   onPress,
-  showAll = false,
 }: {
   title: string;
   data: Playlist[];
   onPress: (playlist: Playlist) => void;
-  showAll?: boolean;
 }) {
   if (!data.length) return null;
 
   return (
     <View style={styles.section}>
-      <SectionHeader title={title} showAll={showAll} />
+      <SectionHeader title={title} />
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -387,14 +426,61 @@ function PlaylistRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => (
-          <PlaylistCard playlist={item} size={116} onPress={() => onPress(item)} />
+          <PlaylistCard playlist={item} size={140} onPress={() => onPress(item)} />
         )}
       />
     </View>
   );
-}
+});
 
-function AlbumRail({
+const SongRail = memo(function SongRail({
+  title,
+  songs,
+  currentSongId,
+  onPress,
+}: {
+  title: string;
+  songs: Song[];
+  currentSongId?: string;
+  onPress: (song: Song) => void;
+}) {
+  if (!songs.length) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={title} />
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={songs}
+        keyExtractor={(item, index) => String(item.id || `recent-song-${index}`)}
+        initialNumToRender={RAIL_INITIAL_RENDER}
+        maxToRenderPerBatch={RAIL_BATCH_SIZE}
+        windowSize={RAIL_WINDOW_SIZE}
+        contentContainerStyle={styles.rail}
+        renderItem={({ item }) => {
+          const active = String(currentSongId || '') === String(item.id || '');
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Play ${item.name || item.title || 'song'}`}
+              onPress={() => onPress(item)}
+              style={({ pressed }) => [styles.recentSongCard, pressed && styles.pressed]}
+            >
+              <TrackArtwork song={item} size={140} radius={8} />
+              <Text numberOfLines={1} style={[styles.recentSongTitle, active && styles.recentSongTitleActive]}>
+                {item.name || item.title || 'Untitled Track'}
+              </Text>
+              <Text numberOfLines={1} style={styles.recentSongArtist}>{artistNames(item)}</Text>
+            </Pressable>
+          );
+        }}
+      />
+    </View>
+  );
+});
+
+const AlbumRail = memo(function AlbumRail({
   title,
   albums,
   onPress,
@@ -416,7 +502,7 @@ function AlbumRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => {
-          const cover = imageUrl(item.image as any, 116);
+          const cover = imageUrl(item.image as any, 140);
           return (
             <Pressable
               onPress={() => onPress(item)}
@@ -444,7 +530,7 @@ function AlbumRail({
       />
     </View>
   );
-}
+});
 
 function HomeSkeleton() {
   return (
@@ -467,106 +553,110 @@ function HomeSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0C0C0C' },
+  safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
-    height: 48,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(0,0,0,0.96)',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#242424',
-    backgroundColor: '#0D0D0D',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
     zIndex: 4,
   },
   topTitle: {
-    color: '#EDEDED',
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '500',
+    color: colors.textStrong,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
   },
   content: {
-    paddingHorizontal: 8,
-    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingTop: 16,
   },
   ambientGlow: {
     position: 'absolute',
-    top: -70,
-    left: -50,
-    width: 270,
-    height: 220,
-    borderRadius: 140,
-    backgroundColor: 'rgba(69,10,245,0.08)',
+    top: 0,
+    left: -12,
+    right: -12,
+    height: 260,
+    backgroundColor: 'rgba(69,10,245,0.10)',
   },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 24,
   },
   quickCard: {
-    width: '49%',
-    minHeight: 48,
-    borderRadius: 8,
+    minHeight: 56,
+    borderRadius: 16,
     padding: 2,
     paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111111',
+    backgroundColor: 'rgba(23,23,23,0.72)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(41,41,41,0.72)',
   },
   likedArtwork: {
-    width: 44,
-    height: 44,
-    borderRadius: 7,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6A65F2',
+    backgroundColor: '#450AF5',
   },
   quickTitle: {
     flex: 1,
     minWidth: 0,
     color: '#E7E7E7',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-    marginLeft: 7,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '800',
+    marginLeft: 10,
   },
   section: { marginBottom: 24 },
   sectionHead: {
-    minHeight: 28,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
     paddingHorizontal: 1,
   },
   sectionHeadCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
   sectionTitle: {
     flexShrink: 1,
     color: '#F0F0F0',
-    fontSize: 17,
-    lineHeight: 22,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '800',
-    letterSpacing: -0.25,
+    letterSpacing: -0.4,
   },
-  sectionSubtitle: { color: '#777', fontSize: 9, marginTop: 1 },
-  showAll: { color: '#8F8F8F', fontSize: 10, fontWeight: '700' },
+  sectionSubtitle: { color: '#8A8A8A', fontSize: 12, marginTop: 2 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
-  albumCard: { width: 116, marginRight: 12 },
-  albumArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  recentSongCard: { width: 140, marginRight: 16 },
+  recentSongTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
+  recentSongTitleActive: { color: colors.accent },
+  recentSongArtist: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, marginTop: 2 },
+  albumCard: { width: 140, marginRight: 16 },
+  albumArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: '#171717' },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
-  albumTitle: { color: '#E8E8E8', fontSize: 11, fontWeight: '700', marginTop: 7 },
-  albumMeta: { color: '#777', fontSize: 9, fontWeight: '500', marginTop: 2 },
+  albumTitle: { color: '#E8E8E8', fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
+  albumMeta: { color: '#8B8B8B', fontSize: 11, lineHeight: 15, fontWeight: '500', marginTop: 2 },
   topSongsHead: {
     minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 7,
+    marginBottom: 11,
   },
   chartActions: { flexDirection: 'row', gap: 6 },
   chartArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#181818',
     alignItems: 'center',
     justifyContent: 'center',
@@ -575,7 +665,7 @@ const styles = StyleSheet.create({
   chartRail: { gap: 10, paddingRight: 8 },
   chartColumn: { gap: 6 },
   chartRow: {
-    minHeight: 58,
+    minHeight: 64,
     borderRadius: 11,
     backgroundColor: '#111111',
     padding: 6,
@@ -583,25 +673,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chartNumber: {
-    width: 24,
+    width: 28,
     textAlign: 'center',
     color: '#7A7A7A',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   chartCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
-  chartTitle: { color: '#ECECEC', fontSize: 11, fontWeight: '800' },
-  chartArtist: { color: '#777', fontSize: 9, marginTop: 2 },
+  chartTitle: { color: '#ECECEC', fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  chartArtist: { color: '#8A8A8A', fontSize: 12, lineHeight: 16, marginTop: 2 },
   errorBox: {
     borderRadius: 9,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(243,114,127,0.22)',
     backgroundColor: 'rgba(84,28,21,0.28)',
-    padding: 10,
+    padding: 14,
     marginBottom: 18,
   },
-  error: { color: colors.danger, fontSize: 11, fontWeight: '600' },
-  retry: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  retry: { color: colors.muted, fontSize: 11, marginTop: 4 },
   empty: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: '#E7E7E7', fontSize: 15, fontWeight: '800' },
   emptyBody: { color: '#777', fontSize: 11, marginTop: 5 },
@@ -609,7 +699,7 @@ const styles = StyleSheet.create({
   skeletonWrap: { paddingTop: 2 },
   skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: '#171717', marginBottom: 9 },
   skeletonRail: { flexDirection: 'row', gap: 12 },
-  skeletonCard: { width: 116 },
-  skeletonArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  skeletonCard: { width: 140 },
+  skeletonArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: '#171717' },
   skeletonLine: { width: 90, height: 10, borderRadius: 4, backgroundColor: '#171717', marginTop: 8 },
 });

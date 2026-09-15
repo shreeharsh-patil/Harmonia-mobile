@@ -298,6 +298,7 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
+        <Text style={styles.pageTitle}>Search</Text>
         <View style={styles.searchBox}>
           <Ionicons name="search" size={19} color="#777" />
           <TextInput
@@ -315,7 +316,7 @@ export default function SearchScreen() {
             style={styles.input}
           />
           {!!query && (
-            <Pressable onPress={() => setQuery('')} style={styles.clear} accessibilityLabel="Clear search">
+            <Pressable accessibilityRole="button" onPress={() => setQuery('')} style={styles.clear} accessibilityLabel="Clear search">
               <Ionicons name="close-circle" size={21} color="#7A7A7A" />
             </Pressable>
           )}
@@ -335,6 +336,8 @@ export default function SearchScreen() {
             {BROWSE_CATEGORIES.map((category) => (
               <Pressable
                 key={category.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Browse ${category.name}`}
                 onPress={() => openBrowseCategory(category)}
                 style={({ pressed }) => [
                   styles.browseCard,
@@ -372,7 +375,7 @@ export default function SearchScreen() {
               <Text style={styles.recentFooterTitle}>Recent searches</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentFooterRow}>
                 {recentSearches.slice(0, 6).map((item) => (
-                  <Pressable key={item} onPress={() => setQuery(item)} style={styles.recentFooterChip}>
+                  <Pressable accessibilityRole="button" key={item} onPress={() => setQuery(item)} style={styles.recentFooterChip}>
                     <Ionicons name="time-outline" size={14} color="#898989" />
                     <Text numberOfLines={1} style={styles.recentFooterText}>{item}</Text>
                   </Pressable>
@@ -447,12 +450,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 10,
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#1D1D1D',
     backgroundColor: '#0D0D0D',
   },
+  pageTitle: { color: '#F7F7F7', fontSize: 30, lineHeight: 36, fontWeight: '900', letterSpacing: -0.9, marginBottom: 14 },
   searchBox: {
     height: 56,
     borderRadius: 12,
@@ -523,7 +527,7 @@ const styles = StyleSheet.create({
   retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: '#EEE', paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#080808', fontWeight: '800', fontSize: 12 },
   empty: { color: '#777', textAlign: 'center', paddingVertical: 60 },
-  inlineLoading: { position: 'absolute', top: 26, right: 32 },
+  inlineLoading: { position: 'absolute', top: 76, right: 32 },
   nonBlockingError: { position: 'absolute', left: 20, right: 20, color: '#D98787', fontSize: 11, backgroundColor: '#171010', borderRadius: 10, padding: 9 },
   likedIndicator: { color: '#FFF', fontSize: 17, marginLeft: 8 },
 });

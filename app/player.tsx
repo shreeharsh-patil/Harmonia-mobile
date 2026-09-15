@@ -22,8 +22,9 @@ import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyri
 import { albumName, artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { usePlaybackActivity, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePlaybackHistory, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
+import { colors } from '@/src/theme';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
 
@@ -127,7 +128,7 @@ export default function PlayerScreen() {
     toggleShuffle,
     toggleRadio,
   } = usePlayer();
-  const { history } = usePlaybackActivity();
+  const { history } = usePlaybackHistory();
   const { position, duration, sleepRemaining } = usePlaybackProgress();
 
   const [progressWidth, setProgressWidth] = useState(1);
@@ -153,7 +154,7 @@ export default function PlayerScreen() {
       return lyrics.plainLyrics.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
     }
     return '';
-  }, [activeLine, lyrics?.plainLyrics, syncedLines]);
+  }, [activeLine, lyrics, syncedLines]);
 
   const playingFromLabel = useMemo(() => {
     const album = String(albumName(currentSong) || '').trim();
@@ -445,7 +446,7 @@ export default function PlayerScreen() {
               <Ionicons
                 name="shuffle"
                 size={26}
-                color={shuffleEnabled ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
+                color={shuffleEnabled ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
@@ -463,7 +464,7 @@ export default function PlayerScreen() {
               <Ionicons
                 name="repeat"
                 size={26}
-                color={repeatMode !== 'off' ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
+                color={repeatMode !== 'off' ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
               {repeatMode === 'one' && (
                 <View style={styles.repeatBadge}><Text style={styles.repeatBadgeText}>1</Text></View>
@@ -884,7 +885,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#4ADE80',
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

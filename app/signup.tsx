@@ -45,7 +45,7 @@ export default function SignupScreen() {
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <Text style={styles.kicker}>HARMONIA ACCOUNT</Text>
           <Text style={styles.title}>Create your account.</Text>
-          <Text style={styles.subtitle}>Your library, playlists and likes stay synchronized with Harmonia Web.</Text>
+          <Text style={styles.subtitle}>Keep your library, playlists, and liked songs in sync across Harmonia.</Text>
         </View>
 
         <View style={styles.form}>

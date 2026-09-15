@@ -12,7 +12,7 @@ import { artistNames } from '@/src/lib/song';
 import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
-export const MINI_PLAYER_HEIGHT = 56;
+export const MINI_PLAYER_HEIGHT = 60;
 export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_MIN_BOTTOM = 0;
 export const TAB_BAR_TO_MINI_GAP = 6;
@@ -36,17 +36,19 @@ export function MiniPlayer() {
     togglePlayback,
     next,
   } = usePlayer();
-  const { position, duration } = usePlaybackProgress();
 
   if (!currentSong) return null;
-
-  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
 
   return (
     <View style={styles.shell}>
       <View style={styles.row}>
-        <Pressable onPress={() => router.push('/player')} style={styles.info}>
-          <TrackArtwork song={currentSong} size={40} radius={4} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open Now Playing for ${currentSong.name}`}
+          onPress={() => router.push('/player')}
+          style={styles.info}
+        >
+          <TrackArtwork song={currentSong} size={44} radius={6} />
           <View style={styles.copy}>
             <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
             <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
@@ -83,9 +85,18 @@ export function MiniPlayer() {
         </Pressable>
       </View>
 
-      <View style={styles.progressTrack}>
-        <View style={[styles.progress, { width: `${progress * 100}%` }]} />
-      </View>
+      <MiniPlayerProgress />
+    </View>
+  );
+}
+
+function MiniPlayerProgress() {
+  const { position, duration } = usePlaybackProgress();
+  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progress, { width: `${progress * 100}%` }]} />
     </View>
   );
 }
@@ -93,8 +104,10 @@ export function MiniPlayer() {
 const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
-    backgroundColor: 'rgb(30,30,30)',
-    borderRadius: 8,
+    backgroundColor: '#202020',
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.10)',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.22,
@@ -107,12 +120,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 7,
   },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   copy: { flex: 1, marginLeft: 8, minWidth: 0 },
-  title: { color: '#FFF', fontWeight: '600', fontSize: 13, lineHeight: 16 },
+  title: { color: '#FFF', fontWeight: '700', fontSize: 13, lineHeight: 17 },
   artist: { color: 'rgba(255,255,255,0.70)', fontSize: 12, marginTop: 1, lineHeight: 14 },
   smallControl: { width: 27, height: 36, alignItems: 'center', justifyContent: 'center' },
   playControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },

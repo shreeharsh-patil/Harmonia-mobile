@@ -277,7 +277,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       if (!HAS_HARMONIA_API) {
-        setError('Sign-in needs your Harmonia backend. Playback can still work without it.');
+        setError('Sign-in is unavailable in this build. You can still listen without an account.');
         return;
       }
       await WebBrowser.openBrowserAsync(

@@ -230,15 +230,19 @@ type PlaybackProgressValue = {
   sleepRemaining: number;
 };
 
-type PlaybackActivityValue = {
+type PlaybackHistoryValue = {
   history: PlaybackHistoryEntry[];
-  listeningStats: ListeningStats;
   clearHistory: () => Promise<void>;
+};
+
+type ListeningStatsValue = {
+  listeningStats: ListeningStats;
 };
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 const PlaybackProgressContext = createContext<PlaybackProgressValue | null>(null);
-const PlaybackActivityContext = createContext<PlaybackActivityValue | null>(null);
+const PlaybackHistoryContext = createContext<PlaybackHistoryValue | null>(null);
+const ListeningStatsContext = createContext<ListeningStatsValue | null>(null);
 
 export function PlayerProvider({ children }: PropsWithChildren) {
   const { getOfflineUri } = useOfflinePlayback();
@@ -1845,11 +1849,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleAdaptivePipeline,
   ]);
 
-  const activityValue = useMemo<PlaybackActivityValue>(() => ({
+  const historyValue = useMemo<PlaybackHistoryValue>(() => ({
     history,
-    listeningStats,
     clearHistory,
-  }), [clearHistory, history, listeningStats]);
+  }), [clearHistory, history]);
+
+  const listeningStatsValue = useMemo<ListeningStatsValue>(() => ({
+    listeningStats,
+  }), [listeningStats]);
 
   const progressValue = useMemo<PlaybackProgressValue>(() => ({
     position: status.currentTime || restoredPosition.current || 0,
@@ -1859,11 +1866,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
   return (
     <PlayerContext.Provider value={value}>
-      <PlaybackActivityContext.Provider value={activityValue}>
-        <PlaybackProgressContext.Provider value={progressValue}>
-          {children}
-        </PlaybackProgressContext.Provider>
-      </PlaybackActivityContext.Provider>
+      <PlaybackHistoryContext.Provider value={historyValue}>
+        <ListeningStatsContext.Provider value={listeningStatsValue}>
+          <PlaybackProgressContext.Provider value={progressValue}>
+            {children}
+          </PlaybackProgressContext.Provider>
+        </ListeningStatsContext.Provider>
+      </PlaybackHistoryContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -1880,8 +1889,22 @@ export function usePlaybackProgress() {
   return value;
 }
 
-export function usePlaybackActivity() {
-  const value = useContext(PlaybackActivityContext);
-  if (!value) throw new Error('usePlaybackActivity must be used inside PlayerProvider');
+export function usePlaybackHistory() {
+  const value = useContext(PlaybackHistoryContext);
+  if (!value) throw new Error('usePlaybackHistory must be used inside PlayerProvider');
   return value;
+}
+
+export function useListeningStats() {
+  const value = useContext(ListeningStatsContext);
+  if (!value) throw new Error('useListeningStats must be used inside PlayerProvider');
+  return value;
+}
+
+/** @deprecated Prefer the focused history or listening-stats hook to avoid unrelated re-renders. */
+export function usePlaybackActivity() {
+  return {
+    ...usePlaybackHistory(),
+    ...useListeningStats(),
+  };
 }

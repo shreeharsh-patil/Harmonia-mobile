@@ -43,7 +43,7 @@ export default function MixScreen() {
       setMix(null);
       setSongs([]);
       setLoading(false);
-      if (token && !id) setError('Mix ID is missing');
+      if (token && !id) setError('This mix link is incomplete.');
       return;
     }
 
@@ -110,7 +110,7 @@ export default function MixScreen() {
         <View style={styles.top}><BackButton /></View>
         <View style={styles.center}>
           <Text style={styles.errorTitle}>Sign in for your mixes</Text>
-          <Text style={styles.errorBody}>Made for you uses your Harmonia account listening signals.</Text>
+          <Text style={styles.errorBody}>Made for You mixes use your Harmonia listening history.</Text>
           <Pressable onPress={() => router.push('/login')} style={styles.primarySingle}><Text style={styles.primaryText}>Sign in</Text></Pressable>
         </View>
       </SafeAreaView>
@@ -152,7 +152,9 @@ export default function MixScreen() {
               <PlaylistArtwork playlist={mix} size={224} radius={18} />
               <Text style={styles.kicker}>MADE FOR YOU</Text>
               <Text style={styles.title}>{mix.name}</Text>
-              <Text style={styles.meta}>{subtitle}{songs.length ? ` · ${songs.length} songs` : ''}</Text>
+              <Text style={styles.meta}>
+                {subtitle}{songs.length ? ` · ${songs.length} ${songs.length === 1 ? 'song' : 'songs'}` : ''}
+              </Text>
               <View style={styles.actions}>
                 <Pressable disabled={!songs.length || playing} onPress={() => void playFrom(0)} style={styles.primary}>
                   {playing ? <ActivityIndicator color="#080808" /> : <Ionicons name="play" size={20} color="#080808" />}

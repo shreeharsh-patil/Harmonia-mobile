@@ -193,7 +193,7 @@ type RequestOptions = RequestInit & {
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (!HAS_HARMONIA_API) {
     throw new ApiError(
-      'This feature needs your Harmonia backend. Configure EXPO_PUBLIC_HARMONIA_API_URL for account/catalog sync.',
+      'Account sync is unavailable in this build. You can continue listening without signing in.',
       503
     );
   }
@@ -492,7 +492,24 @@ export async function addSongToPlaylist(token: string, playlistId: string, songI
   );
 }
 
-export async function fetchHomeSections(): Promise<MusicSection[]> {
+type HomeFetchOptions = {
+  forceRefresh?: boolean;
+};
+
+type TrendingHomeContent = {
+  albums: HarmoniaAlbum[];
+  songs: Song[];
+};
+
+const HOME_SECTIONS_TTL_MS = 10 * 60_000;
+const TRENDING_HOME_TTL_MS = 60 * 60_000;
+
+let homeSectionsCache: { data: MusicSection[]; expiresAt: number } | null = null;
+let homeSectionsRequest: Promise<MusicSection[]> | null = null;
+let trendingHomeCache: { data: TrendingHomeContent; expiresAt: number } | null = null;
+let trendingHomeRequest: Promise<TrendingHomeContent> | null = null;
+
+async function loadHomeSections(): Promise<MusicSection[]> {
   if (HAS_HARMONIA_API) {
     try {
       const curated = await requestJson<{ success: true; data: MusicSection[] }>('/api/curated-music');
@@ -508,10 +525,29 @@ export async function fetchHomeSections(): Promise<MusicSection[]> {
   return getStaticHomeSections();
 }
 
-export async function fetchTrendingHomeContent(): Promise<{
-  albums: HarmoniaAlbum[];
-  songs: Song[];
-}> {
+export async function fetchHomeSections(
+  { forceRefresh = false }: HomeFetchOptions = {}
+): Promise<MusicSection[]> {
+  const now = Date.now();
+  if (!forceRefresh && homeSectionsCache && homeSectionsCache.expiresAt > now) {
+    return homeSectionsCache.data;
+  }
+  if (homeSectionsRequest) return homeSectionsRequest;
+
+  const request = loadHomeSections().then((data) => {
+    homeSectionsCache = { data, expiresAt: Date.now() + HOME_SECTIONS_TTL_MS };
+    return data;
+  });
+  homeSectionsRequest = request;
+
+  try {
+    return await request;
+  } finally {
+    if (homeSectionsRequest === request) homeSectionsRequest = null;
+  }
+}
+
+async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
   const [albumResult, songResult] = await Promise.allSettled([
     searchMusic('Latest Hindi Songs', 30),
     searchMusic('Top Songs India', 30),
@@ -525,6 +561,30 @@ export async function fetchTrendingHomeContent(): Promise<{
     : [];
 
   return { albums, songs };
+}
+
+export async function fetchTrendingHomeContent(
+  { forceRefresh = false }: HomeFetchOptions = {}
+): Promise<TrendingHomeContent> {
+  const now = Date.now();
+  if (!forceRefresh && trendingHomeCache && trendingHomeCache.expiresAt > now) {
+    return trendingHomeCache.data;
+  }
+  if (trendingHomeRequest) return trendingHomeRequest;
+
+  const request = loadTrendingHomeContent().then((data) => {
+    if (data.albums.length || data.songs.length) {
+      trendingHomeCache = { data, expiresAt: Date.now() + TRENDING_HOME_TTL_MS };
+    }
+    return data;
+  });
+  trendingHomeRequest = request;
+
+  try {
+    return await request;
+  } finally {
+    if (trendingHomeRequest === request) trendingHomeRequest = null;
+  }
 }
 
 export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {

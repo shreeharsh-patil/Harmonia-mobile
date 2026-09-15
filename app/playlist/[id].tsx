@@ -76,7 +76,7 @@ export default function PlaylistScreen() {
       setPlaylist(null);
       setSongs([]);
       setLoading(false);
-      setError('Playlist ID is missing');
+      setError('This playlist link is incomplete.');
       return;
     }
 
@@ -325,7 +325,7 @@ export default function PlaylistScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No tracks yet</Text>
-            <Text style={styles.emptyBody}>{owned ? 'Add songs from Search or Now Playing.' : 'Harmonia did not return playable tracks.'}</Text>
+            <Text style={styles.emptyBody}>{owned ? 'Add songs from Search or Now Playing.' : 'No playable tracks are available in this playlist.'}</Text>
           </View>
         }
         renderItem={({ item, index }) => (

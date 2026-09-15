@@ -23,7 +23,7 @@ import { checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
-import { usePlaybackActivity, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePlaybackHistory, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
@@ -76,7 +76,7 @@ export default function SettingsScreen() {
     toggleRadio,
     toggleAdaptivePipeline,
   } = usePlayer();
-  const { history, clearHistory } = usePlaybackActivity();
+  const { history, clearHistory } = usePlaybackHistory();
 
   const clearRecentSearches = async () => {
     await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
@@ -173,8 +173,8 @@ export default function SettingsScreen() {
             <>
               <StaticRow icon="person-outline" title={user.name || 'Harmonia account'} detail={user.email} />
               <ActionRow icon="create-outline" title="Edit profile" detail="Update your name and profile picture" onPress={() => router.push('/edit-profile')} />
-              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist into Harmonia" onPress={() => router.push('/import-playlist')} />
-              <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from the phone" destructive onPress={() => void signOutNow()} />
+              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist to Harmonia" onPress={() => router.push('/import-playlist')} />
+              <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from this phone" destructive onPress={() => void signOutNow()} />
             </>
           ) : (
             <ActionRow icon="log-in-outline" title="Sign in" detail="Sync your Harmonia account" onPress={() => router.push('/login')} />
@@ -340,7 +340,7 @@ export default function SettingsScreen() {
           <ActionRow
             icon="cloud-download-outline"
             title="Check for updates"
-            detail={checkingUpdate ? 'Checking GitHub Releases…' : 'Compare this build with the latest published release'}
+            detail={checkingUpdate ? 'Checking for updates…' : 'Compare this build with the latest published release'}
             disabled={checkingUpdate}
             onPress={() => void checkUpdates()}
           />
@@ -352,7 +352,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Text style={styles.footer}>Native Expo player · Harmonia account and catalog backend</Text>
+        <Text style={styles.footer}>Harmonia Mobile · Built for uninterrupted listening</Text>
       </ScrollView>
     </SafeAreaView>
   );

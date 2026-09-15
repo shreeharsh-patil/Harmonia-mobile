@@ -50,7 +50,7 @@ export default function TabsLayout() {
             right: 0,
             bottom: 0,
             height: TAB_BAR_HEIGHT + safeBottom,
-            paddingTop: 5,
+            paddingTop: 6,
             paddingBottom: Math.max(5, safeBottom),
             borderTopWidth: StyleSheet.hairlineWidth,
             borderLeftWidth: 0,
@@ -61,8 +61,8 @@ export default function TabsLayout() {
             elevation: 0,
           },
           tabBarLabelStyle: {
-            fontSize: 9,
-            fontWeight: '600',
+            fontSize: 10,
+            fontWeight: '700',
             letterSpacing: 0,
           },
           tabBarItemStyle: {
@@ -123,5 +123,5 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  miniWrap: { position: 'absolute', left: 8, right: 8 },
+  miniWrap: { position: 'absolute', left: 6, right: 6 },
 });

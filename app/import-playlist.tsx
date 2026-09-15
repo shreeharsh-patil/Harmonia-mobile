@@ -64,7 +64,7 @@ export default function ImportPlaylistScreen() {
         <View>
           <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
           <Text style={styles.kicker}>SPOTIFY IMPORT</Text>
-          <Text style={styles.title}>Bring a playlist into Harmonia.</Text>
+          <Text style={styles.title}>Bring a playlist to Harmonia.</Text>
           <Text style={styles.subtitle}>Paste a public Spotify playlist link. Harmonia matches each track to its playable catalog source and keeps the original playlist order.</Text>
         </View>
         <View style={styles.form}>

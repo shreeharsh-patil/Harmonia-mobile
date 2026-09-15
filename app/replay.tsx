@@ -11,7 +11,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
-import { usePlaybackActivity, usePlayer } from '@/src/providers/PlayerProvider';
+import { useListeningStats, usePlaybackHistory, usePlayer } from '@/src/providers/PlayerProvider';
 import type { Song } from '@/src/types';
 
 function localDayKey(date = new Date()) {
@@ -25,7 +25,8 @@ function minutes(seconds: number) {
 
 export default function ReplayScreen() {
   const { currentSong, playSong } = usePlayer();
-  const { listeningStats, history } = usePlaybackActivity();
+  const { listeningStats } = useListeningStats();
+  const { history } = usePlaybackHistory();
 
   const songsById = useMemo(() => {
     const map = new Map<string, Song>();

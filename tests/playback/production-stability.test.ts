@@ -600,23 +600,55 @@ test('player persistence batches background-safe storage work instead of writing
   assert.match(source, /playbackSnapshotWriteChainRef\.current = playbackSnapshotWriteChainRef\.current/);
 });
 
-test('high-frequency listening activity is isolated from the core player context', async () => {
-  const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /type PlaybackActivityValue/);
-  assert.match(source, /PlaybackActivityContext/);
-  assert.match(source, /export function usePlaybackActivity\(\)/);
+test('high-frequency listening activity uses focused subscriptions', async () => {
+  const provider = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
+  assert.match(provider, /type PlaybackHistoryValue/);
+  assert.match(provider, /type ListeningStatsValue/);
+  assert.match(provider, /PlaybackHistoryContext/);
+  assert.match(provider, /ListeningStatsContext/);
+  assert.match(provider, /export function usePlaybackHistory\(\)/);
+  assert.match(provider, /export function useListeningStats\(\)/);
+  assert.match(provider, /export function usePlaybackActivity\(\)/);
 
   for (const path of [
     'app/player.tsx',
     'app/replay.tsx',
-    'app/(tabs)/library.tsx',
-    'app/(tabs)/profile.tsx',
     'app/settings.tsx',
     'app/explore.tsx',
+    'app/(tabs)/index.tsx',
   ]) {
     const consumer = await readFile(path, 'utf8');
-    assert.match(consumer, /usePlaybackActivity/);
+    assert.match(consumer, /usePlaybackHistory/);
   }
+
+  for (const path of [
+    'app/replay.tsx',
+    'app/(tabs)/profile.tsx',
+  ]) {
+    const consumer = await readFile(path, 'utf8');
+    assert.match(consumer, /useListeningStats/);
+  }
+
+  const library = await readFile('app/(tabs)/library.tsx', 'utf8');
+  assert.doesNotMatch(library, /usePlaybackActivity|usePlaybackHistory|useListeningStats/);
+});
+
+test('mini player limits progress updates to the progress bar', async () => {
+  const source = await readFile('src/components/MiniPlayer.tsx', 'utf8');
+  const shell = source.match(/export function MiniPlayer\(\)[\s\S]*?function MiniPlayerProgress/)?.[0] || '';
+  assert.doesNotMatch(shell, /usePlaybackProgress\(\)/);
+  assert.match(source, /function MiniPlayerProgress\(\)[\s\S]*?usePlaybackProgress\(\)/);
+});
+
+test('home discovery caches and deduplicates public catalog requests', async () => {
+  const api = await readFile('src/lib/api.ts', 'utf8');
+  const home = await readFile('app/(tabs)/index.tsx', 'utf8');
+  assert.match(api, /HOME_SECTIONS_TTL_MS/);
+  assert.match(api, /TRENDING_HOME_TTL_MS/);
+  assert.match(api, /homeSectionsRequest/);
+  assert.match(api, /trendingHomeRequest/);
+  assert.match(home, /fetchHomeSections\(\{ forceRefresh: refresh \}\)/);
+  assert.match(home, /fetchTrendingHomeContent\(\{ forceRefresh: refresh \}\)/);
 });
 
 test('now playing backdrop uses a smaller source and lower blur cost', async () => {
