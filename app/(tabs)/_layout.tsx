@@ -42,7 +42,7 @@ export default function TabsLayout() {
           freezeOnBlur: true,
           sceneStyle: { backgroundColor: colors.background },
           tabBarActiveTintColor: colors.textStrong,
-          tabBarInactiveTintColor: colors.muted,
+          tabBarInactiveTintColor: '#898989',
           tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: 'absolute',
@@ -50,19 +50,19 @@ export default function TabsLayout() {
             right: 0,
             bottom: 0,
             height: TAB_BAR_HEIGHT + safeBottom,
-            paddingTop: 6,
-            paddingBottom: Math.max(5, safeBottom),
+            paddingTop: 5,
+            paddingBottom: Math.max(4, safeBottom),
             borderTopWidth: StyleSheet.hairlineWidth,
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            borderTopColor: colors.border,
-            backgroundColor: Platform.OS === 'android' ? '#000000' : 'rgba(0,0,0,0.98)',
+            borderTopColor: 'rgba(41,41,41,0.92)',
+            backgroundColor: Platform.OS === 'android' ? '#121212' : 'rgba(18,18,18,0.98)',
             elevation: 0,
           },
           tabBarLabelStyle: {
             fontSize: 10,
-            fontWeight: '700',
+            fontWeight: '600',
             letterSpacing: 0,
           },
           tabBarItemStyle: {
@@ -123,6 +123,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  miniWrap: { position: 'absolute', left: 6, right: 6 },
+  root: { flex: 1, backgroundColor: '#121212' },
+  miniWrap: { position: 'absolute', left: 8, right: 8 },
 });

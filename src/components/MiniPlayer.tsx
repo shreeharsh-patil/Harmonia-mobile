@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import {
   ActivityIndicator,
   Pressable,
@@ -8,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
-import { artistNames } from '@/src/lib/song';
+import { artistNames, artworkUrl } from '@/src/lib/song';
 import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 
@@ -39,8 +40,22 @@ export function MiniPlayer() {
 
   if (!currentSong) return null;
 
+  const cover = artworkUrl(currentSong, 96);
+
   return (
     <View style={styles.shell}>
+      {!!cover && (
+        <Image
+          source={{ uri: cover }}
+          style={styles.ambientArtwork}
+          contentFit="cover"
+          blurRadius={28}
+          cachePolicy="memory-disk"
+          recyclingKey={`mini-bg-${String(currentSong.id || cover)}`}
+        />
+      )}
+      <View pointerEvents="none" style={styles.ambientWash} />
+
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
@@ -48,7 +63,7 @@ export function MiniPlayer() {
           onPress={() => router.push('/player')}
           style={styles.info}
         >
-          <TrackArtwork song={currentSong} size={44} radius={6} />
+          <TrackArtwork song={currentSong} size={42} radius={4} />
           <View style={styles.copy}>
             <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
             <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
@@ -61,7 +76,7 @@ export function MiniPlayer() {
           onPress={() => router.push({ pathname: '/player', params: { panel: 'lyrics' } })}
           style={styles.smallControl}
         >
-          <Ionicons name="mic-outline" size={17} color="rgba(255,255,255,0.68)" />
+          <Ionicons name="mic-outline" size={16} color="rgba(255,255,255,0.68)" />
         </Pressable>
 
         <Pressable
@@ -81,7 +96,7 @@ export function MiniPlayer() {
           onPress={() => void next()}
           style={styles.nextControl}
         >
-          <Ionicons name="play-skip-forward" size={26} color={colors.textStrong} />
+          <Ionicons name="play-skip-forward" size={28} color={colors.textStrong} />
         </Pressable>
       </View>
 
@@ -104,32 +119,39 @@ function MiniPlayerProgress() {
 const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
-    backgroundColor: '#202020',
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
     elevation: 8,
+  },
+  ambientArtwork: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.72,
+    transform: [{ scale: 1.55 }],
+  },
+  ambientWash: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15,15,15,0.48)',
   },
   row: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
-  copy: { flex: 1, marginLeft: 8, minWidth: 0 },
-  title: { color: '#FFF', fontWeight: '700', fontSize: 13, lineHeight: 17 },
+  copy: { flex: 1, marginLeft: 9, minWidth: 0 },
+  title: { color: '#FFF', fontWeight: '600', fontSize: 13, lineHeight: 17 },
   artist: { color: 'rgba(255,255,255,0.70)', fontSize: 12, marginTop: 1, lineHeight: 14 },
-  smallControl: { width: 27, height: 36, alignItems: 'center', justifyContent: 'center' },
+  smallControl: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
   playControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
-  nextControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
+  nextControl: { width: 36, height: 38, alignItems: 'center', justifyContent: 'center' },
   progressTrack: {
     position: 'absolute',
     left: 8,

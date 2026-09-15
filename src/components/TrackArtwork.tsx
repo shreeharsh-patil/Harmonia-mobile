@@ -31,7 +31,7 @@ export const TrackArtwork = memo(function TrackArtwork({ song, size, radius = 12
   return (
     <Image
       source={{ uri: url }}
-      style={[{ width: size, height: size, borderRadius: radius, backgroundColor: '#151515' }, style]}
+      style={[{ width: size, height: size, borderRadius: radius, backgroundColor: '#171717' }, style]}
       contentFit="cover"
       transition={120}
       cachePolicy="memory-disk"
@@ -42,11 +42,11 @@ export const TrackArtwork = memo(function TrackArtwork({ song, size, radius = 12
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: '#181818',
+    backgroundColor: '#171717',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#292929',
   },
-  note: { color: '#777', fontWeight: '700' },
+  note: { color: '#A2A2A2', fontWeight: '700' },
 });
