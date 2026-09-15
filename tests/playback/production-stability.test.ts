@@ -136,10 +136,13 @@ test('radio suggestions fall back to local catalog and direct JioSaavn when back
   assert.match(source, /diversifySuggestions\(seed, candidates/);
 });
 
-test('search UI no longer downgrades backend-free discovery to song-only copy', async () => {
+test('search UI keeps full Harmonia discovery and web-parity browse categories', async () => {
   const source = await readFile('app/(tabs)/search.tsx', 'utf8');
   assert.ok(source.includes('placeholder="What do you want to listen to?"'));
-  assert.match(source, /Bundled Harmonia discovery plus direct JioSaavn/);
+  assert.match(source, /BROWSE_CATEGORIES/);
+  assert.match(source, />Browse all</);
+  assert.match(source, /name: 'Live Radio'/);
+  assert.match(source, /searchMusic\(trimmed, 30, controller\.signal\)/);
 });
 
 
@@ -618,9 +621,9 @@ test('now playing backdrop uses a smaller source and lower blur cost', async () 
 test('now playing uses responsive artwork and control spacing on narrow phones', async () => {
   const source = await readFile('app/player.tsx', 'utf8');
   assert.match(source, /useWindowDimensions/);
-  assert.match(source, /playerContentWidth = Math\.max\(0, width - 40\)/);
-  assert.match(source, /artworkSize = Math\.min\(compactArtwork \? 244 : 330, playerContentWidth\)/);
-  assert.match(source, /controlsFixedWidth = 42 \+ 52 \+ 74 \+ 52 \+ 42/);
+  assert.match(source, /playerContentWidth = Math\.max\(0, width - 32\)/);
+  assert.match(source, /artworkSize = Math\.min\(compactArtwork \? 244 : 360, playerContentWidth\)/);
+  assert.match(source, /controlsFixedWidth = 42 \+ 52 \+ 76 \+ 52 \+ 42/);
   assert.match(source, /Math\.min\(34, \(playerContentWidth - controlsFixedWidth\) \/ 4\)/);
   assert.match(source, /style=\{\[styles\.controls, \{ gap: controlGap \}\]\}/);
 });
