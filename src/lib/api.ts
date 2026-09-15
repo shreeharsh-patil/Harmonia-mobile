@@ -508,6 +508,37 @@ export async function fetchHomeSections(): Promise<MusicSection[]> {
   return getStaticHomeSections();
 }
 
+export async function fetchCommunityPlaylists(limit = 20): Promise<Playlist[]> {
+  if (!HAS_HARMONIA_API) return [];
+  try {
+    const payload = await requestJson<{ success: true; data: Playlist[] }>(
+      `/api/playlists/community?limit=${Math.max(1, Math.min(50, limit))}&page=0`
+    );
+    return Array.isArray(payload.data) ? payload.data : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchTrendingHomeContent(): Promise<{
+  albums: HarmoniaAlbum[];
+  songs: Song[];
+}> {
+  const [albumResult, songResult] = await Promise.allSettled([
+    searchMusic('Latest Hindi Songs', 30),
+    searchMusic('Top Songs India', 30),
+  ]);
+
+  const albums = albumResult.status === 'fulfilled'
+    ? (albumResult.value.albums?.results || []).slice(0, 20)
+    : [];
+  const songs = songResult.status === 'fulfilled'
+    ? (songResult.value.songs?.results || []).slice(0, 30)
+    : [];
+
+  return { albums, songs };
+}
+
 export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {
   if (HAS_HARMONIA_API) {
     try {
