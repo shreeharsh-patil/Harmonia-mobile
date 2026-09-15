@@ -1086,8 +1086,6 @@ const styles = StyleSheet.create({
     fontFamily: PLAYER_FONT,
     textAlign: 'center',
     letterSpacing: -0.35,
-    textShadowColor: 'rgba(255,255,255,0.24)',
-    textShadowRadius: 5,
   },
   lyricsOverlayEmpty: {
     flex: 1,
