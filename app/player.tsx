@@ -291,24 +291,14 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {!!cover && (
-        <>
-          <Image
-            source={{ uri: cover }}
-            blurRadius={58}
-            contentFit="cover"
-            style={[StyleSheet.absoluteFill, styles.backdropImage]}
-            cachePolicy="memory-disk"
-            recyclingKey={String(currentSong.id || cover)}
-          />
-          <Image
-            source={{ uri: cover }}
-            blurRadius={18}
-            contentFit="cover"
-            style={[StyleSheet.absoluteFill, styles.backdropGlow]}
-            cachePolicy="memory-disk"
-            recyclingKey={`glow-${String(currentSong.id || cover)}`}
-          />
-        </>
+        <Image
+          source={{ uri: cover }}
+          blurRadius={28}
+          contentFit="cover"
+          style={[StyleSheet.absoluteFill, styles.backdropImage]}
+          cachePolicy="memory-disk"
+          recyclingKey={String(currentSong.id || cover)}
+        />
       )}
       <View style={styles.backdropTopWash} />
       <View style={styles.backdropMiddleWash} />
@@ -807,11 +797,10 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
-  backdropImage: { opacity: 0.9, transform: [{ scale: 1.42 }] },
-  backdropGlow: { opacity: 0.16, transform: [{ scale: 1.78 }] },
-  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
-  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '42%', bottom: '28%', backgroundColor: 'rgba(0,0,0,0.16)' },
-  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '44%', backgroundColor: 'rgba(0,0,0,0.58)' },
+  backdropImage: { opacity: 0.82, transform: [{ scale: 1.24 }] },
+  backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.15)' },
+  backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '40%', bottom: '30%', backgroundColor: 'rgba(0,0,0,0.18)' },
+  backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '46%', backgroundColor: 'rgba(0,0,0,0.56)' },
   safe: { flex: 1, paddingHorizontal: 16 },
   scroll: { paddingBottom: 16 },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
