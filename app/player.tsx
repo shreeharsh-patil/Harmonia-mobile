@@ -211,9 +211,9 @@ export default function PlayerScreen() {
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel !== 'none';
-  const playerContentWidth = Math.max(0, width - 40);
-  const artworkSize = Math.min(compactArtwork ? 244 : 330, playerContentWidth);
-  const controlsFixedWidth = 42 + 52 + 74 + 52 + 42;
+  const playerContentWidth = Math.max(0, width - 32);
+  const artworkSize = Math.min(compactArtwork ? 244 : 360, playerContentWidth);
+  const controlsFixedWidth = 42 + 52 + 76 + 52 + 42;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
@@ -302,7 +302,7 @@ export default function PlayerScreen() {
             <ArtworkRenderer
               song={currentSong}
               size={artworkSize}
-              radius={16}
+              radius={14}
               enableMotion={panel === 'none'}
               style={styles.artwork}
             />
@@ -334,7 +334,7 @@ export default function PlayerScreen() {
             </Pressable>
             <View style={styles.times}>
               <Text style={styles.time}>{durationLabel(position)}</Text>
-              <Text style={styles.time}>-{durationLabel(Math.max(0, duration - position))}</Text>
+              <Text style={styles.time}>{durationLabel(duration)}</Text>
             </View>
           </View>
 
@@ -344,25 +344,25 @@ export default function PlayerScreen() {
             <Pressable onPress={toggleShuffle} style={styles.modeControl} accessibilityLabel="Shuffle">
               <Ionicons
                 name="shuffle"
-                size={24}
+                size={26}
                 color={shuffleEnabled ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
-              <Ionicons name="play-skip-back" size={38} color="#FFF" />
+              <Ionicons name="play-skip-back" size={40} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
                 ? <ActivityIndicator color="#080808" size="large" />
-                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={32} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
-              <Ionicons name="play-skip-forward" size={38} color="#FFF" />
+              <Ionicons name="play-skip-forward" size={40} color="#FFF" />
             </Pressable>
             <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
               <Ionicons
                 name="repeat"
-                size={24}
+                size={26}
                 color={repeatMode !== 'off' ? '#4ADE80' : 'rgba(255,255,255,0.62)'}
               />
               {repeatMode === 'one' && (
@@ -378,8 +378,8 @@ export default function PlayerScreen() {
               accessibilityLabel="Queue"
             >
               <Ionicons
-                name="list"
-                size={20}
+                name="list-outline"
+                size={22}
                 color={panel === 'queue' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
@@ -389,8 +389,8 @@ export default function PlayerScreen() {
               accessibilityLabel="Lyrics"
             >
               <Ionicons
-                name="mic"
-                size={19}
+                name="mic-outline"
+                size={21}
                 color={panel === 'lyrics' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
@@ -725,15 +725,17 @@ export default function PlayerScreen() {
             </View>
           )}
 
-          <View style={styles.footer}>
-            <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
-              <Text style={styles.secondaryText}>−10</Text>
-            </Pressable>
-            <Text style={styles.device}>HARMONIA • THIS PHONE</Text>
-            <Pressable onPress={() => void seek(Math.min(duration, position + 10))} style={styles.secondary}>
-              <Text style={styles.secondaryText}>+10</Text>
-            </Pressable>
-          </View>
+          {panel !== 'none' && (
+            <View style={styles.footer}>
+              <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
+                <Text style={styles.secondaryText}>−10</Text>
+              </Pressable>
+              <Text style={styles.device}>HARMONIA • THIS PHONE</Text>
+              <Pressable onPress={() => void seek(Math.min(duration, position + 10))} style={styles.secondary}>
+                <Text style={styles.secondaryText}>+10</Text>
+              </Pressable>
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -742,24 +744,24 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080808' },
-  backdropImage: { opacity: 0.34, transform: [{ scale: 1.16 }] },
-  backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5,5,5,0.70)' },
-  backdropFade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
-  safe: { flex: 1, paddingHorizontal: 20 },
-  scroll: { paddingBottom: 20 },
-  header: { height: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  backdropImage: { opacity: 0.48, transform: [{ scale: 1.18 }] },
+  backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(5,5,5,0.64)' },
+  backdropFade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.14)' },
+  safe: { flex: 1, paddingHorizontal: 16 },
+  scroll: { paddingBottom: 16 },
+  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerCopy: { alignItems: 'center', flex: 1, paddingHorizontal: 12 },
-  playingFrom: { color: 'rgba(255,255,255,0.80)', fontSize: 14, fontWeight: '500' },
-  album: { color: 'rgba(255,255,255,0.60)', fontSize: 12, fontWeight: '500', marginTop: 1, maxWidth: 190 },
-  artworkWrap: { minHeight: 390, justifyContent: 'center', alignItems: 'center' },
-  artworkWrapCompact: { minHeight: 275 },
+  playingFrom: { color: 'rgba(255,255,255,0.88)', fontSize: 15, fontWeight: '700' },
+  album: { color: 'rgba(255,255,255,0.56)', fontSize: 13, fontWeight: '500', marginTop: 2, maxWidth: 210 },
+  artworkWrap: { minHeight: 408, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 34 },
+  artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
   artwork: {
     shadowColor: '#000',
     shadowOpacity: 0.42,
@@ -767,23 +769,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     elevation: 18,
   },
-  meta: { paddingTop: 10, flexDirection: 'row', alignItems: 'center' },
+  meta: { paddingTop: 20, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
-  likeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#FFF', fontSize: 20, fontWeight: '700', letterSpacing: -0.35 },
-  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 15, marginTop: 3 },
-  timeline: { paddingTop: 24 },
-  track: { height: 20, justifyContent: 'center' },
+  likeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#FFF', fontSize: 21, fontWeight: '800', letterSpacing: -0.35 },
+  artist: { color: 'rgba(255,255,255,0.62)', fontSize: 16, marginTop: 4 },
+  timeline: { paddingTop: 22 },
+  track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
   fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
   thumb: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFF', marginLeft: -6 },
-  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 },
-  time: { color: '#8A8A8A', fontSize: 11, fontVariant: ['tabular-nums'] },
+  times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
-  modeControl: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
-  skip: { width: 52, height: 58, alignItems: 'center', justifyContent: 'center' },
-  play: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center' },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 18, paddingBottom: 12 },
+  modeControl: { width: 42, height: 56, alignItems: 'center', justifyContent: 'center' },
+  skip: { width: 52, height: 64, alignItems: 'center', justifyContent: 'center' },
+  play: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   playIcon: { marginLeft: 3 },
   repeatBadge: {
     position: 'absolute',
@@ -801,10 +803,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 2,
     marginBottom: 12,
   },
   secondaryControl: {
-    width: 44,
+    width: 46,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',

@@ -7,40 +7,50 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
   fetchHomeSections,
   fetchRecentlyPlayedPlaylists,
   fetchRecommendedMixes,
+  fetchTrendingHomeContent,
 } from '@/src/lib/api';
+import { albumTitle, imageUrl } from '@/src/lib/entities';
+import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
-import type { MusicSection, Playlist, RecommendedMix } from '@/src/types';
+import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
-type FeedTab = 'all' | 'music';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { token } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, playSong } = usePlayer();
+
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
-  const [activeFeedTab, setActiveFeedTab] = useState<FeedTab>('all');
+  const [trendingAlbums, setTrendingAlbums] = useState<HarmoniaAlbum[]>([]);
+  const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
+  const topSongsRef = useRef<FlatList<Song[]> | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -48,10 +58,11 @@ export default function HomeScreen() {
     else setLoading(true);
     setError(null);
 
-    const [publicResult, recentResult, mixResult] = await Promise.allSettled([
+    const [publicResult, recentResult, mixResult, trendingResult] = await Promise.allSettled([
       fetchHomeSections(),
       token ? fetchRecentlyPlayedPlaylists(token) : Promise.resolve<Playlist[]>([]),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
+      fetchTrendingHomeContent(),
     ]);
 
     if (generation !== loadGenerationRef.current) return;
@@ -64,6 +75,15 @@ export default function HomeScreen() {
 
     setRecentPlaylists(recentResult.status === 'fulfilled' ? recentResult.value : []);
     setMixes(mixResult.status === 'fulfilled' ? mixResult.value : []);
+
+    if (trendingResult.status === 'fulfilled') {
+      setTrendingAlbums(trendingResult.value.albums);
+      setTrendingSongs(trendingResult.value.songs);
+    } else {
+      setTrendingAlbums([]);
+      setTrendingSongs([]);
+    }
+
     setLoading(false);
     setRefreshing(false);
   }, [token]);
@@ -78,6 +98,12 @@ export default function HomeScreen() {
     router.push({ pathname: '/playlist/[id]', params: { id } });
   };
 
+  const openAlbum = (album: HarmoniaAlbum) => {
+    const id = String(album.id || '');
+    if (!id) return;
+    router.push({ pathname: '/album/[id]', params: { id } });
+  };
+
   const openMix = (mix: RecommendedMix) => {
     const id = String(mix._mixId || mix.id || '');
     if (!id) return;
@@ -88,13 +114,34 @@ export default function HomeScreen() {
     () => sections.flatMap((section) => section.playlists || []).slice(0, 5),
     [sections]
   );
+
   const quickPlaylists = recentPlaylists.length
     ? recentPlaylists.slice(0, 5)
     : featuredFallback;
+
+  const topColumns = useMemo(() => {
+    const columns: Song[][] = [];
+    for (let index = 0; index < trendingSongs.length; index += 4) {
+      columns.push(trendingSongs.slice(index, index + 4));
+    }
+    return columns;
+  }, [trendingSongs]);
+
+  const topColumnWidth = Math.min(342, Math.max(282, width - 54));
+
+  const scrollTopSongs = (direction: -1 | 1) => {
+    if (!topColumns.length) return;
+    const nextIndex = Math.max(0, Math.min(topColumns.length - 1, topColumnIndex + direction));
+    setTopColumnIndex(nextIndex);
+    topSongsRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+  };
+
   const hasContent =
     sections.some((section) => section.playlists?.length) ||
     recentPlaylists.length > 0 ||
-    mixes.length > 0;
+    trendingAlbums.length > 0 ||
+    trendingSongs.length > 0;
+
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   return (
@@ -116,103 +163,166 @@ export default function HomeScreen() {
       >
         <View pointerEvents="none" style={styles.ambientGlow} />
 
-        <View style={styles.feedTabs}>
-          {(['all', 'music'] as FeedTab[]).map((tab) => {
-            const active = activeFeedTab === tab;
-            return (
+            <View style={styles.quickGrid}>
               <Pressable
-                key={tab}
-                onPress={() => setActiveFeedTab(tab)}
-                style={[styles.feedPill, active && styles.feedPillActive]}
+                onPress={() => {
+                  if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
+                  else router.push('/(tabs)/library');
+                }}
+                style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
               >
-                <Text style={[styles.feedPillText, active && styles.feedPillTextActive]}>
-                  {tab === 'all' ? 'All' : 'Music'}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.quickGrid}>
-          <Pressable
-            onPress={() => {
-              if (likedSongs.length) void playSong(likedSongs[0], likedSongs);
-              else router.push('/(tabs)/library');
-            }}
-            style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
-          >
-            <View style={styles.likedArtwork}>
-              <Ionicons name="heart" size={22} color="#EF4444" />
-            </View>
-            <Text numberOfLines={2} style={styles.quickTitle}>Liked Songs</Text>
-          </Pressable>
-
-          {quickPlaylists.map((playlist, index) => (
-            <QuickPlaylistCard
-              key={String(playlist.id || playlist._id || `quick-${index}`)}
-              playlist={playlist}
-              onPress={() => openPlaylist(playlist)}
-            />
-          ))}
-        </View>
-
-        {!!error && (
-          <Pressable onPress={() => void load()} style={styles.errorBox}>
-            <Text style={styles.error}>{error}</Text>
-            <Text style={styles.retry}>Tap to retry</Text>
-          </Pressable>
-        )}
-
-        {loading && !hasContent ? (
-          <HomeSkeleton />
-        ) : (
-          <>
-            {!!recentPlaylists.length && (
-              <PlaylistRail
-                title="Recently Played"
-                data={recentPlaylists}
-                onPress={openPlaylist}
-              />
-            )}
-
-            {!!mixes.length && (
-              <View style={styles.section}>
-                <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>Recommended for You</Text>
+                <View style={styles.likedArtwork}>
+                  <Ionicons name="heart" size={20} color="#FF3B4D" />
                 </View>
-                <FlatList
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  data={mixes}
-                  keyExtractor={(item, index) => String(item._mixId || item.id || index)}
-                  initialNumToRender={RAIL_INITIAL_RENDER}
-                  maxToRenderPerBatch={RAIL_BATCH_SIZE}
-                  windowSize={RAIL_WINDOW_SIZE}
-                  contentContainerStyle={styles.rail}
-                  renderItem={({ item }) => (
-                    <PlaylistCard playlist={item} onPress={() => openMix(item)} />
-                  )}
+                <Text numberOfLines={2} style={styles.quickTitle}>Liked Songs</Text>
+              </Pressable>
+
+              {quickPlaylists.map((playlist, index) => (
+                <QuickPlaylistCard
+                  key={String(playlist.id || playlist._id || `quick-${index}`)}
+                  playlist={playlist}
+                  onPress={() => openPlaylist(playlist)}
                 />
-              </View>
+              ))}
+            </View>
+
+            {!!error && (
+              <Pressable onPress={() => void load()} style={styles.errorBox}>
+                <Text style={styles.error}>{error}</Text>
+                <Text style={styles.retry}>Tap to retry</Text>
+              </Pressable>
             )}
 
-            {sections.map((section) => (
-              <PlaylistRail
-                key={String(section.id || section._id || section.name)}
-                title={section.name}
-                data={section.playlists || []}
-                onPress={openPlaylist}
-              />
-            ))}
+            {loading && !hasContent ? (
+              <HomeSkeleton />
+            ) : (
+              <>
+                {!!trendingAlbums.length && (
+                  <AlbumRail
+                    title="Trending Albums"
+                    albums={trendingAlbums}
+                    onPress={openAlbum}
+                  />
+                )}
 
-            {!hasContent && !error && (
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>Nothing to show yet</Text>
-                <Text style={styles.emptyBody}>Pull to refresh the Harmonia catalog.</Text>
-              </View>
+                {!!trendingSongs.length && (
+                  <View style={styles.section}>
+                    <View style={styles.topSongsHead}>
+                      <View style={styles.sectionHeadCopy}>
+                        <Text style={styles.sectionTitle}>Top Songs</Text>
+                        <Text numberOfLines={1} style={styles.sectionSubtitle}>
+                          The most popular tracks right now ({trendingSongs.length} songs)
+                        </Text>
+                      </View>
+                      <View style={styles.chartActions}>
+                        <Pressable
+                          onPress={() => scrollTopSongs(-1)}
+                          disabled={topColumnIndex === 0}
+                          style={[styles.chartArrow, topColumnIndex === 0 && styles.chartArrowDisabled]}
+                          accessibilityLabel="Previous top songs"
+                        >
+                          <Ionicons name="chevron-back" size={16} color="#DADADA" />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => scrollTopSongs(1)}
+                          disabled={topColumnIndex >= topColumns.length - 1}
+                          style={[styles.chartArrow, topColumnIndex >= topColumns.length - 1 && styles.chartArrowDisabled]}
+                          accessibilityLabel="Next top songs"
+                        >
+                          <Ionicons name="chevron-forward" size={16} color="#DADADA" />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <FlatList<Song[]>
+                      ref={topSongsRef}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      data={topColumns}
+                      keyExtractor={(_, index) => `top-column-${index}`}
+                      initialNumToRender={2}
+                      maxToRenderPerBatch={2}
+                      windowSize={3}
+                      snapToInterval={topColumnWidth + 10}
+                      decelerationRate="fast"
+                      contentContainerStyle={styles.chartRail}
+                      getItemLayout={(_, index) => ({
+                        length: topColumnWidth + 10,
+                        offset: (topColumnWidth + 10) * index,
+                        index,
+                      })}
+                      onMomentumScrollEnd={(event) => {
+                        const next = Math.round(event.nativeEvent.contentOffset.x / (topColumnWidth + 10));
+                        setTopColumnIndex(Math.max(0, Math.min(topColumns.length - 1, next)));
+                      }}
+                      renderItem={({ item: songs, index: columnIndex }) => (
+                        <View style={[styles.chartColumn, { width: topColumnWidth }]}>
+                          {songs.map((song, localIndex) => (
+                            <Pressable
+                              key={String(song.id)}
+                              onPress={() => void playSong(song, trendingSongs)}
+                              style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
+                            >
+                              <TrackArtwork song={song} size={46} radius={8} />
+                              <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
+                              <View style={styles.chartCopy}>
+                                <Text numberOfLines={1} style={styles.chartTitle}>{song.name}</Text>
+                                <Text numberOfLines={1} style={styles.chartArtist}>{artistNames(song)}</Text>
+                              </View>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                    />
+                  </View>
+                )}
+
+                {!!recentPlaylists.length && (
+                  <PlaylistRail
+                    title="Recently Played"
+                    data={recentPlaylists}
+                    onPress={openPlaylist}
+                    showAll
+                  />
+                )}
+
+                {sections.map((section) => (
+                  <PlaylistRail
+                    key={String(section.id || section._id || section.name)}
+                    title={section.name}
+                    data={section.playlists || []}
+                    onPress={openPlaylist}
+                    showAll
+                  />
+                ))}
+
+                {!!mixes.length && (
+                  <View style={styles.section}>
+                    <SectionHeader title="Recommended for You" showAll />
+                    <FlatList
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      data={mixes}
+                      keyExtractor={(item, index) => String(item._mixId || item.id || index)}
+                      initialNumToRender={RAIL_INITIAL_RENDER}
+                      maxToRenderPerBatch={RAIL_BATCH_SIZE}
+                      windowSize={RAIL_WINDOW_SIZE}
+                      contentContainerStyle={styles.rail}
+                      renderItem={({ item }) => (
+                        <PlaylistCard playlist={item} size={116} onPress={() => openMix(item)} />
+                      )}
+                    />
+                  </View>
+                )}
+
+                {!hasContent && !error && (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyTitle}>Nothing to show yet</Text>
+                    <Text style={styles.emptyBody}>Pull to refresh the Harmonia catalog.</Text>
+                  </View>
+                )}
+              </>
             )}
-          </>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -230,7 +340,7 @@ function QuickPlaylistCard({
       onPress={onPress}
       style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
     >
-      <PlaylistArtwork playlist={playlist} size={48} radius={12} />
+      <PlaylistArtwork playlist={playlist} size={44} radius={7} />
       <Text numberOfLines={2} style={styles.quickTitle}>
         {playlist.name || playlist.title || 'Playlist'}
       </Text>
@@ -238,22 +348,35 @@ function QuickPlaylistCard({
   );
 }
 
+function SectionHeader({ title, showAll = false }: { title: string; showAll?: boolean }) {
+  return (
+    <View style={styles.sectionHead}>
+      <Text numberOfLines={1} style={styles.sectionTitle}>{title}</Text>
+      {showAll && (
+        <Pressable onPress={() => router.push('/(tabs)/search')} hitSlop={8}>
+          <Text style={styles.showAll}>Show all</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 function PlaylistRail({
   title,
   data,
   onPress,
+  showAll = false,
 }: {
   title: string;
   data: Playlist[];
   onPress: (playlist: Playlist) => void;
+  showAll?: boolean;
 }) {
   if (!data.length) return null;
 
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHead}>
-        <Text numberOfLines={1} style={styles.sectionTitle}>{title}</Text>
-      </View>
+      <SectionHeader title={title} showAll={showAll} />
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -264,8 +387,60 @@ function PlaylistRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => (
-          <PlaylistCard playlist={item} onPress={() => onPress(item)} />
+          <PlaylistCard playlist={item} size={116} onPress={() => onPress(item)} />
         )}
+      />
+    </View>
+  );
+}
+
+function AlbumRail({
+  title,
+  albums,
+  onPress,
+}: {
+  title: string;
+  albums: HarmoniaAlbum[];
+  onPress: (album: HarmoniaAlbum) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={title} />
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={albums}
+        keyExtractor={(item, index) => String(item.id || `album-${index}`)}
+        initialNumToRender={RAIL_INITIAL_RENDER}
+        maxToRenderPerBatch={RAIL_BATCH_SIZE}
+        windowSize={RAIL_WINDOW_SIZE}
+        contentContainerStyle={styles.rail}
+        renderItem={({ item }) => {
+          const cover = imageUrl(item.image as any, 116);
+          return (
+            <Pressable
+              onPress={() => onPress(item)}
+              style={({ pressed }) => [styles.albumCard, pressed && styles.pressed]}
+            >
+              {cover ? (
+                <Image
+                  source={{ uri: cover }}
+                  style={styles.albumArtwork}
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View style={[styles.albumArtwork, styles.albumFallback]}>
+                  <Ionicons name="disc-outline" size={34} color="#666" />
+                </View>
+              )}
+              <Text numberOfLines={1} style={styles.albumTitle}>{albumTitle(item)}</Text>
+              <Text numberOfLines={1} style={styles.albumMeta}>
+                {item.primaryArtists || item.year || 'Album'}
+              </Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -282,7 +457,6 @@ function HomeSkeleton() {
               <View key={item} style={styles.skeletonCard}>
                 <View style={styles.skeletonArtwork} />
                 <View style={styles.skeletonLine} />
-                <View style={styles.skeletonLineShort} />
               </View>
             ))}
           </View>
@@ -293,156 +467,149 @@ function HomeSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: '#0C0C0C' },
   topBar: {
-    height: 56,
+    height: 48,
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(0,0,0,0.96)',
+    borderBottomColor: '#242424',
+    backgroundColor: '#0D0D0D',
     zIndex: 4,
   },
   topTitle: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '600',
+    color: '#EDEDED',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   content: {
-    paddingHorizontal: 12,
-    paddingTop: 14,
+    paddingHorizontal: 8,
+    paddingTop: 12,
   },
   ambientGlow: {
     position: 'absolute',
-    top: -90,
-    left: -70,
-    width: 300,
-    height: 260,
-    borderRadius: 150,
+    top: -70,
+    left: -50,
+    width: 270,
+    height: 220,
+    borderRadius: 140,
     backgroundColor: 'rgba(69,10,245,0.08)',
-  },
-  feedTabs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  feedPill: {
-    minHeight: 30,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(10,10,10,0.82)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedPillActive: {
-    backgroundColor: colors.textStrong,
-    borderColor: colors.textStrong,
-  },
-  feedPillText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  feedPillTextActive: {
-    color: colors.background,
   },
   quickGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 24,
+    gap: 7,
+    marginBottom: 20,
   },
   quickCard: {
-    width: '48.7%',
-    minHeight: 56,
-    borderRadius: 16,
-    padding: 4,
-    paddingRight: 10,
+    width: '49%',
+    minHeight: 48,
+    borderRadius: 8,
+    padding: 2,
+    paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(10,10,10,0.78)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#111111',
   },
   likedArtwork: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#181818',
+    backgroundColor: '#6A65F2',
   },
   quickTitle: {
     flex: 1,
     minWidth: 0,
-    color: colors.text,
-    fontSize: 13,
-    lineHeight: 16,
+    color: '#E7E7E7',
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '700',
-    marginLeft: 9,
+    marginLeft: 7,
   },
-  section: { marginBottom: 28 },
+  section: { marginBottom: 24 },
   sectionHead: {
+    minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 2,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 1,
   },
+  sectionHeadCopy: { flex: 1, minWidth: 0, paddingRight: 8 },
   sectionTitle: {
     flexShrink: 1,
-    color: colors.text,
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+    color: '#F0F0F0',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+    letterSpacing: -0.25,
   },
-  rail: { paddingHorizontal: 2, paddingBottom: 2 },
+  sectionSubtitle: { color: '#777', fontSize: 9, marginTop: 1 },
+  showAll: { color: '#8F8F8F', fontSize: 10, fontWeight: '700' },
+  rail: { paddingHorizontal: 1, paddingBottom: 1 },
+  albumCard: { width: 116, marginRight: 12 },
+  albumArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  albumFallback: { alignItems: 'center', justifyContent: 'center' },
+  albumTitle: { color: '#E8E8E8', fontSize: 11, fontWeight: '700', marginTop: 7 },
+  albumMeta: { color: '#777', fontSize: 9, fontWeight: '500', marginTop: 2 },
+  topSongsHead: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 7,
+  },
+  chartActions: { flexDirection: 'row', gap: 6 },
+  chartArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#181818',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartArrowDisabled: { opacity: 0.35 },
+  chartRail: { gap: 10, paddingRight: 8 },
+  chartColumn: { gap: 6 },
+  chartRow: {
+    minHeight: 58,
+    borderRadius: 11,
+    backgroundColor: '#111111',
+    padding: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chartNumber: {
+    width: 24,
+    textAlign: 'center',
+    color: '#7A7A7A',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  chartCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
+  chartTitle: { color: '#ECECEC', fontSize: 11, fontWeight: '800' },
+  chartArtist: { color: '#777', fontSize: 9, marginTop: 2 },
   errorBox: {
-    borderRadius: 10,
+    borderRadius: 9,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(243,114,127,0.22)',
     backgroundColor: 'rgba(84,28,21,0.28)',
-    padding: 12,
-    marginBottom: 20,
+    padding: 10,
+    marginBottom: 18,
   },
-  error: { color: colors.danger, fontSize: 13, fontWeight: '600' },
-  retry: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  empty: { minHeight: 220, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  emptyBody: { color: colors.muted, fontSize: 13, marginTop: 5 },
+  error: { color: colors.danger, fontSize: 11, fontWeight: '600' },
+  retry: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  empty: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { color: '#E7E7E7', fontSize: 15, fontWeight: '800' },
+  emptyBody: { color: '#777', fontSize: 11, marginTop: 5 },
   pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
   skeletonWrap: { paddingTop: 2 },
-  skeletonTitle: {
-    width: 160,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceRaised,
-    marginBottom: 12,
-  },
-  skeletonRail: { flexDirection: 'row', gap: 16 },
-  skeletonCard: { width: 140 },
-  skeletonArtwork: {
-    width: 140,
-    height: 140,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceRaised,
-  },
-  skeletonLine: {
-    width: 112,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: colors.surfaceRaised,
-    marginTop: 10,
-  },
-  skeletonLineShort: {
-    width: 76,
-    height: 9,
-    borderRadius: 4,
-    backgroundColor: colors.surface,
-    marginTop: 5,
-  },
+  skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: '#171717', marginBottom: 9 },
+  skeletonRail: { flexDirection: 'row', gap: 12 },
+  skeletonCard: { width: 116 },
+  skeletonArtwork: { width: 116, height: 116, borderRadius: 8, backgroundColor: '#171717' },
+  skeletonLine: { width: 90, height: 10, borderRadius: 4, backgroundColor: '#171717', marginTop: 8 },
 });
