@@ -129,12 +129,12 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ambientArtwork: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.72,
     transform: [{ scale: 1.55 }],
   },
   ambientWash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(15,15,15,0.48)',
   },
   row: {
