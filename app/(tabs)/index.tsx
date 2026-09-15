@@ -18,7 +18,6 @@ import { PlaylistCard } from '@/src/components/PlaylistCard';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
-  fetchCommunityPlaylists,
   fetchHomeSections,
   fetchRecentlyPlayedPlaylists,
   fetchRecommendedMixes,
@@ -51,7 +50,6 @@ export default function HomeScreen() {
 
   const [sections, setSections] = useState<MusicSection[]>([]);
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
-  const [communityPlaylists, setCommunityPlaylists] = useState<Playlist[]>([]);
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<HarmoniaAlbum[]>([]);
   const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
@@ -69,11 +67,10 @@ export default function HomeScreen() {
     else setLoading(true);
     setError(null);
 
-    const [publicResult, recentResult, mixResult, communityResult, trendingResult] = await Promise.allSettled([
+    const [publicResult, recentResult, mixResult, trendingResult] = await Promise.allSettled([
       fetchHomeSections(),
       token ? fetchRecentlyPlayedPlaylists(token) : Promise.resolve<Playlist[]>([]),
       token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
-      fetchCommunityPlaylists(20),
       fetchTrendingHomeContent(),
     ]);
 
@@ -87,7 +84,6 @@ export default function HomeScreen() {
 
     setRecentPlaylists(recentResult.status === 'fulfilled' ? recentResult.value : []);
     setMixes(mixResult.status === 'fulfilled' ? mixResult.value : []);
-    setCommunityPlaylists(communityResult.status === 'fulfilled' ? communityResult.value : []);
 
     if (trendingResult.status === 'fulfilled') {
       setTrendingAlbums(trendingResult.value.albums);
@@ -152,7 +148,6 @@ export default function HomeScreen() {
   const hasContent =
     sections.some((section) => section.playlists?.length) ||
     recentPlaylists.length > 0 ||
-    communityPlaylists.length > 0 ||
     trendingAlbums.length > 0 ||
     trendingSongs.length > 0;
 
@@ -315,15 +310,6 @@ export default function HomeScreen() {
                   <PlaylistRail
                     title="Recently Played"
                     data={recentPlaylists}
-                    onPress={openPlaylist}
-                    showAll
-                  />
-                )}
-
-                {!!communityPlaylists.length && (
-                  <PlaylistRail
-                    title="Community Playlists"
-                    data={communityPlaylists}
                     onPress={openPlaylist}
                     showAll
                   />
