@@ -76,7 +76,7 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function PlayerScreen() {
-  const params = useLocalSearchParams<{ panel?: string }>();
+  const params = useLocalSearchParams<{ panel?: string; from?: string }>();
   const { width } = useWindowDimensions();
   const { token } = useAuth();
   const { isLiked, toggleLike } = useLibrary();
@@ -145,7 +145,10 @@ export default function PlayerScreen() {
     () => activeLyricWordIndex(syncedLines[activeLine], position),
     [activeLine, position, syncedLines]
   );
-  const playingFromLabel = 'Music';
+  const playingFromLabel = useMemo(() => {
+    const value = Array.isArray(params.from) ? params.from[0] : params.from;
+    return String(value || 'Music').trim() || 'Music';
+  }, [params.from]);
 
   const recentQueueSuggestions = useMemo(() => {
     const queued = new Set(queue.map((song) => String(song.id || '')));
@@ -220,9 +223,9 @@ export default function PlayerScreen() {
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const compactArtwork = panel === 'queue' || panel === 'tools';
-  const playerContentWidth = Math.max(0, width - 40);
-  const artworkSize = Math.min(compactArtwork ? 244 : 332, Math.max(0, width - 44));
-  const controlsFixedWidth = 42 + 52 + 80 + 52 + 42;
+  const playerContentWidth = Math.max(0, width - 32);
+  const artworkSize = Math.min(compactArtwork ? 244 : 380, playerContentWidth);
+  const controlsFixedWidth = 40 + 50 + 64 + 50 + 40;
   const controlGap = Math.max(
     4,
     Math.min(34, (playerContentWidth - controlsFixedWidth) / 4)
@@ -278,7 +281,7 @@ export default function PlayerScreen() {
       {!!cover && (
         <Image
           source={{ uri: cover }}
-          blurRadius={56}
+          blurRadius={72}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
@@ -386,7 +389,7 @@ export default function PlayerScreen() {
               <ArtworkRenderer
                 song={currentSong}
                 size={artworkSize}
-                radius={2}
+                radius={0}
                 enableMotion={panel === 'none'}
                 style={styles.artwork}
               />
@@ -401,7 +404,7 @@ export default function PlayerScreen() {
             <Pressable onPress={handleLike} style={styles.likeButton} accessibilityLabel={isLiked(currentSong.id) ? 'Unlike song' : 'Like song'}>
               <Ionicons
                 name={isLiked(currentSong.id) ? 'heart' : 'heart-outline'}
-                size={25}
+                size={24}
                 color={isLiked(currentSong.id) ? '#EF4444' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
@@ -429,25 +432,25 @@ export default function PlayerScreen() {
             <Pressable onPress={toggleShuffle} style={styles.modeControl} accessibilityLabel="Shuffle">
               <Ionicons
                 name="shuffle"
-                size={26}
+                size={24}
                 color={shuffleEnabled ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
             <Pressable onPress={() => void previous()} style={styles.skip} accessibilityLabel="Previous">
-              <Ionicons name="play-skip-back" size={34} color="#FFF" />
+              <Ionicons name="play-skip-back" size={42} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => void togglePlayback()} style={styles.play} accessibilityLabel={isPlaying ? 'Pause' : 'Play'}>
               {isBuffering || isLoadingTrack
                 ? <ActivityIndicator color="#080808" size="large" />
-                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
+                : <Ionicons name={isPlaying ? 'pause' : 'play'} size={30} color="#080808" style={!isPlaying ? styles.playIcon : undefined} />}
             </Pressable>
             <Pressable onPress={() => void next()} style={styles.skip} accessibilityLabel="Next">
-              <Ionicons name="play-skip-forward" size={34} color="#FFF" />
+              <Ionicons name="play-skip-forward" size={42} color="#FFF" />
             </Pressable>
             <Pressable onPress={toggleRepeat} style={styles.modeControl} accessibilityLabel="Repeat">
               <Ionicons
                 name="repeat"
-                size={26}
+                size={24}
                 color={repeatMode !== 'off' ? colors.accent : 'rgba(255,255,255,0.62)'}
               />
               {repeatMode === 'one' && (
@@ -465,7 +468,7 @@ export default function PlayerScreen() {
             >
               <Ionicons
                 name="list"
-                size={24}
+                size={18}
                 color={panel === 'queue' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
@@ -477,7 +480,7 @@ export default function PlayerScreen() {
             >
               <Ionicons
                 name="mic-outline"
-                size={23}
+                size={18}
                 color={panel === 'lyrics' ? '#FFF' : 'rgba(255,255,255,0.62)'}
               />
             </Pressable>
@@ -784,9 +787,9 @@ const styles = StyleSheet.create({
   backdropTopWash: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.28)' },
   backdropMiddleWash: { position: 'absolute', left: 0, right: 0, top: '34%', bottom: '32%', backgroundColor: 'rgba(0,0,0,0.46)' },
   backdropBottomWash: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '58%', backgroundColor: 'rgba(0,0,0,0.82)' },
-  safe: { flex: 1, paddingHorizontal: 20 },
-  scroll: { paddingBottom: 18 },
-  header: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  safe: { flex: 1, paddingHorizontal: 16 },
+  scroll: { paddingBottom: 16 },
+  header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundButton: {
     width: 40,
     height: 40,
@@ -795,9 +798,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCopy: { alignItems: 'center', flex: 1, paddingHorizontal: 12 },
-  playingFrom: { color: 'rgba(255,255,255,0.94)', fontSize: 15, fontWeight: '700', fontFamily: PLAYER_FONT },
-  album: { color: 'rgba(255,255,255,0.58)', fontSize: 13, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 1, maxWidth: 210 },
-  artworkWrap: { minHeight: 398, justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 28 },
+  playingFrom: { color: 'rgba(255,255,255,0.82)', fontSize: 14, fontWeight: '600', fontFamily: PLAYER_FONT },
+  album: { color: 'rgba(255,255,255,0.60)', fontSize: 12, fontWeight: '500', fontFamily: PLAYER_FONT, marginTop: 1, maxWidth: 210 },
+  artworkWrap: { minHeight: 404, justifyContent: 'center', alignItems: 'center', paddingTop: 20, paddingBottom: 26 },
   artworkWrapCompact: { minHeight: 275, paddingTop: 8, paddingBottom: 12 },
   lyricsStage: { width: '100%', height: 380, paddingHorizontal: 10, paddingTop: 12, paddingBottom: 4 },
   lyricsStageHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 10 },
@@ -817,23 +820,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
   },
-  meta: { paddingTop: 18, flexDirection: 'row', alignItems: 'center' },
+  meta: { paddingTop: 16, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
-  likeButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#FFF', fontSize: 22, fontWeight: '800', fontFamily: PLAYER_FONT, letterSpacing: -0.45 },
-  artist: { color: 'rgba(255,255,255,0.66)', fontSize: 16, fontFamily: PLAYER_FONT, marginTop: 4 },
-  timeline: { paddingTop: 18 },
+  likeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { color: '#FFF', fontSize: 20, fontWeight: '800', fontFamily: PLAYER_FONT, letterSpacing: -0.35 },
+  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 14, fontFamily: PLAYER_FONT, marginTop: 3 },
+  timeline: { paddingTop: 16 },
   track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' },
   fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
-  thumb: { position: 'absolute', width: 14, height: 14, borderRadius: 7, backgroundColor: '#FFF', marginLeft: -7 },
+  thumb: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFF', marginLeft: -5 },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 16, paddingBottom: 8 },
-  modeControl: { width: 42, height: 54, alignItems: 'center', justifyContent: 'center' },
-  skip: { width: 52, height: 62, alignItems: 'center', justifyContent: 'center' },
-  play: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 14, paddingBottom: 8 },
+  modeControl: { width: 40, height: 50, alignItems: 'center', justifyContent: 'center' },
+  skip: { width: 50, height: 56, alignItems: 'center', justifyContent: 'center' },
+  play: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 5 },
   playIcon: { marginLeft: 3 },
   repeatBadge: {
     position: 'absolute',
@@ -851,13 +854,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
-    marginBottom: 8,
-    paddingHorizontal: 4,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 8,
   },
   secondaryControl: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },
