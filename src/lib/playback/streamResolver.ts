@@ -224,7 +224,7 @@ function codecPreference(candidate: AudioCandidate) {
 }
 
 function candidateScore(candidate: AudioCandidate) {
-  if (candidate.lossless) return 100_000_000 + Number(candidate.bitrate || 0);
+  if (candidate.lossless) return 1_000_000_000_000 + Number(candidate.bitrate || 0);
   return Number(candidate.bitrate || 0) * 1000 + codecPreference(candidate);
 }
 
