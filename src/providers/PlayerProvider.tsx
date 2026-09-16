@@ -322,6 +322,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const statsWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const playbackSnapshotWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
   const lastStatsPersistedAtRef = useRef(0);
+  const lockScreenReadyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -548,15 +549,20 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const setLockScreenMetadata = useCallback((song: Song) => {
+    const title = String(song.title || song.name || '').trim() || 'Harmonia';
+    const artist = artistNames(song).trim();
+    const albumTitle = albumName(song).trim();
+
     player.setActiveForLockScreen(
       true,
       {
-        title: song.name,
-        artist: artistNames(song),
-        albumTitle: albumName(song),
+        title,
+        artist: artist || undefined,
+        albumTitle: albumTitle || undefined,
         artworkUrl: artworkUrl(song, 512) || undefined,
       },
       {
+        isLiveStream: false,
         showSeekBackward: true,
         showSeekForward: true,
       }
@@ -573,6 +579,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!target) return false;
 
     const generation = ++loadGenerationRef.current;
+    lockScreenReadyKeyRef.current = null;
     activeResolutionAbortRef.current?.abort();
     const controller = new AbortController();
     activeResolutionAbortRef.current = controller;
@@ -769,6 +776,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             const shouldResume = playbackIntentRef.current;
 
             player.pause();
+            lockScreenReadyKeyRef.current = null;
             player.replace(nativeAudioSource(candidate.url, candidate.headers));
             player.setPlaybackRate(rateRef.current);
             pendingSeek.current = resumeAt;
@@ -1336,6 +1344,28 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     lastKnownPositionRef.current = target;
     player.seekTo(target).catch(() => {});
   }, [player, status.isLoaded]);
+
+  useEffect(() => {
+    const nativeDuration = Number(status.duration || 0);
+    if (
+      !currentSong?.id ||
+      !status.isLoaded ||
+      !Number.isFinite(nativeDuration) ||
+      nativeDuration <= 0
+    ) {
+      return;
+    }
+
+    const readyKey = `${currentSong.id}:${Math.round(nativeDuration * 1000)}`;
+    if (lockScreenReadyKeyRef.current === readyKey) return;
+
+    // expo-audio can create Android's MediaSession before the replacement
+    // source has reported a timeline. Re-register once the native player knows
+    // the duration so the system media card gets a real seek range instead of
+    // remaining at 0:00 for the whole track.
+    setLockScreenMetadata(currentSong);
+    lockScreenReadyKeyRef.current = readyKey;
+  }, [currentSong, setLockScreenMetadata, status.duration, status.isLoaded]);
 
   useEffect(() => {
     let cancelled = false;
