@@ -78,6 +78,17 @@ test('home feed does not let stale account requests overwrite newer state', asyn
   assert.match(source, /generation !== loadGenerationRef\.current/);
 });
 
+test('home quick access refreshes and preserves recently played playlist metadata', async () => {
+  const home = await readFile('app/(tabs)/index.tsx', 'utf8');
+  const playlist = await readFile('app/playlist/[id].tsx', 'utf8');
+  const api = await readFile('src/lib/api.ts', 'utf8');
+
+  assert.match(home, /const refreshRecentPlaylistsSilently = useCallback/);
+  assert.match(home, /useFocusEffect\([\s\S]*?refreshRecentPlaylistsSilently/);
+  assert.match(playlist, /trackRecentlyPlayedPlaylist\(token, \{[\s\S]*?\.\.\.detail/);
+  assert.match(api, /const name = String\(item\.name \|\| item\.playlistName \|\| item\.title/);
+});
+
 test('OAuth deep links dedupe one-time mobile tickets', async () => {
   const source = await readFile('src/providers/AuthProvider.tsx', 'utf8');
   assert.match(source, /activeTicketRef/);
