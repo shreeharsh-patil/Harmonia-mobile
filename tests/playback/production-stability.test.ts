@@ -797,3 +797,15 @@ test('playback refs only follow committed native status', async () => {
     /useEffect\(\(\) => \{[\s\S]*?currentTimeRef\.current = Number\(status\.currentTime \|\| 0\);[\s\S]*?nativePlayingRef\.current = Boolean\(status\.playing\);[\s\S]*?\}, \[status\.currentTime, status\.playing\]\)/
   );
 });
+
+
+test('home India chart refreshes dynamically while the tab is active', async () => {
+  const home = await readFile('app/(tabs)/index.tsx', 'utf8');
+  assert.match(home, /useFocusEffect/);
+  assert.match(home, /TRENDING_SCREEN_REFRESH_MS = 10 \* 60_000/);
+  assert.match(home, /refreshTrendingSilently/);
+  assert.match(home, /fetchTrendingHomeContent\(\{ forceRefresh: true \}\)/);
+  assert.match(home, /setInterval\(\(\) => \{/);
+  assert.match(home, /Trending in India/);
+  assert.match(home, /Live chart · refreshed automatically/);
+});
