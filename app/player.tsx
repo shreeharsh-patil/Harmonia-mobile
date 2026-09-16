@@ -32,6 +32,9 @@ const PLAYER_FONT = Platform.OS === 'android' ? 'sans-serif' : undefined;
 const PLAYER_BACKGROUND_FADE =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAIACAYAAACl/81BAAAAmElEQVR42u2XQRKAIAwDA+ML/P9jvTpeuEBN0nBk7LYUSGQAuPEaE5/Ra+ICMLK4VEresRSWm91lcTEc1bRHsuyANmf0ShuGLzReqbq365AdX6xDjtRRA60prBdDuKdOZ71GP3QcmcUKdITNbWIG6rCVLN7AopZOshWVOnNvnRgRNoE/R+GnOe1LnFaCaUPSD4pDVwP9SaUesKAGpjLrUecAAAAASUVORK5CYII=';
 
+const PROGRESS_THUMB_SIZE = 10;
+const PROGRESS_THUMB_INSET = PROGRESS_THUMB_SIZE / 2;
+
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
   { value: 'automatic', label: 'Auto' },
@@ -236,6 +239,9 @@ export default function PlayerScreen() {
   }
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+  const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
+  const progressFillWidth = progress * progressUsableWidth;
+  const progressThumbLeft = progress * progressUsableWidth;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
   const artworkSize = compactArtwork ? Math.min(244, playerContentWidth) : playerContentWidth;
@@ -366,9 +372,9 @@ export default function PlayerScreen() {
               onPress={(event) => void seek((event.nativeEvent.locationX / progressWidth) * duration)}
               style={styles.track}
             >
-              <View style={styles.trackBase} />
-              <View style={[styles.fill, { width: `${progress * 100}%` }]} />
-              <View style={[styles.thumb, { left: `${progress * 100}%` }]} />
+              <View style={[styles.trackBase, { left: PROGRESS_THUMB_INSET, right: PROGRESS_THUMB_INSET }]} />
+              <View style={[styles.fill, { left: PROGRESS_THUMB_INSET, width: progressFillWidth }]} />
+              <View style={[styles.thumb, { left: progressThumbLeft }]} />
             </Pressable>
             <View style={styles.times}>
               <Text style={styles.time}>{durationLabel(position)}</Text>
@@ -1123,7 +1129,7 @@ const styles = StyleSheet.create({
   track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' },
   fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
-  thumb: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFF', marginLeft: -5 },
+  thumb: { position: 'absolute', width: PROGRESS_THUMB_SIZE, height: PROGRESS_THUMB_SIZE, borderRadius: PROGRESS_THUMB_INSET, backgroundColor: '#FFF' },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },
   error: { color: '#FF8A8A', textAlign: 'center', marginTop: 9, fontSize: 12 },
