@@ -434,16 +434,23 @@ export async function fetchRecentlyPlayedPlaylists(token: string): Promise<Playl
     '/api/mobile/recently-played-playlists',
     { token }
   );
-  return (payload.data || []).map((item: any) => ({
-    id: String(item.playlistId || ''),
-    name: String(item.playlistName || 'Playlist'),
-    image: item.image || [],
-    songCount: Number(item.songCount || 0),
-    source: item.source || 'jiosaavn',
-    owner: item.owner || '',
-    catalogSource: item.catalogSource || '',
-    playedAt: item.playedAt,
-  }));
+  return (payload.data || []).map((item: any) => {
+    const id = String(item.playlistId || item.id || item._id || '');
+    const name = String(item.name || item.playlistName || item.title || 'Playlist');
+    return {
+      ...item,
+      id,
+      _id: id,
+      name,
+      title: name,
+      image: item.image || [],
+      songCount: Number(item.songCount || 0),
+      source: item.source || 'jiosaavn',
+      owner: item.owner || '',
+      catalogSource: item.catalogSource || '',
+      playedAt: item.playedAt,
+    };
+  });
 }
 
 export async function trackRecentlyPlayedPlaylist(token: string, playlist: Playlist) {

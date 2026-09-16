@@ -93,6 +93,15 @@ export default function PlaylistScreen() {
       setDraftName(playlistTitle(detail));
       setDraftDescription(String(detail.description || ''));
       setSongs(nextSongs);
+
+      // Harmonia Web adds a playlist to quick access when its page is visited.
+      // Do the same on native so returning Home can immediately show it.
+      if (token) {
+        void trackRecentlyPlayedPlaylist(token, {
+          ...detail,
+          songCount: nextSongs.length || detail.songCount || detail.songIds?.length || 0,
+        }).catch(() => {});
+      }
     } catch (cause: any) {
       if (generation === loadGenerationRef.current) {
         setError(cause?.message || 'Unable to load this playlist');

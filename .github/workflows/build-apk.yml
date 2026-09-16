@@ -63,7 +63,7 @@ jobs:
           fi
           gh release create phone-build Harmonia-mobile.apk \
             --target "${GITHUB_SHA}" \
-            --title "Harmonia Mobile 0.3.4 APK" \
-            --notes "Latest standalone Android APK with the Harmonia player/lyrics gradient refinements and official India trending-chart update. Download Harmonia-mobile.apk on your Android phone and install it."
+            --title "Harmonia Mobile 0.3.5 APK" \
+            --notes "Harmonia Mobile 0.3.5 standalone Android APK. Includes the refreshed Harmonia login/performance work, dynamic India chart updates, player and lyrics polish, and the Home quick-access fix so recently opened or played playlists appear beside Liked Songs. Download Harmonia-mobile.apk on your Android phone and install it."
 
-# Release trigger: 2026-09-15-v034-latest
+# Release trigger: 2026-09-16-v035-recent-home
