@@ -74,6 +74,7 @@ export default function HomeScreen() {
   const loadGenerationRef = useRef(0);
   const lastTrendingRefreshRef = useRef(0);
   const trendingRefreshInFlightRef = useRef(false);
+  const recentRefreshInFlightRef = useRef(false);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
@@ -122,6 +123,25 @@ export default function HomeScreen() {
     };
   }, [load]);
 
+  const refreshRecentPlaylistsSilently = useCallback(async () => {
+    if (!token) {
+      setRecentPlaylists([]);
+      return;
+    }
+    if (recentRefreshInFlightRef.current) return;
+
+    recentRefreshInFlightRef.current = true;
+    try {
+      const next = await fetchRecentlyPlayedPlaylists(token);
+      setRecentPlaylists(next);
+    } catch {
+      // Keep the last successful recent list. The quick-access grid should not
+      // disappear just because a background sync request briefly fails.
+    } finally {
+      recentRefreshInFlightRef.current = false;
+    }
+  }, [token]);
+
   const refreshTrendingSilently = useCallback(async (force = false) => {
     // A focused tab can remain mounted while the app is backgrounded. Avoid
     // waking the network/cache pipeline until Harmonia is actually visible.
@@ -156,10 +176,17 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // Expo Router keeps tab screens mounted. Re-fetch recents every time Home
+      // regains focus so a playlist played on another screen appears here
+      // immediately instead of waiting for a full app remount.
+      void refreshRecentPlaylistsSilently();
       void refreshTrendingSilently();
 
       const appStateSubscription = AppState.addEventListener('change', (state) => {
-        if (state === 'active') void refreshTrendingSilently();
+        if (state === 'active') {
+          void refreshRecentPlaylistsSilently();
+          void refreshTrendingSilently();
+        }
       });
 
       const interval = setInterval(() => {
@@ -170,7 +197,7 @@ export default function HomeScreen() {
         clearInterval(interval);
         appStateSubscription.remove();
       };
-    }, [refreshTrendingSilently])
+    }, [refreshRecentPlaylistsSilently, refreshTrendingSilently])
   );
 
   const openPlaylist = useCallback((playlist: Playlist) => {
