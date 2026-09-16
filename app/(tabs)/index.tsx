@@ -141,7 +141,6 @@ export default function HomeScreen() {
           const nextIds = next.songs.map((song) => String(song.id || '')).join('|');
           return currentIds === nextIds ? current : next.songs;
         });
-        setTopColumnIndex(0);
       }
       lastTrendingRefreshRef.current = Date.now();
     } catch {
