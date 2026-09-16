@@ -72,6 +72,24 @@ function directTrackToSong(track: DirectSaavnTrack | DirectSaavnSearchTrack): So
   } as any);
 }
 
+function directAlbumToEntity(album: {
+  id: string;
+  title: string;
+  year: string | null;
+  image: string | null;
+  artists: string[];
+}): HarmoniaAlbum {
+  return {
+    id: album.id,
+    name: album.title,
+    title: album.title,
+    year: album.year || undefined,
+    image: album.image ? [{ quality: '500x500', url: album.image }] : [],
+    primaryArtists: album.artists.join(', '),
+    type: 'album',
+  };
+}
+
 function mergeSongs(primary: Song[], secondary: Song[], limit: number) {
   const result: Song[] = [];
   const seenIds = new Set<string>();
@@ -650,8 +668,30 @@ async function fetchDirectTrendingSongs(limit = 30): Promise<Song[]> {
   return [];
 }
 
+async function fetchTrendingAlbums(limit = 20): Promise<HarmoniaAlbum[]> {
+  const query = 'Latest Hindi Songs';
+
+  if (HAS_HARMONIA_API) {
+    try {
+      const payload = await requestJson<{ success: true; data: SearchPayload }>(
+        `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
+        { timeoutMs: 8_000 }
+      );
+      const albums = payload.data?.albums?.results || [];
+      if (albums.length) return albums.slice(0, limit);
+    } catch {
+      // Fall back to the direct provider lookup below.
+    }
+  }
+
+  const directAlbums = await searchDirectJioSaavnAlbums(query, { limit });
+  return directAlbums.map(directAlbumToEntity);
+}
+
 async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
-  const albumPromise = searchMusic('Latest Hindi Songs', 30);
+  // Home only needs album results here. Avoid a full multi-entity search fallback,
+  // which would otherwise issue track, album, artist, and playlist requests.
+  const albumPromise = fetchTrendingAlbums(20);
 
   let songs: Song[] = [];
 
@@ -689,8 +729,7 @@ async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
     songs = mergeSongs(direct.map(directTrackToSong), [], 30);
   }
 
-  const albumResult = await Promise.resolve(albumPromise).catch(() => null);
-  const albums = (albumResult?.albums?.results || []).slice(0, 20);
+  const albums = await albumPromise.catch(() => []);
 
   return { albums, songs };
 }
@@ -733,8 +772,12 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
           results: (payload.data.songs?.results || []).map((song) => normalizeSong(song as any)),
         },
       };
-    } catch {
-      // Public discovery must stay usable even if the account/catalog server is unavailable.
+    } catch (cause: any) {
+      // A cancelled query belongs to an older input value. Propagate the abort
+      // instead of starting fallback provider work for a result the UI has
+      // already discarded.
+      if (signal?.aborted || cause?.name === 'AbortError') throw cause;
+      // Public discovery must stay usable if the account/catalog server is unavailable.
     }
   }
 
@@ -749,15 +792,7 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
 
   const directSongs = directTracks.map(directTrackToSong);
   const songs = mergeSongs(local.songs?.results || [], directSongs, limit);
-  const providerAlbums: HarmoniaAlbum[] = directAlbums.map((album) => ({
-    id: album.id,
-    name: album.title,
-    title: album.title,
-    year: album.year || undefined,
-    image: album.image ? [{ quality: '500x500', url: album.image }] : [],
-    primaryArtists: album.artists.join(', '),
-    type: 'album',
-  }));
+  const providerAlbums: HarmoniaAlbum[] = directAlbums.map(directAlbumToEntity);
   const providerArtists: HarmoniaArtistEntity[] = directArtists.map((artist) => ({
     id: artist.id,
     name: artist.name,
