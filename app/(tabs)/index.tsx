@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -122,6 +123,9 @@ export default function HomeScreen() {
   }, [load]);
 
   const refreshTrendingSilently = useCallback(async (force = false) => {
+    // A focused tab can remain mounted while the app is backgrounded. Avoid
+    // waking the network/cache pipeline until Harmonia is actually visible.
+    if (AppState.currentState !== 'active') return;
     if (trendingRefreshInFlightRef.current) return;
     if (
       !force &&
@@ -154,11 +158,18 @@ export default function HomeScreen() {
     useCallback(() => {
       void refreshTrendingSilently();
 
+      const appStateSubscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void refreshTrendingSilently();
+      });
+
       const interval = setInterval(() => {
         void refreshTrendingSilently(true);
       }, TRENDING_SCREEN_REFRESH_MS);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        appStateSubscription.remove();
+      };
     }, [refreshTrendingSilently])
   );
 

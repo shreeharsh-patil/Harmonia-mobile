@@ -799,13 +799,45 @@ test('playback refs only follow committed native status', async () => {
 });
 
 
-test('home India chart refreshes dynamically while the tab is active', async () => {
+test('home India chart refreshes dynamically without polling in the background', async () => {
   const home = await readFile('app/(tabs)/index.tsx', 'utf8');
   assert.match(home, /useFocusEffect/);
   assert.match(home, /TRENDING_SCREEN_REFRESH_MS = 10 \* 60_000/);
   assert.match(home, /refreshTrendingSilently/);
   assert.match(home, /fetchTrendingHomeContent\(\{ forceRefresh: true \}\)/);
+  assert.match(home, /AppState\.currentState !== 'active'/);
+  assert.match(home, /AppState\.addEventListener\('change'/);
+  assert.match(home, /appStateSubscription\.remove\(\)/);
   assert.match(home, /setInterval\(\(\) => \{/);
   assert.match(home, /Trending in India/);
   assert.match(home, /Live chart · refreshed automatically/);
+});
+
+test('search cancellation does not fall through to provider fallback work', async () => {
+  const api = await readFile('src/lib/api.ts', 'utf8');
+  const search = api.match(
+    /export async function searchMusic\([\s\S]*?\n\}\n\nexport async function fetchAlbum/
+  )?.[0] || '';
+
+  assert.match(search, /catch \(cause: any\)/);
+  assert.match(search, /signal\?\.aborted \|\| cause\?\.name === 'AbortError'/);
+  assert.match(search, /throw cause/);
+});
+
+test('trending album refresh avoids a full multi-entity provider fallback', async () => {
+  const api = await readFile('src/lib/api.ts', 'utf8');
+
+  assert.match(api, /async function fetchTrendingAlbums/);
+  assert.match(api, /searchDirectJioSaavnAlbums\(query, \{ limit \}\)/);
+  assert.doesNotMatch(api, /const albumPromise = searchMusic\('Latest Hindi Songs'/);
+});
+
+test('login uses Harmonia web branding and provider SVG marks', async () => {
+  const login = await readFile('app/login.tsx', 'utf8');
+
+  assert.match(login, /harmonia-icon\.png/);
+  assert.match(login, /google-logo\.svg/);
+  assert.match(login, /github-logo\.svg/);
+  assert.match(login, /contentFit="contain"/);
+  assert.match(login, /Continue without an account/);
 });
