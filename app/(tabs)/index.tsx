@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
@@ -35,6 +35,8 @@ import {
 } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
+
+const TRENDING_SCREEN_REFRESH_MS = 10 * 60_000;
 
 function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
   const seen = new Set<string>();
@@ -69,6 +71,8 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
+  const lastTrendingRefreshRef = useRef(0);
+  const trendingRefreshInFlightRef = useRef(false);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
@@ -100,6 +104,7 @@ export default function HomeScreen() {
     if (trendingResult.status === 'fulfilled') {
       setTrendingAlbums(trendingResult.value.albums);
       setTrendingSongs(trendingResult.value.songs);
+      lastTrendingRefreshRef.current = Date.now();
     } else {
       setTrendingAlbums([]);
       setTrendingSongs([]);
@@ -115,6 +120,48 @@ export default function HomeScreen() {
       loadGenerationRef.current += 1;
     };
   }, [load]);
+
+  const refreshTrendingSilently = useCallback(async (force = false) => {
+    if (trendingRefreshInFlightRef.current) return;
+    if (
+      !force &&
+      lastTrendingRefreshRef.current > 0 &&
+      Date.now() - lastTrendingRefreshRef.current < TRENDING_SCREEN_REFRESH_MS
+    ) {
+      return;
+    }
+
+    trendingRefreshInFlightRef.current = true;
+    try {
+      const next = await fetchTrendingHomeContent({ forceRefresh: true });
+      if (next.albums.length) setTrendingAlbums(next.albums);
+      if (next.songs.length) {
+        setTrendingSongs((current) => {
+          const currentIds = current.map((song) => String(song.id || '')).join('|');
+          const nextIds = next.songs.map((song) => String(song.id || '')).join('|');
+          return currentIds === nextIds ? current : next.songs;
+        });
+        setTopColumnIndex(0);
+      }
+      lastTrendingRefreshRef.current = Date.now();
+    } catch {
+      // Keep the last successful chart instead of flashing an empty section.
+    } finally {
+      trendingRefreshInFlightRef.current = false;
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshTrendingSilently();
+
+      const interval = setInterval(() => {
+        void refreshTrendingSilently(true);
+      }, TRENDING_SCREEN_REFRESH_MS);
+
+      return () => clearInterval(interval);
+    }, [refreshTrendingSilently])
+  );
 
   const openPlaylist = useCallback((playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
@@ -242,9 +289,9 @@ export default function HomeScreen() {
                   <View style={styles.section}>
                     <View style={styles.topSongsHead}>
                       <View style={styles.sectionHeadCopy}>
-                        <Text style={styles.sectionTitle}>Top Songs</Text>
+                        <Text style={styles.sectionTitle}>Trending in India</Text>
                         <Text numberOfLines={1} style={styles.sectionSubtitle}>
-                          The most popular tracks right now ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
+                          Live chart · refreshed automatically ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
                         </Text>
                       </View>
                       <View style={styles.chartActions}>
