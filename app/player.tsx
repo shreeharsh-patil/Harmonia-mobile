@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
+import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyrics';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
@@ -24,6 +25,7 @@ import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlaybackHistory, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
 
 type Panel = 'none' | 'lyrics' | 'queue' | 'tools';
@@ -84,6 +86,7 @@ export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
   const { width } = useWindowDimensions();
   const { token } = useAuth();
+  const { batterySaver } = usePreferences();
   const { isLiked, toggleLike } = useLibrary();
   const {
     isDownloaded,
@@ -240,7 +243,6 @@ export default function PlayerScreen() {
 
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
-  const progressFillWidth = progress * progressUsableWidth;
   const progressThumbLeft = progress * progressUsableWidth;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const playerContentWidth = Math.max(0, width - 32);
@@ -301,7 +303,7 @@ export default function PlayerScreen() {
       {!!cover && (
         <Image
           source={{ uri: cover }}
-          blurRadius={28}
+          blurRadius={batterySaver ? 0 : 12}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
@@ -348,6 +350,7 @@ export default function PlayerScreen() {
               size={artworkSize}
               radius={14}
               enableMotion={panel === 'none'}
+              isPlaying={isPlaying}
               style={styles.artwork}
             />
           </View>
@@ -372,8 +375,12 @@ export default function PlayerScreen() {
               onPress={(event) => void seek((event.nativeEvent.locationX / progressWidth) * duration)}
               style={styles.track}
             >
-              <View style={[styles.trackBase, { left: PROGRESS_THUMB_INSET, right: PROGRESS_THUMB_INSET }]} />
-              <View style={[styles.fill, { left: PROGRESS_THUMB_INSET, width: progressFillWidth }]} />
+              <PlaybackProgressFill
+                progress={progress}
+                playing={isPlaying}
+                color="#F4F4F4"
+                style={[styles.trackBase, { left: PROGRESS_THUMB_INSET, right: PROGRESS_THUMB_INSET }]}
+              />
               <View style={[styles.thumb, { left: progressThumbLeft }]} />
             </Pressable>
             <View style={styles.times}>
@@ -739,7 +746,7 @@ export default function PlayerScreen() {
           {!!cover && (
             <Image
               source={{ uri: cover }}
-              blurRadius={44}
+              blurRadius={batterySaver ? 0 : 16}
               contentFit="cover"
               style={[StyleSheet.absoluteFill, styles.lyricsBackdropImage]}
               cachePolicy="memory-disk"
@@ -1128,7 +1135,6 @@ const styles = StyleSheet.create({
   timeline: { paddingTop: 14 },
   track: { height: 22, justifyContent: 'center' },
   trackBase: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.22)' },
-  fill: { position: 'absolute', height: 4, borderRadius: 2, backgroundColor: '#F4F4F4', left: 0 },
   thumb: { position: 'absolute', width: PROGRESS_THUMB_SIZE, height: PROGRESS_THUMB_SIZE, borderRadius: PROGRESS_THUMB_INSET, backgroundColor: '#FFF' },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontVariant: ['tabular-nums'] },

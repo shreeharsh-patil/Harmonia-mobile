@@ -9,9 +9,11 @@ import {
   View,
 } from 'react-native';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
+import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { artistNames, artworkUrl } from '@/src/lib/song';
 import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 
 export const MINI_PLAYER_HEIGHT = 60;
 export const TAB_BAR_HEIGHT = 64;
@@ -30,6 +32,7 @@ export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boo
 
 export function MiniPlayer() {
   const pathname = usePathname();
+  const { batterySaver } = usePreferences();
   const {
     currentSong,
     isPlaying,
@@ -67,7 +70,7 @@ export function MiniPlayer() {
           source={{ uri: cover }}
           style={styles.ambientArtwork}
           contentFit="cover"
-          blurRadius={28}
+          blurRadius={batterySaver ? 0 : 12}
           cachePolicy="memory-disk"
           recyclingKey={`mini-bg-${String(currentSong.id || cover)}`}
         />
@@ -118,18 +121,18 @@ export function MiniPlayer() {
         </Pressable>
       </View>
 
-      <MiniPlayerProgress />
+      <MiniPlayerProgress playing={isPlaying} />
     </View>
   );
 }
 
-function MiniPlayerProgress() {
+function MiniPlayerProgress({ playing }: { playing: boolean }) {
   const { position, duration } = usePlaybackProgress();
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
 
   return (
     <View style={styles.progressTrack}>
-      <View style={[styles.progress, { width: `${progress * 100}%` }]} />
+      <PlaybackProgressFill progress={progress} playing={playing} color="#FFF" style={styles.progress} />
     </View>
   );
 }
@@ -180,5 +183,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
   },
-  progress: { height: 2, backgroundColor: '#FFF' },
+  progress: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, height: 2 },
 });

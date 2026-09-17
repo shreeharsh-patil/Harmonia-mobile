@@ -314,13 +314,12 @@ test('preferences merge early user changes over asynchronous hydration', async (
   assert.match(source, /writeChainRef/);
 });
 
-test('recent searches reject stale hydration and serialize storage writes', async () => {
+test('search terms are never stored or displayed as search history', async () => {
   const source = await readFile('app/(tabs)/search.tsx', 'utf8');
-  assert.match(source, /recentSearchesRef/);
-  assert.match(source, /recentMutationRef/);
-  assert.match(source, /generation !== recentMutationRef\.current/);
-  assert.match(source, /recentWriteChainRef/);
-  assert.match(source, /recentMutationRef\.current \+= 1/);
+  assert.match(source, /AsyncStorage\.removeItem\(RECENT_SEARCHES_KEY\)/);
+  assert.doesNotMatch(source, /AsyncStorage\.setItem\(RECENT_SEARCHES_KEY/);
+  assert.doesNotMatch(source, /AsyncStorage\.getItem\(RECENT_SEARCHES_KEY/);
+  assert.doesNotMatch(source, /Recent searches/);
 });
 
 test('app update checks cannot hang indefinitely', async () => {
@@ -528,6 +527,14 @@ test('library playlists are virtualized instead of mapped inside a vertical Scro
   assert.doesNotMatch(source, /playlists\.map\(\(playlist\)/);
 });
 
+test('library playlists, albums, and artists remain virtualized as they grow', async () => {
+  const source = await readFile('app/(tabs)/library.tsx', 'utf8');
+  assert.match(source, /<FlatList<Playlist>/);
+  assert.match(source, /<FlatList<HarmoniaAlbum>/);
+  assert.match(source, /<FlatList<HarmoniaArtistEntity>/);
+  assert.match(source, /windowSize=\{SONG_LIST_WINDOW_SIZE\}/);
+});
+
 test('artwork and Canvas avoid unnecessary decode and lookup work', async () => {
   const track = await readFile('src/components/TrackArtwork.tsx', 'utf8');
   const playlist = await readFile('src/components/PlaylistArtwork.tsx', 'utf8');
@@ -559,7 +566,7 @@ test('lyrics overlay uses one artwork-driven gradient and measured line position
   assert.match(source, /lyricLineLayouts/);
   assert.match(source, /lyricsViewportHeight \* 0\.43/);
   assert.match(source, /event\.nativeEvent\.layout\.height/);
-  assert.match(source, /blurRadius=\{44\}/);
+  assert.match(source, /blurRadius=\{batterySaver \? 0 : 16\}/);
   assert.match(source, /source=\{\{ uri: PLAYER_BACKGROUND_FADE \}\}/);
   assert.match(source, /lyricsBackdropGradient/);
   assert.match(source, /distance === 3/);
@@ -574,7 +581,7 @@ test('Canvas fully unmounts when motion is disabled and proxy work is bounded', 
   const renderer = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
 
-  assert.match(renderer, /!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion/);
+  assert.match(renderer, /!!canvasUrl && enableMotion && isPlaying && foreground && !batterySaver && !reduceMotion/);
   assert.match(canvas, /CANVAS_TIMEOUT_MS = 10_000/);
   assert.match(canvas, /const controller = new AbortController\(\)/);
   assert.match(canvas, /signal: controller\.signal/);
@@ -606,20 +613,17 @@ test('Spotify import cannot navigate backward after its screen has unmounted', a
 test('native next-track preload releases stale buffers when no longer useful', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /const releasePreloadedSource = \(\) =>/);
-  assert.match(source, /if \(batterySaver \|\| !networkConnected \|\| !status\.playing\) \{[\s\S]*?releasePreloadedSource\(\)/);
+  assert.match(source, /if \(batterySaver \|\| !isForeground \|\| !networkConnected \|\| !status\.playing\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /if \(!upcoming\?\.id\) \{[\s\S]*?releasePreloadedSource\(\)/);
   assert.match(source, /preloadedSourceRef\.current = null/);
   assert.match(source, /if \(previous\) clearPreloadedSource\(previous\.source\)/);
 });
 
 
-test('Search resyncs recent searches after Settings clears persisted history', async () => {
-  const source = await readFile('app/(tabs)/search.tsx', 'utf8');
-  assert.match(source, /useFocusEffect/);
-  assert.match(source, /recentWriteChainRef\.current/);
-  assert.match(source, /AsyncStorage\.getItem\(RECENT_SEARCHES_KEY\)/);
-  assert.match(source, /if \(!raw\) \{[\s\S]*?commitRecentSearches\(\[\]\)/);
-  assert.match(source, /generation !== recentMutationRef\.current/);
+test('settings no longer exposes a search-history control', async () => {
+  const source = await readFile('app/settings.tsx', 'utf8');
+  assert.doesNotMatch(source, /Clear recent searches/);
+  assert.doesNotMatch(source, /RECENT_SEARCHES_KEY/);
 });
 
 
@@ -684,7 +688,7 @@ test('mini player limits progress updates to the progress bar', async () => {
   const source = await readFile('src/components/MiniPlayer.tsx', 'utf8');
   const shell = source.match(/export function MiniPlayer\(\)[\s\S]*?function MiniPlayerProgress/)?.[0] || '';
   assert.doesNotMatch(shell, /usePlaybackProgress\(\)/);
-  assert.match(source, /function MiniPlayerProgress\(\)[\s\S]*?usePlaybackProgress\(\)/);
+  assert.match(source, /function MiniPlayerProgress\([^)]*\)[\s\S]*?usePlaybackProgress\(\)/);
 });
 
 test('home discovery caches and deduplicates public catalog requests', async () => {
@@ -698,10 +702,10 @@ test('home discovery caches and deduplicates public catalog requests', async () 
   assert.match(home, /fetchTrendingHomeContent\(\{ forceRefresh: refresh \}\)/);
 });
 
-test('now playing backdrop uses a smaller source and lower blur cost', async () => {
+test('now playing backdrop uses a smaller source and low blur cost', async () => {
   const source = await readFile('app/player.tsx', 'utf8');
   assert.match(source, /artworkUrl\(currentSong, 360\)/);
-  assert.match(source, /blurRadius=\{28\}/);
+  assert.match(source, /blurRadius=\{batterySaver \? 0 : 12\}/);
   assert.doesNotMatch(source, /artworkUrl\(currentSong, 720\)/);
   assert.doesNotMatch(source, /blurRadius=\{42\}/);
 });

@@ -11,6 +11,7 @@ type Props = {
   size: number;
   radius?: number;
   enableMotion?: boolean;
+  isPlaying?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -67,7 +68,14 @@ function MotionCanvas({ url, active }: { url: string; active: boolean }) {
   );
 }
 
-export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, style }: Props) {
+export function ArtworkRenderer({
+  song,
+  size,
+  radius = 20,
+  enableMotion = true,
+  isPlaying = false,
+  style,
+}: Props) {
   const { batterySaver } = usePreferences();
   const songRef = useRef(song);
   songRef.current = song;
@@ -101,7 +109,7 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
     const controller = new AbortController();
     let active = true;
 
-    if (!enableMotion || batterySaver || reduceMotion || !foreground) {
+    if (!enableMotion || !isPlaying || batterySaver || reduceMotion || !foreground) {
       return () => {
         active = false;
         controller.abort();
@@ -137,12 +145,12 @@ export function ArtworkRenderer({ song, size, radius = 20, enableMotion = true, 
       active = false;
       controller.abort();
     };
-  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion]);
+  }, [batterySaver, canvasLookupKey, enableMotion, foreground, isPlaying, reduceMotion]);
 
   return (
     <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
       <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
-      {!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion && (
+      {!!canvasUrl && enableMotion && isPlaying && foreground && !batterySaver && !reduceMotion && (
         <MotionCanvas url={canvasUrl} active={foreground} />
       )}
     </View>

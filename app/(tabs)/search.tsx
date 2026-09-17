@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
@@ -34,69 +34,22 @@ import { usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song } from '@/src/types';
 
-const MAX_RECENT_SEARCHES = 10;
-
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const { isLiked } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchPayload | null>(null);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const [retrySeq, setRetrySeq] = useState(0);
-  const recentSearchesRef = useRef<string[]>([]);
-  const recentMutationRef = useRef(0);
-  const recentWriteChainRef = useRef<Promise<unknown>>(Promise.resolve());
-
-  const commitRecentSearches = useCallback((next: string[]) => {
-    recentSearchesRef.current = next;
-    setRecentSearches(next);
-  }, []);
-
-  const persistRecentSearches = (next: string[]) => {
-    recentWriteChainRef.current = recentWriteChainRef.current
-      .catch(() => {})
-      .then(() => next.length
-        ? AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next))
-        : AsyncStorage.removeItem(RECENT_SEARCHES_KEY)
-      );
-    return recentWriteChainRef.current;
-  };
-
   const trimmed = query.trim();
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      const generation = recentMutationRef.current;
-
-      void recentWriteChainRef.current
-        .catch(() => {})
-        .then(() => AsyncStorage.getItem(RECENT_SEARCHES_KEY))
-        .then((raw) => {
-          if (!active || generation !== recentMutationRef.current) return;
-          if (!raw) {
-            commitRecentSearches([]);
-            return;
-          }
-
-          const parsed = JSON.parse(raw);
-          commitRecentSearches(
-            Array.isArray(parsed)
-              ? parsed.filter((item) => typeof item === 'string').slice(0, MAX_RECENT_SEARCHES)
-              : []
-          );
-        })
-        .catch(() => {});
-
-      return () => {
-        active = false;
-      };
-    }, [commitRecentSearches])
-  );
+  useEffect(() => {
+    // Purge data created by older builds. Current searches are never stored.
+    void AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
+  }, []);
 
   useEffect(() => {
     if (!trimmed) {
@@ -141,24 +94,9 @@ export default function SearchScreen() {
   const hasResults = songs.length || albums.length || artists.length || playlists.length;
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
-  const rememberSearch = async (value = trimmed) => {
-    const clean = value.trim();
-    if (!clean) return;
-    recentMutationRef.current += 1;
-    const next = [
-      clean,
-      ...recentSearchesRef.current.filter(
-        (item) => item.toLowerCase() !== clean.toLowerCase()
-      ),
-    ].slice(0, MAX_RECENT_SEARCHES);
-    commitRecentSearches(next);
-    await persistRecentSearches(next).catch(() => {});
-  };
-
   const openPlaylist = (playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (!id) return;
-    void rememberSearch();
     Keyboard.dismiss();
     router.push({ pathname: '/playlist/[id]', params: { id } });
   };
@@ -166,7 +104,6 @@ export default function SearchScreen() {
   const openAlbum = (album: HarmoniaAlbum) => {
     const id = String(album.id || '');
     if (!id || id.startsWith('search-')) return;
-    void rememberSearch();
     Keyboard.dismiss();
     router.push({ pathname: '/album/[id]', params: { id } });
   };
@@ -174,7 +111,6 @@ export default function SearchScreen() {
   const openArtist = (artist: HarmoniaArtistEntity) => {
     const id = String(artist.id || '');
     if (!id || id.startsWith('search-')) return;
-    void rememberSearch();
     Keyboard.dismiss();
     router.push({ pathname: '/artist/[id]', params: { id } });
   };
@@ -259,10 +195,7 @@ export default function SearchScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
-            onSubmitEditing={() => {
-              void rememberSearch();
-              Keyboard.dismiss();
-            }}
+            onSubmitEditing={Keyboard.dismiss}
             style={styles.input}
           />
           {!!query && (
@@ -311,19 +244,6 @@ export default function SearchScreen() {
             ))}
           </View>
 
-          {!!recentSearches.length && (
-            <View style={styles.recentFooter}>
-              <Text style={styles.recentFooterTitle}>Recent searches</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentFooterRow}>
-                {recentSearches.slice(0, 6).map((item) => (
-                  <Pressable accessibilityRole="button" key={item} onPress={() => setQuery(item)} style={styles.recentFooterChip}>
-                    <Ionicons name="time-outline" size={14} color="#898989" />
-                    <Text numberOfLines={1} style={styles.recentFooterText}>{item}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
         </ScrollView>
       ) : error && !results ? (
         <View style={styles.center}>
@@ -350,7 +270,6 @@ export default function SearchScreen() {
               active={currentSong?.id === item.id}
               onMorePress={() => setActionSong(item)}
               onPress={() => {
-                void rememberSearch();
                 Keyboard.dismiss();
                 void playSong(item, songs);
               }}
@@ -458,11 +377,6 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   browseArtwork: { width: '100%', height: '100%' },
-  recentFooter: { marginTop: 28, paddingBottom: 4 },
-  recentFooterTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
-  recentFooterRow: { gap: 8, paddingRight: 16 },
-  recentFooterChip: { height: 38, borderRadius: 19, backgroundColor: colors.surfaceRaised, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12 },
-  recentFooterText: { color: colors.muted, fontSize: 12, fontWeight: '600', maxWidth: 150 },
   errorTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
   error: { color: colors.muted, textAlign: 'center', marginTop: 7, lineHeight: 19 },
   retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: colors.textStrong, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },

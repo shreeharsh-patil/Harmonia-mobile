@@ -8,7 +8,7 @@ import {
   useAudioPlayerStatus,
   type AudioSource,
 } from 'expo-audio';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   createContext,
   PropsWithChildren,
@@ -271,6 +271,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [history, setHistory] = useState<PlaybackHistoryEntry[]>([]);
   const [playbackDiagnostics, setPlaybackDiagnostics] = useState<PlaybackDiagnostics | null>(null);
   const [listeningStats, setListeningStats] = useState<ListeningStats>(() => emptyListeningStats());
+  const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
 
   const loadedTrackId = useRef<string | null>(null);
   const restoredPosition = useRef(0);
@@ -328,6 +329,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     queueRef.current = queue;
     indexRef.current = currentIndex;
   }, [currentIndex, queue]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      setIsForeground(nextState === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     currentTimeRef.current = Number(status.currentTime || 0);
@@ -641,6 +649,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         setAdaptivePipelineStatus('idle');
       } else if (
         adaptivePipelineRef.current &&
+        !batterySaver &&
         !options.recovery &&
         !options.skipAdaptive &&
         !options.forceFresh
@@ -833,7 +842,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         // A newer track load aborts it, which also cancels any late quality promotion.
       }
     }
-  }, [getOfflineUri, player, setLockScreenMetadata]);
+  }, [batterySaver, getOfflineUri, player, setLockScreenMetadata]);
 
   useEffect(() => {
     const next = qualityFor(streamQuality);
@@ -1378,7 +1387,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     };
 
     const warmNextTrack = async () => {
-      if (batterySaver || !networkConnected || !status.playing) {
+      if (batterySaver || !isForeground || !networkConnected || !status.playing) {
         releasePreloadedSource();
         return;
       }
@@ -1449,7 +1458,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       cancelled = true;
       controller.abort();
     };
-  }, [batterySaver, currentIndex, getOfflineUri, networkConnected, queue, status.playing, streamQuality]);
+  }, [batterySaver, currentIndex, getOfflineUri, isForeground, networkConnected, queue, status.playing, streamQuality]);
 
   useEffect(() => {
     return () => {

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Linking,
@@ -16,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ANDROID_BUILD_VERSION,
   APP_VERSION,
-  RECENT_SEARCHES_KEY,
 } from '@/src/config';
 import type { StreamQuality } from '@/src/lib/api';
 import { checkForAppUpdate } from '@/src/lib/updates';
@@ -77,11 +75,6 @@ export default function SettingsScreen() {
     toggleAdaptivePipeline,
   } = usePlayer();
   const { history, clearHistory } = usePlaybackHistory();
-
-  const clearRecentSearches = async () => {
-    await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
-    Alert.alert('Recent searches cleared');
-  };
 
   const confirmClearDownloads = () => {
     if (!downloads.length) return;
@@ -320,12 +313,6 @@ export default function SettingsScreen() {
             detail={history.length ? `${history.length} local history entries` : 'No local listening history'}
             disabled={!history.length}
             onPress={confirmClearHistory}
-          />
-          <ActionRow
-            icon="search-outline"
-            title="Clear recent searches"
-            detail="Removes searches stored on this phone"
-            onPress={() => void clearRecentSearches()}
           />
           <ActionRow
             icon="images-outline"
