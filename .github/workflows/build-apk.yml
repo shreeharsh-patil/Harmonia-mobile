@@ -22,7 +22,8 @@ jobs:
       CI: "1"
       # Public runtime endpoints bundled into the APK. Spotify client secrets
       # stay only in the backend's Vercel environment.
-      EXPO_PUBLIC_HARMONIA_API_URL: https://backend-harmonia.vercel.app
+      EXPO_PUBLIC_HARMONIA_API_URL: https://harmonia-mobile-backend.vercel.app
+      EXPO_PUBLIC_HARMONIA_STREAM_API_URL: https://harmonia-mobile-backend.vercel.app
       EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL: https://spotify-canvas-one.vercel.app/api/canvas
 
     steps:

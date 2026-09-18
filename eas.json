@@ -8,13 +8,15 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://harmonia-mobile-backend.vercel.app",
+        "EXPO_PUBLIC_HARMONIA_STREAM_API_URL": "https://harmonia-mobile-backend.vercel.app"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://harmonia-mobile-backend.vercel.app",
+        "EXPO_PUBLIC_HARMONIA_STREAM_API_URL": "https://harmonia-mobile-backend.vercel.app"
       },
       "android": {
         "buildType": "apk"
@@ -23,7 +25,8 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://harmonia-mobile-backend.vercel.app",
+        "EXPO_PUBLIC_HARMONIA_STREAM_API_URL": "https://harmonia-mobile-backend.vercel.app"
       }
     }
   }
