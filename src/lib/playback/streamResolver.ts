@@ -359,16 +359,6 @@ function jioSaavnIdOf(track: Song) {
   return id || null;
 }
 
-function hasSpotifyIdentity(track: Song) {
-  const raw = track as any;
-  const explicit = String(raw.spotifyId || raw.spotifyUri || '').trim();
-  if (explicit) return true;
-
-  const source = String(raw.source || raw.provider || '').toLowerCase();
-  const id = String(raw.id || raw.songId || raw.sourceId || '').trim();
-  return source.includes('spotify') || /^[A-Za-z0-9]{22}$/.test(id);
-}
-
 function knownArtistNames(track: Song) {
   const artists = artistNames(track).trim();
   return artists && artists !== 'Unknown artist' ? artists : '';
@@ -380,19 +370,16 @@ function canResolveWithDirectJioSaavn(track: Song) {
   if (jioSaavnIdOf(track)) return true;
 
   const title = String(track.name || track.title || '').trim();
-  const artists = knownArtistNames(track);
-  return Boolean(
-    title && title !== 'Unknown track' && (artists || hasSpotifyIdentity(track))
-  );
+  // Some catalog feeds omit artists even though the recording title is valid.
+  // Both direct matchers already score exact/contained titles conservatively,
+  // so do not discard those tracks before a provider gets a chance to search.
+  return Boolean(title && title !== 'Unknown track');
 }
 
 function canResolveWithDirectYouTube(track: Song) {
   if (youtubeIdOf(track)) return true;
   const title = String(track.name || track.title || '').trim();
-  const artists = knownArtistNames(track);
-  return Boolean(
-    title && title !== 'Unknown track' && (artists || hasSpotifyIdentity(track))
-  );
+  return Boolean(title && title !== 'Unknown track');
 }
 
 async function fetchJson(

@@ -313,6 +313,53 @@ test('Spotify tracks with a title but no artist still resolve by recording title
   assert.deepEqual(queries, ['KALYANI Remix']);
 });
 
+test('catalog tracks without artist metadata still resolve Radhimaa by title', async () => {
+  const queries: string[] = [];
+  const providers = createHarmoniaProviders({
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+      queries.push(url.searchParams.get('q') || '');
+      return json({
+        results: [{
+          id: 'P5pjB99X',
+          title: 'Radhimaa (From &quot;Think Indie&quot;)',
+          image: 'https://c.saavncdn.com/001/radhimaa-150x150.jpg',
+          more_info: {
+            album: 'Radhimaa (From "Think Indie")',
+            duration: '259',
+            encrypted_media_url: encryptedSaavnUrl(
+              'https://aac.saavncdn.com/001/radhimaa_160.mp4'
+            ),
+            '320kbps': 'true',
+            artistMap: {
+              primary_artists: [{ id: 'artist-1', name: 'Sai Abhyankkar' }],
+            },
+          },
+        }],
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'harmonia-radhimaa',
+    songId: 'harmonia-radhimaa',
+    name: 'Radhimaa',
+    title: 'Radhimaa',
+    source: 'harmonia',
+    artist: undefined,
+    primaryArtists: undefined,
+    artists: undefined,
+  }), { quality: 'normal', priority: 'high' });
+
+  assert.equal(result.source, 'jiosaavn');
+  assert.match(result.url, /radhimaa_160\.mp4/);
+  assert.deepEqual(queries, ['Radhimaa']);
+});
+
 test('7 expired resolved-stream cache entries are rejected', () => {
   let now = 1_000_000;
   const cache = new ResolvedStreamMemoryCache<any>(300, () => now);
