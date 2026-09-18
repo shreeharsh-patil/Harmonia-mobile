@@ -14,6 +14,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/shreeharsh-patil/Harmonia-mobile"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-Harmonia--mobile-181717?style=for-the-badge&logo=github&logoColor=white"></a>
   <a href="https://github.com/shreeharsh-patil/Harmonia-mobile/stargazers"><img alt="Stars" src="https://badgen.net/github/stars/shreeharsh-patil/Harmonia-mobile?color=3178C6&icon=github"></a>
   <a href="https://github.com/shreeharsh-patil/Harmonia-mobile/issues"><img alt="Issues" src="https://badgen.net/github/issues/shreeharsh-patil/Harmonia-mobile?color=3178C6&icon=github"></a>
 </p>
@@ -374,8 +375,8 @@ eas build -p android --profile production
 
 | Repo | Description |
 |---|---|
-| [Harmonia-mobile](https://github.com/shreeharsh-patil/Harmonia-mobile) | This app |
-| [Backend-Harmonia](https://github.com/shreeharsh-patil/Backend-Harmonia) | Optional account/sync backend |
+| [shreeharsh-patil/Harmonia-mobile](https://github.com/shreeharsh-patil/Harmonia-mobile) | This app — React Native mobile client |
+| [shreeharsh-patil/Backend-Harmonia](https://github.com/shreeharsh-patil/Backend-Harmonia) | Optional account/sync backend |
 
 ---
 
