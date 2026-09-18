@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   AppState,
   FlatList,
@@ -41,6 +41,19 @@ import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
 const TRENDING_SCREEN_REFRESH_MS = 10 * 60_000;
+
+function normalizeHomeSections(value: unknown): MusicSection[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((section): section is MusicSection => Boolean(section && typeof section === 'object'))
+    .map((section) => ({
+      ...section,
+      name: String(section.name || 'Music'),
+      playlists: Array.isArray(section.playlists)
+        ? section.playlists.filter(Boolean)
+        : [],
+    }));
+}
 
 function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
   const seen = new Set<string>();
@@ -114,7 +127,7 @@ export default function HomeScreen() {
     if (generation !== loadGenerationRef.current) return;
 
     if (publicResult.status === 'fulfilled') {
-      setSections(publicResult.value);
+      setSections(normalizeHomeSections(publicResult.value));
       lastCatalogRefreshRef.current = Date.now();
     } else {
       setError(publicResult.reason?.message || 'Unable to load music');
@@ -144,13 +157,6 @@ export default function HomeScreen() {
     }
 
   }, [token]);
-
-  useEffect(() => {
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [load]);
 
   const refreshRecentPlaylistsSilently = useCallback(async () => {
     if (!token) {
@@ -217,7 +223,8 @@ export default function HomeScreen() {
     catalogRefreshInFlightRef.current = true;
     try {
       const next = await fetchHomeSections({ forceRefresh: true });
-      if (next.length) setSections(next);
+      const safeSections = normalizeHomeSections(next);
+      if (safeSections.length) setSections(safeSections);
       lastCatalogRefreshRef.current = Date.now();
     } catch {
       // Retain the last successful playlist feed during a transient outage.
@@ -249,6 +256,7 @@ export default function HomeScreen() {
       }, TRENDING_SCREEN_REFRESH_MS);
 
       return () => {
+        loadGenerationRef.current += 1;
         clearInterval(interval);
         appStateSubscription.remove();
       };
@@ -305,7 +313,7 @@ export default function HomeScreen() {
   };
 
   const hasContent =
-    sections.some((section) => section.playlists?.length) ||
+    sections.some((section) => Array.isArray(section.playlists) && section.playlists.length > 0) ||
     recentSongs.length > 0 ||
     recentPlaylists.length > 0 ||
     trendingAlbums.length > 0 ||
