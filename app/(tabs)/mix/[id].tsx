@@ -10,8 +10,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
+import { playlistArtworkUrl, PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { CatalogDetailSkeleton } from '@/src/components/CatalogDetailSkeleton';
+import { ArtworkColorHeader } from '@/src/components/ArtworkColorHeader';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
@@ -24,11 +25,14 @@ import {
 } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
 import type { RecommendedMix, Song } from '@/src/types';
 
 export default function MixScreen() {
   const insets = useSafeAreaInsets();
+  // Web detail pages skip color extraction in battery-saver mode.
+  const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
@@ -108,6 +112,13 @@ export default function MixScreen() {
     return 'Based on your recent listening';
   }, [mix]);
 
+  // Web detail pages wash the header with the artwork's dominant color.
+  // Memoized before the early returns and against 2 Hz progress re-renders.
+  const paletteCover = useMemo(
+    () => (mix ? playlistArtworkUrl(mix as any, 64) : ''),
+    [mix]
+  );
+
   if (!token) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -148,6 +159,7 @@ export default function MixScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
       <FlatList
         data={songs}
         keyExtractor={(item, index) => item.id || String(index)}

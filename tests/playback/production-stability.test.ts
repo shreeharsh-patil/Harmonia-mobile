@@ -141,7 +141,7 @@ test('player hydration and radio continuation are generation guarded', async () 
 
 test('radio suggestions fall back to local catalog and direct JioSaavn when backend is absent', async () => {
   const source = await readFile('src/lib/api.ts', 'utf8');
-  assert.match(source, /if \(HAS_HARMONIA_API\) \{[\s\S]*?Radio should survive account\/catalog backend outages/);
+  assert.match(source, /if \((?:HAS_HARMONIA_API|hasHarmoniaApi\(\))\) \{[\s\S]*?Radio should survive account\/catalog backend outages/);
   assert.match(source, /searchStaticCatalog\(query, candidateLimit\)/);
   assert.match(source, /searchDirectJioSaavn\(query, \{ limit: candidateLimit \}\)/);
   assert.match(source, /diversifySuggestions\(seed, candidates/);
@@ -645,9 +645,10 @@ test('Spotify Canvas bypasses Harmonia backend and persists device-side results'
 
 test('player persistence batches background-safe storage work instead of writing every few seconds', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /lastStatsPersistedAtRef/);
-  assert.match(source, /Date\.now\(\) - lastStatsPersistedAtRef\.current >= 30_000/);
-  assert.match(source, /Math\.abs\(wholeSecond - lastPersistedSecond\.current\) < 30/);
+  assert.match(
+    source,
+    /shouldPersistPlaybackSnapshot\(\{[\s\S]*?elapsedSeconds: Math\.abs\(wholeSecond - lastPersistedSecond\.current\)/
+  );
   assert.match(source, /playbackSnapshotWriteChainRef\.current = playbackSnapshotWriteChainRef\.current/);
 });
 
@@ -824,8 +825,8 @@ test('home India chart refreshes dynamically without polling in the background',
   assert.match(home, /AppState\.addEventListener\('change'/);
   assert.match(home, /appStateSubscription\.remove\(\)/);
   assert.match(home, /setInterval\(\(\) => \{/);
-  assert.match(home, /Trending in India/);
-  assert.match(home, /Live chart · refreshed automatically/);
+  assert.match(home, /Latest Songs/);
+  assert.match(home, /Fresh from the India chart/);
 });
 
 test('search cancellation does not fall through to provider fallback work', async () => {

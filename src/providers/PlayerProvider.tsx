@@ -42,7 +42,10 @@ import {
   MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
   nextUntriedCandidateIndex,
 } from '@/src/lib/playback/recoveryPolicy';
-import { createQueueWindow } from '@/src/lib/playback/playbackSnapshot';
+import {
+  createQueueWindow,
+  shouldPersistPlaybackSnapshot,
+} from '@/src/lib/playback/playbackSnapshot';
 import {
   albumName,
   artistNames,
@@ -286,6 +289,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const lastPersistedSecond = useRef(-1);
   const lastPersistedQueueRef = useRef<Song[] | null>(null);
   const lastPersistedQueueIndex = useRef(-1);
+  const lastPersistedPlayingRef = useRef(false);
   const finishing = useRef(false);
   const queueRef = useRef(queue);
   const indexRef = useRef(currentIndex);
@@ -1612,14 +1616,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const queueChanged =
       queue !== lastPersistedQueueRef.current ||
       currentIndex !== lastPersistedQueueIndex.current;
+    const playingChanged = status.playing !== lastPersistedPlayingRef.current;
 
-    // Queue/index edits are persisted immediately. Position-only updates are
-    // throttled so playback does not rewrite a large JSON snapshot every few
-    // seconds while the app is running.
+    // The throttle decision lives in playbackSnapshot.ts (unit tested): queue
+    // edits and play/pause transitions persist immediately; position-only
+    // updates are throttled in every state, otherwise paused ticks would
+    // rewrite the queue JSON every 500ms (the write-storm regression).
     if (
-      !queueChanged &&
-      status.playing &&
-      Math.abs(wholeSecond - lastPersistedSecond.current) < 30
+      !shouldPersistPlaybackSnapshot({
+        queueChanged,
+        playingChanged,
+        elapsedSeconds: Math.abs(wholeSecond - lastPersistedSecond.current),
+      })
     ) {
       return;
     }
@@ -1640,6 +1648,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     lastPersistedSecond.current = wholeSecond;
     lastPersistedQueueRef.current = queue;
     lastPersistedQueueIndex.current = currentIndex;
+    lastPersistedPlayingRef.current = status.playing;
 
     const snapshot: PlaybackSnapshot = {
       queue: currentWindow.items.map(persistenceSafeSong),

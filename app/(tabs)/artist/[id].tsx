@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { CatalogDetailSkeleton } from '@/src/components/CatalogDetailSkeleton';
+import { ArtworkColorHeader } from '@/src/components/ArtworkColorHeader';
 import { SongRow } from '@/src/components/SongRow';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { fetchArtist, fetchArtistAlbums, fetchArtistSongs } from '@/src/lib/api';
@@ -29,10 +30,13 @@ import { shareArtist } from '@/src/lib/share';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Song } from '@/src/types';
 
 export default function ArtistScreen() {
   const insets = useSafeAreaInsets();
+  // Web detail pages skip color extraction in battery-saver mode.
+  const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
@@ -99,6 +103,11 @@ export default function ArtistScreen() {
     return [];
   }, [artist, songs]);
 
+  // Web artist page washes the header with the avatar's dominant color.
+  // Memoized before the early returns and against 2 Hz progress re-renders.
+  const cover = useMemo(() => entityImageUrl(artist, 208), [artist]);
+  const paletteCover = useMemo(() => entityImageUrl(artist, 64), [artist]);
+
   const playFrom = async (startIndex = 0, shuffle = false) => {
     if (!visibleSongs.length || playing) return;
     setPlaying(true);
@@ -135,12 +144,12 @@ export default function ArtistScreen() {
     );
   }
 
-  const cover = entityImageUrl(artist, 208);
   const followerText = artist.followerCount ? `${Number(artist.followerCount).toLocaleString()} followers` : '';
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
       <FlatList
         data={visibleSongs}
         keyExtractor={(item, index) => item.id || String(index)}

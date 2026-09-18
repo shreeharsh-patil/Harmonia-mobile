@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { CatalogDetailSkeleton } from '@/src/components/CatalogDetailSkeleton';
+import { ArtworkColorHeader } from '@/src/components/ArtworkColorHeader';
 import { SongRow } from '@/src/components/SongRow';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
@@ -34,11 +35,14 @@ import { artistNames } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, Song } from '@/src/types';
 
 export default function AlbumScreen() {
   const insets = useSafeAreaInsets();
+  // Web detail pages skip color extraction in battery-saver mode.
+  const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
@@ -46,6 +50,11 @@ export default function AlbumScreen() {
   const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
 
   const [album, setAlbum] = useState<HarmoniaAlbum | null>(null);
+  // Artwork resolution walks many fields and runs regexes; memoize so the
+  // 2 Hz progress re-renders do not recompute it (and so the value is stable
+  // even though these screens return early while loading).
+  const cover = useMemo(() => entityImageUrl(album, 224), [album]);
+  const paletteCover = useMemo(() => entityImageUrl(album, 64), [album]);
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
@@ -153,7 +162,7 @@ export default function AlbumScreen() {
     );
   }
 
-  const cover = entityImageUrl(album, 224);
+  // Web album page washes the header with the artwork's dominant color.
   const subtitle =
     album.primaryArtists ||
     (songs[0] ? artistNames(songs[0]) : '') ||
@@ -167,6 +176,7 @@ export default function AlbumScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
       <FlatList
         data={songs}
         keyExtractor={(item, index) => item.id || String(index)}

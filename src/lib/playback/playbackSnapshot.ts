@@ -1,3 +1,38 @@
+/**
+ * Inputs the PlayerProvider snapshot effect uses to decide whether the
+ * playback snapshot needs rewriting to AsyncStorage.
+ */
+export type SnapshotPersistDecisionInput = {
+  /** Whether the queue array or active index changed since the last write. */
+  queueChanged: boolean;
+  /** Whether play/pause state flipped since the last write. */
+  playingChanged: boolean;
+  /** Whole seconds elapsed since the last write (position-only delta). */
+  elapsedSeconds: number;
+  /** Throttle window for position-only updates, in whole seconds.
+   *  Pass Infinity to simulate "playing mode" unlimited waits in tests. */
+  positionThrottleSeconds?: number;
+};
+
+/**
+ * Decide whether the playback snapshot should be persisted now.
+ *
+ * Queue/index edits and play/pause transitions persist immediately (a pause
+ * must checkpoint its exact position). Position-only updates are throttled
+ * regardless of playing state: while paused the position does not advance, so
+ * gating the throttle on playing would rewrite the queue JSON every 500ms
+ * status tick (the write storm this decision exists to prevent).
+ */
+export function shouldPersistPlaybackSnapshot({
+  queueChanged,
+  playingChanged,
+  elapsedSeconds,
+  positionThrottleSeconds = 30,
+}: SnapshotPersistDecisionInput): boolean {
+  if (queueChanged || playingChanged) return true;
+  return elapsedSeconds >= positionThrottleSeconds;
+}
+
 export type QueueWindow<T> = {
   items: T[];
   index: number;

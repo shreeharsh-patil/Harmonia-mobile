@@ -16,39 +16,42 @@ type StaticCatalogSnapshot = {
   songs?: Song[];
 };
 
-// This file is overwritten with the compact catalog during EAS builds by
-// scripts/sync-static-catalog.mjs. Keeping a tiny checked-in placeholder makes
-// typecheck/local setup deterministic even before the first catalog sync.
+type StaticCatalogIndex = {
+  snapshot: StaticCatalogSnapshot;
+  sections: (MusicSection & { genreId?: string; genreName?: string })[];
+  songs: Song[];
+  songById: Map<string, Song>;
+  playlistById: Map<string, Playlist>;
+};
 
-const bundledCatalog = require('../../assets/catalog/harmonia-catalog.json') as StaticCatalogSnapshot;
+let catalogIndex: StaticCatalogIndex | null = null;
 
-const CURATED_SECTIONS = [
-  { id: '6a033dd076732f7db81ee4da', sectionIds: ['6a0300000000000000000005', '6a033dd076732f7db81ee4da'], title: 'Popular Hindi Playlists' },
-  { id: '6a0348173bcc78e22f236fdb', sectionIds: ['6a0300000000000000000001', '6a0348173bcc78e22f236fdb'], title: 'New & Trending' },
-  { id: '6a04102c17b699631f90592a', sectionIds: ['6a0300000000000000000002', '6a04102c17b699631f90592a'], title: 'Bollywood Romance' },
-  { id: '6a041b0d17b699631f905947', sectionIds: ['6a0300000000000000000003', '6a041b0d17b699631f905947'], title: 'Chill & Sad' },
-  { id: '6a38b276d0a0b98c1b5c1fd8', sectionIds: ['6a0300000000000000000004', '6a38b276d0a0b98c1b5c1fd8'], title: 'Popular Party Playlists' },
-  { id: '6a04071717b699631f905913', title: 'English Top Hits' },
-  { id: '6a047203f2b5dded647a6dcf', title: 'English New & Trending' },
-  { id: '6a0680775b5c126be7357acc', title: 'Pop Essentials' },
-  { id: '6a08919dc1eb7a1d81d81ca0', title: 'Dance Hits' },
-] as const;
+function getCatalogIndex(): StaticCatalogIndex {
+  if (catalogIndex) return catalogIndex;
 
-const sections = Array.isArray(bundledCatalog.sections) ? bundledCatalog.sections : [];
-const songs = Array.isArray(bundledCatalog.songs) ? bundledCatalog.songs : [];
+  // The checked-in fallback can contain thousands of playlists. Loading and
+  // indexing it during module evaluation blocks the React Native JS thread on
+  // every launch, even when the database feed is healthy. Parse it only when a
+  // remote request actually needs the offline fallback.
+  const snapshot = require('../../assets/catalog/harmonia-catalog.json') as StaticCatalogSnapshot;
+  const sections = Array.isArray(snapshot.sections) ? snapshot.sections : [];
+  const songs = Array.isArray(snapshot.songs) ? snapshot.songs : [];
+  const songById = new Map(
+    songs
+      .filter((song) => song?.id)
+      .map((song) => [String(song.id), song] as const)
+  );
+  const playlistById = new Map<string, Playlist>();
 
-const songById = new Map(
-  songs
-    .filter((song) => song?.id)
-    .map((song) => [String(song.id), song] as const)
-);
-
-const playlistById = new Map<string, Playlist>();
-for (const section of sections) {
-  for (const playlist of section.playlists || []) {
-    const id = String(playlist.id || playlist._id || '').trim();
-    if (id && !playlistById.has(id)) playlistById.set(id, playlist);
+  for (const section of sections) {
+    for (const playlist of section.playlists || []) {
+      const id = String(playlist.id || playlist._id || '').trim();
+      if (id && !playlistById.has(id)) playlistById.set(id, playlist);
+    }
   }
+
+  catalogIndex = { snapshot, sections, songs, songById, playlistById };
+  return catalogIndex;
 }
 
 function normalizeText(value: unknown) {
@@ -197,12 +200,14 @@ function deriveArtists(matchedSongs: Song[], query: string, limit: number): Harm
 }
 
 export function hasBundledCatalog() {
+  const { sections, songs } = getCatalogIndex();
   return sections.length > 0 && songs.length > 0;
 }
 
 export function getStaticCatalogStats() {
+  const { snapshot, sections, playlistById, songById } = getCatalogIndex();
   return {
-    generatedAt: bundledCatalog.generatedAt || null,
+    generatedAt: snapshot.generatedAt || null,
     sections: sections.length,
     playlists: playlistById.size,
     songs: songById.size,
@@ -210,46 +215,13 @@ export function getStaticCatalogStats() {
 }
 
 export function getStaticHomeSections(): MusicSection[] {
+  const { sections } = getCatalogIndex();
   if (!sections.length) return [];
-
-  const byId = new Map(
-    sections.map((section) => [String(section.id || section._id || ''), section] as const)
-  );
-
-  const curated = CURATED_SECTIONS
-    .map((item) => {
-      const ids: string[] = 'sectionIds' in item ? [...item.sectionIds] : [item.id];
-      const matchingSections = ids.map((id) => byId.get(id)).filter(Boolean) as (MusicSection & { genreId?: string; genreName?: string })[];
-      if (!matchingSections.length) return null;
-
-      const playlistMap = new Map<string, Playlist>();
-      for (const section of matchingSections) {
-        for (const playlist of section?.playlists || []) {
-          const pid = String(playlist.id || playlist._id || '').trim();
-          if (pid && !playlistMap.has(pid)) {
-            playlistMap.set(pid, playlist);
-          }
-        }
-      }
-
-      const mergedPlaylists = [...playlistMap.values()];
-      if (!mergedPlaylists.length) return null;
-
-      return {
-        id: item.id,
-        _id: item.id,
-        name: item.title,
-        genreId: matchingSections[0]?.genreId || '',
-        genreName: matchingSections[0]?.genreName || '',
-        playlists: mergedPlaylists,
-      };
-    })
-    .filter(Boolean) as MusicSection[];
-
-  return curated.length >= 5 ? curated : sections.slice(0, 20);
+  return sections.filter((section) => Boolean(section?.playlists && section.playlists.length > 0));
 }
 
 export function findStaticPlaylist(id: string): Playlist | null {
+  const { playlistById, songById } = getCatalogIndex();
   const cleanId = String(id || '').trim();
   const playlist = playlistById.get(cleanId);
   if (!playlist) return null;
@@ -269,12 +241,14 @@ export function findStaticPlaylist(id: string): Playlist | null {
 }
 
 export function getStaticSongs(ids: string[]) {
+  const { songById } = getCatalogIndex();
   return ids
     .map((id) => songById.get(String(id)))
     .filter(Boolean) as Song[];
 }
 
 export function searchStaticCatalog(query: string, limit = 30): SearchPayload {
+  const { songs, playlistById } = getCatalogIndex();
   const cleanQuery = String(query || '').trim();
   const empty = { total: 0, start: 0, results: [] };
   if (!cleanQuery || !songs.length) {

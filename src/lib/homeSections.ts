@@ -1,10 +1,5 @@
 import type { MusicSection, Playlist } from '@/src/types';
 
-function playlistIdentity(playlist: Playlist) {
-  return String(playlist.id || playlist._id || '').trim() ||
-    String(playlist.name || playlist.title || '').trim().toLowerCase();
-}
-
 function isSpotifyPlaylist(playlist: Playlist) {
   const raw = playlist as any;
   const source = String(
@@ -13,19 +8,97 @@ function isSpotifyPlaylist(playlist: Playlist) {
   const sourceUrl = String(
     raw.sourceUrl || raw.source_url || raw.spotifyUrl || ''
   ).toLowerCase();
-  return source.includes('spotify') || sourceUrl.includes('open.spotify.com/playlist/');
+  const images = [
+    ...(Array.isArray(playlist.image) ? playlist.image : []),
+    ...(Array.isArray(raw.spotifyImages) ? raw.spotifyImages : []),
+  ];
+  const hasSpotifyImage = images.some((img: any) =>
+    typeof img?.url === 'string' && img.url.includes('scdn.co')
+  );
+  return source.includes('spotify') || sourceUrl.includes('open.spotify.com/playlist/') || hasSpotifyImage;
 }
 
-function mergeSpotifyPlaylists(primary: Playlist[], secondary: Playlist[]) {
-  const merged: Playlist[] = [];
+function parseTimestamp(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value < 10_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value !== 'string' || !value.trim()) return 0;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function playlistFreshness(playlist: Playlist) {
+  const raw = playlist as any;
+  for (const value of [
+    raw.updatedAt,
+    raw.lastUpdated,
+    raw.modifiedAt,
+    raw.publishedAt,
+    raw.releaseDate,
+    raw.createdAt,
+  ]) {
+    const timestamp = parseTimestamp(value);
+    if (timestamp > 0) return timestamp;
+  }
+
+  // Mongo ObjectIds encode their creation time in the first four bytes. The
+  // current playlist feed does not expose createdAt, so this keeps newer DB
+  // records ahead of old snapshot entries without guessing from their titles.
+  const objectId = String(playlist._id || playlist.id || '').trim();
+  if (/^[a-f0-9]{24}$/i.test(objectId)) {
+    return Number.parseInt(objectId.slice(0, 8), 16) * 1000;
+  }
+
+  return 0;
+}
+
+export function latestHomePlaylists(sections: MusicSection[], limit = 20) {
   const seen = new Set<string>();
+  const candidates: { playlist: Playlist; index: number; freshness: number }[] = [];
+  let index = 0;
+
+  for (const section of sections) {
+    for (const playlist of section.playlists || []) {
+      const id = String(playlist.id || playlist._id || '').trim();
+      const name = String(playlist.name || playlist.title || '').trim().toLowerCase();
+      const key = id || name;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({ playlist, index, freshness: playlistFreshness(playlist) });
+      index += 1;
+    }
+  }
+
+  return candidates
+    .sort((a, b) => b.freshness - a.freshness || a.index - b.index)
+    .slice(0, Math.max(0, limit))
+    .map(({ playlist }) => playlist);
+}
+
+function newestFirst(playlists: Playlist[]) {
+  return playlists
+    .map((playlist, index) => ({ playlist, index, freshness: playlistFreshness(playlist) }))
+    .sort((a, b) => b.freshness - a.freshness || a.index - b.index)
+    .map(({ playlist }) => playlist);
+}
+
+function mergeSpotifyPlaylists(primary: Playlist[], secondary: Playlist[], limit = 100) {
+  const merged: Playlist[] = [];
+  const seenIds = new Set<string>();
+  const seenNames = new Set<string>();
 
   for (const playlist of [...primary, ...secondary]) {
-    const key = playlistIdentity(playlist);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
+    const id = String(playlist.id || playlist._id || '').trim();
+    const name = String(playlist.name || playlist.title || '').toLowerCase().trim();
+    if ((id && seenIds.has(id)) || (name && seenNames.has(name))) continue;
+    if (id) seenIds.add(id);
+    if (name) seenNames.add(name);
     merged.push(playlist);
-    if (merged.length >= 100) break;
+    if (merged.length >= limit) break;
   }
 
   return merged;
@@ -49,12 +122,77 @@ export function selectDatabaseSpotifySections(remote: MusicSection[] = []) {
       id: current?.id || section.id,
       _id: current?._id || section._id,
       name,
-      playlists: mergeSpotifyPlaylists(
+      playlists: newestFirst(mergeSpotifyPlaylists(
         current?.playlists || [],
-        spotifyPlaylists
-      ),
+        spotifyPlaylists,
+        Number.MAX_SAFE_INTEGER
+      )).slice(0, 100),
     });
   }
 
   return [...selected.values()];
+}
+
+function normalizeSectionKey(name: string) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/^english\s+/i, '')
+    .replace(/\s*&\s*charts/i, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export function mergeHomeSections(
+  base: MusicSection[] = [],
+  remote: MusicSection[] = []
+): MusicSection[] {
+  if (!remote.length) return base;
+  if (!base.length) return remote;
+
+  const remoteById = new Map<string, MusicSection>();
+  const remoteByKey = new Map<string, MusicSection>();
+
+  for (const sec of remote) {
+    const id = String(sec.id || sec._id || '').trim();
+    if (id) remoteById.set(id, sec);
+
+    const key = normalizeSectionKey(sec.name);
+    if (key) remoteByKey.set(key, sec);
+  }
+
+  const merged: MusicSection[] = [];
+  const usedRemote = new Set<MusicSection>();
+
+  for (const baseSec of base) {
+    const id = String(baseSec.id || baseSec._id || '').trim();
+    const key = normalizeSectionKey(baseSec.name);
+
+    const remoteMatch =
+      (id ? remoteById.get(id) : undefined) ||
+      (key ? remoteByKey.get(key) : undefined);
+
+    if (remoteMatch) {
+      usedRemote.add(remoteMatch);
+      merged.push({
+        ...baseSec,
+        id: remoteMatch.id || baseSec.id,
+        _id: remoteMatch._id || baseSec._id,
+        name: baseSec.name || remoteMatch.name,
+        playlists: mergeSpotifyPlaylists(
+          remoteMatch.playlists || [],
+          baseSec.playlists || []
+        ),
+      });
+    } else {
+      merged.push(baseSec);
+    }
+  }
+
+  for (const remoteSec of remote) {
+    if (!usedRemote.has(remoteSec)) {
+      merged.push(remoteSec);
+    }
+  }
+
+  return merged;
 }

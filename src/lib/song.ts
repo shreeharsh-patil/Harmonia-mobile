@@ -1,12 +1,27 @@
 import type { HarmoniaArtist, Song } from '@/src/types';
 
+// Single-pass entity decoding: five sequential .replace() passes over every
+// artist name of every row added up on long lists. The alternation scans the
+// string once. Case-insensitive with arbitrary zero padding matches the
+// original multi-pass regex exactly (e.g. &AMP;, &#000039;).
+const ENTITY_PATTERN = /&(?:amp|quot|apos|nbsp|#0*39);/gi;
+
 function decode(value: string) {
-  return value
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;|&apos;/gi, "'")
-    .replace(/&nbsp;/gi, ' ')
-    .trim();
+  // Fast native check avoids the regex machinery for the common case, and
+  // (unlike ENTITY_PATTERN.test) cannot misfire: replace() with a global
+  // regex is stateless, but test() with one is not (lastIndex carry-over).
+  if (!value.includes('&')) return value.trim();
+  return value.replace(ENTITY_PATTERN, (entity) => {
+    switch (entity.toLowerCase()) {
+      case '&amp;': return '&';
+      case '&quot;': return '"';
+      case '&apos;': return "'";
+      case '&nbsp;': return ' ';
+      default:
+        // &#39; / &#039; / &#000039; — the padded numeric apostrophe forms.
+        return /^&#0*39;$/.test(entity.toLowerCase()) ? "'" : entity;
+    }
+  }).trim();
 }
 
 function normalizeArtist(value: any): HarmoniaArtist | null {
@@ -81,9 +96,17 @@ export function normalizeArtworkUrl(value: unknown) {
   const normalized = trimmed
     .replace(/^http:\/\//i, 'https://')
     .replace(
-      /^https:\/\/image-cdn-[^.]+\.spotifycdn\.com\/image\//i,
+      /^https:\/\/(?:image-cdn-[^.]+\.spotifycdn\.com\/image|lineup-images\.scdn\.co|thisis-images\.scdn\.co|wrapped-images\.scdn\.co|daily-mix\.scdn\.co|blend-playlist-covers\.spotifycdn\.com)\//i,
       'https://i.scdn.co/image/'
-    );
+    )
+    .replace(
+      /^https:\/\/mosaic\.scdn\.co\/\d+\//i,
+      'https://mosaic.scdn.co/640/'
+    )
+    .replace(/ab67616d0000(?:1e02|4851)/g, 'ab67616d0000b273')
+    .replace(/ab67706c0000da84/g, 'ab67706c0000bebb')
+    .replace(/ab67706f0000(?:0003|ba8a)/g, 'ab67706f00000002')
+    .replace(/150x150|50x50/g, '500x500');
 
   // A catalog image may occasionally contain an upstream HTML error body
   // instead of a URL. Do not pass it to expo-image as an artwork source.

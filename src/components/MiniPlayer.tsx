@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { artistNames, artworkUrl } from '@/src/lib/song';
@@ -36,45 +36,48 @@ export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boo
 
 // Web mini-player renders three tiny primary-colored equalizer bars next to
 // the title that animate only while playing (animate-eq-bar-1/2/3).
+// Bars animate with scaleY on the native driver — height layout animations
+// would run on the JS thread and stutter while audio is playing.
+const EQ_BAR_HEIGHTS = [2.5, 5, 3.5];
 function EqBars({ playing }: { playing: boolean }) {
   const bars = useRef([
-    new Animated.Value(2.5),
-    new Animated.Value(5),
-    new Animated.Value(3.5),
+    new Animated.Value(1),
+    new Animated.Value(1),
+    new Animated.Value(1),
   ]).current;
 
   useEffect(() => {
     if (!playing) {
-      bars[0].setValue(2.5);
-      bars[1].setValue(5);
-      bars[2].setValue(3.5);
+      bars[0].setValue(1);
+      bars[1].setValue(1);
+      bars[2].setValue(1);
       return;
     }
 
-    const makeLoop = (delay: number, base: number, peak: number) =>
+    const makeLoop = (delay: number, bar: number, peakScale: number) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(bars[base], {
-            toValue: peak,
+          Animated.timing(bars[bar], {
+            toValue: peakScale,
             duration: 420,
             easing: Easing.inOut(Easing.quad),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
-          Animated.timing(bars[base], {
-            toValue: 2,
+          Animated.timing(bars[bar], {
+            toValue: 1,
             duration: 420,
             easing: Easing.inOut(Easing.quad),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ]),
         { resetBeforeIteration: false }
       );
 
     const loops = [
-      makeLoop(0, 0, 9),
-      makeLoop(140, 1, 9.5),
-      makeLoop(280, 2, 8),
+      makeLoop(0, 0, EQ_BAR_HEIGHTS[0] === 0 ? 1 : 9 / EQ_BAR_HEIGHTS[0]),
+      makeLoop(140, 1, EQ_BAR_HEIGHTS[1] === 0 ? 1 : 9.5 / EQ_BAR_HEIGHTS[1]),
+      makeLoop(280, 2, EQ_BAR_HEIGHTS[2] === 0 ? 1 : 8 / EQ_BAR_HEIGHTS[2]),
     ];
     loops.forEach((loop) => loop.start());
     return () => loops.forEach((loop) => loop.stop());
@@ -83,7 +86,16 @@ function EqBars({ playing }: { playing: boolean }) {
   return (
     <View style={styles.eqRow}>
       {bars.map((value, index) => (
-        <Animated.View key={index} style={[styles.eqBar, { height: value }]} />
+        <Animated.View
+          key={index}
+          style={[
+            styles.eqBar,
+            { height: EQ_BAR_HEIGHTS[index] },
+            // transformOrigin keeps bars anchored to the row baseline so the
+            // scaleY pulse grows upward, like the original height animation.
+            { transform: [{ scaleY: value }], transformOrigin: 'bottom' },
+          ]}
+        />
       ))}
     </View>
   );
@@ -102,8 +114,16 @@ export function MiniPlayer() {
   } = usePlayer();
   // Web mini-player tints the floating card with the artwork's dominant
   // color (fallback rgb(40,40,40)). Extraction is skipped in battery saver.
-  const { dominantRgb } = useArtworkPalette(batterySaver ? null : currentSong, 64);
+  const paletteSong = batterySaver ? null : currentSong;
+  const { dominantRgb } = useArtworkPalette(paletteSong, 64);
   const [tintR, tintG, tintB] = batterySaver ? [40, 40, 40] : dominantRgb;
+  // artworkUrl walks many fields and runs regexes; compute it once per song
+  // instead of three times per render (this component re-renders at 2 Hz
+  // while playing via the progress context).
+  const ambientArtworkUrl = useMemo(
+    () => (currentSong ? artworkUrl(currentSong, 96) : ''),
+    [currentSong]
+  );
 
   if (!currentSong) return null;
 
@@ -136,14 +156,14 @@ export function MiniPlayer() {
           : { backgroundColor: `rgb(${tintR}, ${tintG}, ${tintB})` },
       ]}
     >
-      {!!artworkUrl(currentSong, 96) && (
+      {!!ambientArtworkUrl && (
         <Image
-          source={{ uri: artworkUrl(currentSong, 96) }}
+          source={{ uri: ambientArtworkUrl }}
           style={styles.ambientArtwork}
           contentFit="cover"
           blurRadius={batterySaver ? 0 : 14}
           cachePolicy="memory-disk"
-          recyclingKey={`mini-bg-${String(currentSong.id || artworkUrl(currentSong, 96))}`}
+          recyclingKey={`mini-bg-${String(currentSong.id || ambientArtworkUrl)}`}
         />
       )}
       <View pointerEvents="none" style={styles.ambientWash} />

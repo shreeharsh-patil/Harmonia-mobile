@@ -12,8 +12,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
+import { playlistArtworkUrl, PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { CatalogDetailSkeleton } from '@/src/components/CatalogDetailSkeleton';
+import { ArtworkColorHeader } from '@/src/components/ArtworkColorHeader';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
@@ -37,6 +38,7 @@ import { artistNames } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
 import type { Playlist, Song } from '@/src/types';
 
@@ -46,6 +48,8 @@ function getId(playlist?: Playlist | null) {
 
 export default function PlaylistScreen() {
   const insets = useSafeAreaInsets();
+  // Web detail pages skip color extraction in battery-saver mode.
+  const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
@@ -136,6 +140,14 @@ export default function PlaylistScreen() {
       loadGenerationRef.current += 1;
     };
   }, [load]);
+
+  // Web playlist page washes the header with the artwork's dominant color.
+  // Resolution walks many fields and runs regexes; memoize it so 2 Hz progress
+  // re-renders do not recompute, and so it exists before the early returns.
+  const paletteCover = useMemo(
+    () => (playlist ? playlistArtworkUrl(playlist, 64, songs) : ''),
+    [playlist, songs]
+  );
 
   const filteredSongs = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -287,6 +299,7 @@ export default function PlaylistScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
       <FlatList
         data={filteredSongs}
         keyExtractor={(item, index) => item.id || String(index)}

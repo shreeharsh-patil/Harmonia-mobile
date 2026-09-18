@@ -1,6 +1,6 @@
-import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
+import { HARMONIA_API_URL } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
-import { selectDatabaseSpotifySections } from '@/src/lib/homeSections';
+import { mergeHomeSections, selectDatabaseSpotifySections } from '@/src/lib/homeSections';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
 import {
   fetchDirectJioSaavnAlbum,
@@ -16,6 +16,15 @@ import {
   type DirectSaavnSearchTrack,
   type DirectSaavnTrack,
 } from '@/src/lib/playback/jiosaavnDirect';
+import {
+  CURATED_SECTIONS_CACHE_TTL_MS,
+  fetchLiveMusicSections,
+  getHarmoniaApiUrl,
+  hasHarmoniaApi,
+  normalizeCuratedPlaylist,
+  normalizeCuratedSections,
+  readCuratedSectionsCache,
+} from '@/src/lib/curatedSections';
 import {
   findStaticPlaylist,
   getStaticHomeSections,
@@ -35,6 +44,12 @@ import type {
   Song,
 } from '@/src/types';
 export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
+export {
+  fetchLiveMusicSections,
+  normalizeCuratedPlaylist,
+  normalizeCuratedSections,
+  readCuratedSectionsCache,
+} from '@/src/lib/curatedSections';
 
 export type LyricsResult = {
   syncedLyrics?: string | null;
@@ -210,7 +225,8 @@ type RequestOptions = RequestInit & {
 };
 
 async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  if (!HAS_HARMONIA_API) {
+  const apiUrl = getHarmoniaApiUrl();
+  if (!apiUrl) {
     throw new ApiError(
       'Account sync is unavailable in this build. You can continue listening without signing in.',
       503
@@ -238,7 +254,7 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
   }, Math.max(1_000, timeoutMs));
 
   try {
-    const response = await fetch(`${HARMONIA_API_URL}${path}`, {
+    const response = await fetch(`${apiUrl}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
@@ -535,21 +551,30 @@ let homeSectionsRequest: Promise<MusicSection[]> | null = null;
 let trendingHomeCache: { data: TrendingHomeContent; expiresAt: number } | null = null;
 let trendingHomeRequest: Promise<TrendingHomeContent> | null = null;
 
-async function loadHomeSections(): Promise<MusicSection[]> {
+async function loadHomeSections(forceRefresh = false): Promise<MusicSection[]> {
   const fallback = getStaticHomeSections();
-  if (HAS_HARMONIA_API) {
+
+  if (hasHarmoniaApi()) {
+    try {
+      const live = await fetchLiveMusicSections({ forceRefresh });
+      if (live.length) return mergeHomeSections(fallback, live);
+    } catch {}
+
     try {
       const curated = await requestJson<{ success: true; data: MusicSection[] }>('/api/curated-music');
       const spotifySections = selectDatabaseSpotifySections(curated.data);
-      if (spotifySections.length) return spotifySections;
+      if (spotifySections.length) return mergeHomeSections(fallback, spotifySections);
     } catch {}
 
     try {
       const feed = await requestJson<{ success: true; data: { sections: MusicSection[] } }>('/api/music-feed?all=true');
       const spotifySections = selectDatabaseSpotifySections(feed.data?.sections);
-      if (spotifySections.length) return spotifySections;
+      if (spotifySections.length) return mergeHomeSections(fallback, spotifySections);
     } catch {}
   }
+
+  const cached = await readCuratedSectionsCache();
+  if (cached.data.length) return mergeHomeSections(fallback, cached.data);
 
   return fallback;
 }
@@ -563,12 +588,10 @@ export async function fetchHomeSections(
   }
   if (homeSectionsRequest) return homeSectionsRequest;
 
-  const request = loadHomeSections().then((data) => {
-    // Do not pin a transient empty response for ten minutes. The checked-in
-    // snapshot normally prevents this, but a failed first launch should still
-    // recover immediately when the backend becomes reachable.
+  const request = loadHomeSections(forceRefresh).then((data) => {
+    // Do not pin a transient empty response for thirty minutes.
     if (data.length) {
-      homeSectionsCache = { data, expiresAt: Date.now() + HOME_SECTIONS_TTL_MS };
+      homeSectionsCache = { data, expiresAt: Date.now() + CURATED_SECTIONS_CACHE_TTL_MS };
     }
     return data;
   });
@@ -687,7 +710,7 @@ async function fetchDirectTrendingSongs(limit = 30): Promise<Song[]> {
 async function fetchTrendingAlbums(limit = 20): Promise<HarmoniaAlbum[]> {
   const query = 'Latest Hindi Songs';
 
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: SearchPayload }>(
         `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
@@ -714,7 +737,7 @@ async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {
   // Match Harmonia Web first: use the dedicated India chart endpoint whenever
   // the configured Harmonia API exposes it. This preserves chart ordering and
   // track-level artwork instead of treating a text search as a popularity chart.
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{
         success: true;
@@ -776,7 +799,7 @@ export async function fetchTrendingHomeContent(
 
 export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {
   let backendPlaylists: Playlist[] = [];
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: SearchPayload }>(
         `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
@@ -870,7 +893,7 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
 }
 
 export async function fetchAlbum(id: string): Promise<HarmoniaAlbum> {
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: HarmoniaAlbum }>(
         `/api/albums?id=${encodeURIComponent(id)}`
@@ -896,7 +919,7 @@ export async function fetchAlbum(id: string): Promise<HarmoniaAlbum> {
 }
 
 export async function fetchArtist(id: string): Promise<HarmoniaArtistEntity> {
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: HarmoniaArtistEntity }>(
         `/api/artists?id=${encodeURIComponent(id)}`
@@ -928,7 +951,7 @@ export async function fetchArtist(id: string): Promise<HarmoniaArtistEntity> {
 }
 
 export async function fetchArtistSongs(id: string, limit = 40): Promise<Song[]> {
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: any }>(
         `/api/artists/${encodeURIComponent(id)}/songs?page=0&limit=${limit}`
@@ -949,7 +972,7 @@ export async function fetchArtistSongs(id: string, limit = 40): Promise<Song[]> 
 }
 
 export async function fetchArtistAlbums(id: string, limit = 30): Promise<HarmoniaAlbum[]> {
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: any }>(
         `/api/artists/${encodeURIComponent(id)}/albums?page=0&limit=${limit}`
@@ -972,7 +995,7 @@ export async function fetchArtistAlbums(id: string, limit = 30): Promise<Harmoni
 }
 
 export async function fetchPlaylistDetails(id: string, token?: string | null): Promise<Playlist> {
-  if (token && HAS_HARMONIA_API) {
+  if (token && hasHarmoniaApi()) {
     try {
       const owned = await requestJson<{ success: true; data: Playlist }>(
         `/api/mobile/playlists/${encodeURIComponent(id)}`,
@@ -984,7 +1007,16 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
     }
   }
 
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
+    // 1. Harmonia Web database playlist endpoint
+    try {
+      const payload = await requestJson<{ success: true; data: Playlist }>(
+        `/api/spotify-playlists/${encodeURIComponent(id)}`
+      );
+      if (payload.data) return payload.data;
+    } catch {}
+
+    // 2. Generic playlist endpoint
     try {
       const payload = await requestJson<{ success: true; data: Playlist }>(
         `/api/playlists/${encodeURIComponent(id)}`
@@ -992,10 +1024,7 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
       if (payload.data) return payload.data;
     } catch {}
 
-    // Some catalog deployments return playlist summaries from the curated feed
-    // but do not expose their corresponding public detail route. Preserve that
-    // metadata so fetchPlaylistSongs can resolve a matching provider playlist
-    // by title instead of treating a visible card as unavailable.
+    // 3. Match from live curated sections
     try {
       const sections = await fetchHomeSections();
       const curated = sections
@@ -1062,7 +1091,7 @@ export async function fetchSongs(ids: string[]): Promise<Song[]> {
   const localById = new Map(local.map((song) => [String(song.id), song] as const));
   let missing = clean.filter((id) => !localById.has(id));
 
-  if (HAS_HARMONIA_API && missing.length) {
+  if (hasHarmoniaApi() && missing.length) {
     try {
       const payload = await requestJson<{ success: true; data: Song[] }>(
         `/api/songs?ids=${encodeURIComponent(missing.join(','))}`,
@@ -1088,7 +1117,7 @@ export async function fetchSongs(ids: string[]): Promise<Song[]> {
 export async function fetchSongSuggestions(songId: string, limit = 20): Promise<Song[]> {
   if (!songId) return [];
 
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const payload = await requestJson<{ success: true; data: Song[] }>(
         `/api/songs/${encodeURIComponent(songId)}/suggestions?limit=${limit}`,
@@ -1255,7 +1284,7 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
   if (duration) params.set('duration', String(Math.round(duration)));
 
   const getLyrics = async () => {
-    if (HAS_HARMONIA_API) {
+    if (hasHarmoniaApi()) {
       try {
         const exact = await requestJson<LyricsResult>(
           `/api/proxy/lyrics?endpoint=get&${params.toString()}`,
@@ -1284,7 +1313,7 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
     title,
   ].filter((value, index, values) => value && values.indexOf(value) === index);
 
-  if (HAS_HARMONIA_API) {
+  if (hasHarmoniaApi()) {
     try {
       const serverResults = await Promise.all(
         queries.map((query) =>
@@ -1336,6 +1365,71 @@ export async function resolvePlayableSong(
 }
 
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
+  const id = String(playlist.id || playlist._id || '').trim();
+  const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || (playlist as any).spotifyUrl || '');
+  const isSpotify = Boolean(
+    sourceUrl.includes('open.spotify.com/playlist') ||
+    playlist.source === 'spotify' ||
+    (playlist as any).sourceType === 'spotify' ||
+    (id && (id.startsWith('37i9dQ') || id.length === 22))
+  );
+
+  // 1. Harmonia Web database playlist endpoint: /api/spotify-playlists/:id
+  if (hasHarmoniaApi() && id) {
+    try {
+      const payload = await requestJson<{ success: true; data: any }>(
+        `/api/spotify-playlists/${encodeURIComponent(id)}`
+      );
+      const value = payload.data || {};
+      const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
+
+      const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
+        ? value.tracks
+        : (Array.isArray(value.songs) && value.songs.length)
+          ? value.songs
+          : [];
+
+      if (rawTracks.length) {
+        return rawTracks.map((track: any) => {
+          const mappedId = trackMap[track.id] || track.id;
+          return normalizeSong({ ...track, id: mappedId });
+        });
+      }
+
+      if (Array.isArray(value.songIds) && value.songIds.length) {
+        const songs = await fetchSongs(value.songIds);
+        if (songs.length) return songs;
+      }
+    } catch {}
+  }
+
+  // 2. Live Spotify sync: if this is a Spotify playlist and backend is available,
+  // fetch the latest live tracks directly from Spotify.
+  if (hasHarmoniaApi() && isSpotify) {
+    const spotifyUrl = sourceUrl.includes('open.spotify.com/playlist')
+      ? sourceUrl
+      : `https://open.spotify.com/playlist/${id}`;
+    try {
+      const payload = await requestJson<{ success?: boolean; data?: { tracks?: any[]; songs?: any[] } }>(
+        '/api/scrape-playlist',
+        {
+          method: 'POST',
+          body: JSON.stringify({ playlistUrl: spotifyUrl }),
+          timeoutMs: 15_000,
+        }
+      );
+      const rawTracks = payload.data?.tracks || payload.data?.songs || [];
+      if (rawTracks.length) {
+        return rawTracks.map((track: any) => normalizeSong(track));
+      }
+    } catch {}
+  }
+
+  // 3. If the playlist already has a substantial set of fully resolved tracks, use them.
+  if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 15) {
+    return playlist.tracks.map((song) => normalizeSong(song as any));
+  }
+
   const attemptedSongIds = new Set<string>();
   const resolveSongIds = async (ids: unknown[]) => {
     const pending = [...new Set(ids.map((songId) => String(songId || '').trim()).filter(Boolean))]
@@ -1344,27 +1438,16 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     return pending.length ? fetchSongs(pending) : [];
   };
 
-  if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
-    return playlist.tracks.map((song) => normalizeSong(song as any));
-  }
+  // 4. Resolve explicit song IDs if available
   if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
     const songs = await resolveSongIds(playlist.songIds);
-    if (songs.length) return songs;
+    if (songs.length && songs.length >= (playlist.songIds.length > 10 ? 10 : playlist.songIds.length)) {
+      return songs;
+    }
   }
 
-  const id = String(playlist.id || playlist._id || '');
-  if (!id) return [];
-
-  const bundled = findStaticPlaylist(id);
-  if (bundled?.tracks?.length) {
-    return bundled.tracks.map((song) => normalizeSong(song as any));
-  }
-  if (bundled?.songIds?.length) {
-    const songs = await resolveSongIds(bundled.songIds);
-    if (songs.length) return songs;
-  }
-
-  if (HAS_HARMONIA_API) {
+  // 5. Try backend playlist details endpoint: /api/playlists/:id
+  if (hasHarmoniaApi() && id) {
     try {
       const payload = await requestJson<{ success: true; data: any }>(
         `/api/playlists/${encodeURIComponent(id)}`
@@ -1383,31 +1466,34 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     } catch {}
   }
 
-  const direct = await fetchDirectJioSaavnPlaylist(id);
-  if (direct?.tracks?.length) return direct.tracks.map(directTrackToSong);
-
-  // Spotify scrape fallback: if the playlist is from Spotify or has a Spotify sourceUrl
-  const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || '');
-  if (HAS_HARMONIA_API && (sourceUrl.includes('open.spotify.com/playlist') || (playlist.source === 'spotify' && id))) {
-    try {
-      const spotifyUrl = sourceUrl.includes('open.spotify.com/playlist')
-        ? sourceUrl
-        : `https://open.spotify.com/playlist/${id}`;
-      const payload = await requestJson<{ success?: boolean; event?: string; data?: { tracks?: any[] } }>(
-        '/api/scrape-playlist',
-        {
-          method: 'POST',
-          body: JSON.stringify({ playlistUrl: spotifyUrl }),
-          timeoutMs: 15_000,
-        }
-      );
-      const rawTracks = payload.data?.tracks || [];
-      if (rawTracks.length) {
-        return rawTracks.map((track: any) => normalizeSong(track));
-      }
-    } catch {}
+  // 6. Check bundled static catalog
+  if (id) {
+    const bundled = findStaticPlaylist(id);
+    if (bundled?.tracks?.length) {
+      return bundled.tracks.map((song) => normalizeSong(song as any));
+    }
+    if (bundled?.songIds?.length) {
+      const songs = await resolveSongIds(bundled.songIds);
+      if (songs.length) return songs;
+    }
   }
 
+  // 7. Check existing tracks/songIds even if small
+  if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
+    return playlist.tracks.map((song) => normalizeSong(song as any));
+  }
+  if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
+    const songs = await resolveSongIds(playlist.songIds);
+    if (songs.length) return songs;
+  }
+
+  // 8. Direct provider playlist resolution by ID
+  if (id) {
+    const direct = await fetchDirectJioSaavnPlaylist(id);
+    if (direct?.tracks?.length) return direct.tracks.map(directTrackToSong);
+  }
+
+  // 9. Direct provider search by playlist title
   const title = String(playlist.name || playlist.title || '').trim();
   if (title) {
     const matches = await searchDirectJioSaavnPlaylists(title, { limit: 1 });
@@ -1417,9 +1503,7 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
       if (fallback?.tracks?.length) return fallback.tracks.map(directTrackToSong);
     }
 
-    // Curated backend cards can omit both song IDs and a provider URL. Keep
-    // those cards usable by falling back to catalog tracks for their title.
-    const tracks = await searchDirectJioSaavn(title, { limit: 30 });
+    const tracks = await searchDirectJioSaavn(title, { limit: 40 });
     if (tracks.length) return tracks.map(directTrackToSong);
   }
 

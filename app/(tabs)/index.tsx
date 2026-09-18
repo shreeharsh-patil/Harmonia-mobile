@@ -4,7 +4,6 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -25,15 +24,20 @@ import {
   fetchTrendingHomeContent,
 } from '@/src/lib/api';
 import { albumTitle, entityImageUrl } from '@/src/lib/entities';
+import { latestHomePlaylists } from '@/src/lib/homeSections';
+import { getStaticHomeSections } from '@/src/lib/staticCatalog';
 import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import {
   usePlaybackHistory,
   usePlayer,
   type PlaybackHistoryEntry,
 } from '@/src/providers/PlayerProvider';
+
+import { useArtworkPalette } from '@/src/lib/palette';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
@@ -60,23 +64,33 @@ export default function HomeScreen() {
   const { token } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
+  const { batterySaver } = usePreferences();
+  // Web music layout tints its ambient mesh glows from the playing artwork's
+  // palette (dominant rgba(.,0.10-0.12), secondary rgba(.,0.08)); the saffron
+  // and emerald tokens are the no-song fallback. Battery saver keeps the
+  // token glows and skips artwork download + pixel extraction entirely.
+  const paletteSong = batterySaver ? null : currentSong;
+  const { dominantRgb, secondaryRgb } = useArtworkPalette(paletteSong, 64);
   const { history } = usePlaybackHistory();
 
-  const [sections, setSections] = useState<MusicSection[]>([]);
+  const [sections, setSections] = useState<MusicSection[]>(() => getStaticHomeSections());
   const [recentPlaylists, setRecentPlaylists] = useState<Playlist[]>([]);
   const [mixes, setMixes] = useState<RecommendedMix[]>([]);
   const [trendingAlbums, setTrendingAlbums] = useState<HarmoniaAlbum[]>([]);
   const [trendingSongs, setTrendingSongs] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
+  const lastCatalogRefreshRef = useRef(0);
   const lastTrendingRefreshRef = useRef(0);
+  const catalogRefreshInFlightRef = useRef(false);
   const trendingRefreshInFlightRef = useRef(false);
   const recentRefreshInFlightRef = useRef(false);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
+  const latestPlaylists = useMemo(() => latestHomePlaylists(sections), [sections]);
   const quickCardWidth = Math.floor((width - 32) / 2);
 
   const load = useCallback(async (refresh = false) => {
@@ -85,20 +99,39 @@ export default function HomeScreen() {
     else setLoading(true);
     setError(null);
 
-    const [publicResult, recentResult, mixResult, trendingResult] = await Promise.allSettled([
-      fetchHomeSections({ forceRefresh: refresh }),
-      token ? fetchRecentlyPlayedPlaylists(token) : Promise.resolve<Playlist[]>([]),
-      token ? fetchRecommendedMixes(token) : Promise.resolve<RecommendedMix[]>([]),
-      fetchTrendingHomeContent({ forceRefresh: refresh }),
-    ]);
+    const publicRequest = fetchHomeSections({ forceRefresh: refresh });
+    const recentRequest = token
+      ? fetchRecentlyPlayedPlaylists(token)
+      : Promise.resolve<Playlist[]>([]);
+    const mixRequest = token
+      ? fetchRecommendedMixes(token)
+      : Promise.resolve<RecommendedMix[]>([]);
+    const trendingRequest = fetchTrendingHomeContent({ forceRefresh: refresh });
+
+    // The playlist feed is the primary Home content and is normally much
+    // faster than chart/album discovery. Paint it as soon as it arrives instead
+    // of keeping the entire screen behind the slowest secondary request.
+    const [publicResult] = await Promise.allSettled([publicRequest]);
 
     if (generation !== loadGenerationRef.current) return;
 
     if (publicResult.status === 'fulfilled') {
       setSections(publicResult.value);
+      lastCatalogRefreshRef.current = Date.now();
     } else {
       setError(publicResult.reason?.message || 'Unable to load music');
     }
+
+    setLoading(false);
+    setRefreshing(false);
+
+    const [recentResult, mixResult, trendingResult] = await Promise.allSettled([
+      recentRequest,
+      mixRequest,
+      trendingRequest,
+    ]);
+
+    if (generation !== loadGenerationRef.current) return;
 
     setRecentPlaylists(recentResult.status === 'fulfilled' ? recentResult.value : []);
     setMixes(mixResult.status === 'fulfilled' ? mixResult.value : []);
@@ -112,8 +145,6 @@ export default function HomeScreen() {
       setTrendingSongs([]);
     }
 
-    setLoading(false);
-    setRefreshing(false);
   }, [token]);
 
   useEffect(() => {
@@ -174,22 +205,48 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const refreshCatalogSilently = useCallback(async (force = false) => {
+    if (AppState.currentState !== 'active') return;
+    if (catalogRefreshInFlightRef.current) return;
+    if (
+      !force &&
+      lastCatalogRefreshRef.current > 0 &&
+      Date.now() - lastCatalogRefreshRef.current < TRENDING_SCREEN_REFRESH_MS
+    ) {
+      return;
+    }
+
+    catalogRefreshInFlightRef.current = true;
+    try {
+      const next = await fetchHomeSections({ forceRefresh: true });
+      if (next.length) setSections(next);
+      lastCatalogRefreshRef.current = Date.now();
+    } catch {
+      // Retain the last successful playlist feed during a transient outage.
+    } finally {
+      catalogRefreshInFlightRef.current = false;
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       // Expo Router keeps tab screens mounted. Re-fetch recents every time Home
       // regains focus so a playlist played on another screen appears here
       // immediately instead of waiting for a full app remount.
       void refreshRecentPlaylistsSilently();
+      void refreshCatalogSilently();
       void refreshTrendingSilently();
 
       const appStateSubscription = AppState.addEventListener('change', (state) => {
         if (state === 'active') {
           void refreshRecentPlaylistsSilently();
+          void refreshCatalogSilently();
           void refreshTrendingSilently();
         }
       });
 
       const interval = setInterval(() => {
+        void refreshCatalogSilently(true);
         void refreshTrendingSilently(true);
       }, TRENDING_SCREEN_REFRESH_MS);
 
@@ -197,7 +254,7 @@ export default function HomeScreen() {
         clearInterval(interval);
         appStateSubscription.remove();
       };
-    }, [refreshRecentPlaylistsSilently, refreshTrendingSilently])
+    }, [refreshCatalogSilently, refreshRecentPlaylistsSilently, refreshTrendingSilently])
   );
 
   const openPlaylist = useCallback((playlist: Playlist) => {
@@ -261,14 +318,38 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View pointerEvents="none" style={styles.ambientBackdrop}>
-        <View style={[styles.glowOrb, styles.glowSaffron]} />
-        <View style={[styles.glowOrb, styles.glowEmerald]} />
+        <View
+          style={[
+            styles.glowOrb,
+            styles.glowSaffron,
+            // Gate on paletteSong, not currentSong: in battery saver the hook
+            // receives null and must keep the saffron/emerald tokens instead
+            // of tinting with the neutral default palette.
+            paletteSong
+              ? { backgroundColor: `rgba(${dominantRgb[0]}, ${dominantRgb[1]}, ${dominantRgb[2]}, 0.14)` }
+              : null,
+          ]}
+        />
+        <View
+          style={[
+            styles.glowOrb,
+            styles.glowEmerald,
+            paletteSong
+              ? { backgroundColor: `rgba(${secondaryRgb[0]}, ${secondaryRgb[1]}, ${secondaryRgb[2]}, 0.10)` }
+              : null,
+          ]}
+        />
       </View>
       <View style={styles.topBar}>
         <Text style={styles.topTitle}>Discover</Text>
       </View>
 
-      <ScrollView
+      <FlatList<MusicSection>
+        data={sections}
+        keyExtractor={(section, index) => String(section.id || section._id || `${section.name}-${index}`)}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -278,7 +359,16 @@ export default function HomeScreen() {
           />
         }
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
-      >
+        ListHeaderComponent={
+          <>
+            {!!latestPlaylists.length && (
+              <PlaylistRail
+                title="Latest Playlists"
+                data={latestPlaylists}
+                onPress={openPlaylist}
+              />
+            )}
+
             <View style={styles.quickGrid}>
               <Pressable
                 accessibilityRole="button"
@@ -312,13 +402,15 @@ export default function HomeScreen() {
               </Pressable>
             )}
 
-            {loading && !hasContent ? (
+            {loading && !hasContent && (
               <HomeSkeleton />
-            ) : (
+            )}
+
+            {!loading && (
               <>
                 {!!trendingAlbums.length && (
                   <AlbumRail
-                    title="Trending Albums"
+                    title="Latest Albums"
                     albums={trendingAlbums}
                     onPress={openAlbum}
                   />
@@ -328,9 +420,9 @@ export default function HomeScreen() {
                   <View style={styles.section}>
                     <View style={styles.topSongsHead}>
                       <View style={styles.sectionHeadCopy}>
-                        <Text style={styles.sectionTitle}>Trending in India</Text>
+                        <Text style={styles.sectionTitle}>Latest Songs</Text>
                         <Text numberOfLines={1} style={styles.sectionSubtitle}>
-                          Live chart · refreshed automatically ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
+                          Fresh from the India chart · refreshed automatically ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
                         </Text>
                       </View>
                       <View style={styles.chartActions}>
@@ -376,51 +468,55 @@ export default function HomeScreen() {
                       }}
                       renderItem={({ item: songs, index: columnIndex }) => (
                         <View style={[styles.chartColumn, { width: topColumnWidth }]}>
-                          {songs.map((song, localIndex) => (
-                            <Pressable
-                              key={String(song.id)}
-                              accessibilityRole="button"
-                              accessibilityLabel={
-                                String(currentSong?.id || '') === String(song.id || '') && isPlaying
-                                  ? `Pause ${song.name || 'song'}`
-                                  : `Play ${song.name || 'song'}`
-                              }
-                              onPress={() => {
-                                if (String(currentSong?.id || '') === String(song.id || '')) {
-                                  void togglePlayback();
-                                } else {
-                                  void playSong(song, trendingSongs);
+                          {songs.filter(Boolean).map((song, localIndex) => {
+                            const songId = String(song.id || song.songId || song.sourceId || '');
+                            const isCurrent = Boolean(currentSong?.id && String(currentSong.id) === songId);
+                            return (
+                              <Pressable
+                                key={songId || `chart-song-${columnIndex}-${localIndex}`}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                  isCurrent && isPlaying
+                                    ? `Pause ${song.name || song.title || 'song'}`
+                                    : `Play ${song.name || song.title || 'song'}`
                                 }
-                              }}
-                              style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
-                            >
-                              <View style={styles.chartArtworkWrap}>
-                                <TrackArtwork song={song} size={52} radius={10} />
-                                {String(currentSong?.id || '') === String(song.id || '') && (
-                                  <View style={styles.chartPlaybackOverlay}>
-                                    <Ionicons
-                                      name={isPlaying ? 'pause' : 'play'}
-                                      size={18}
-                                      color="#FFF"
-                                    />
-                                  </View>
-                                )}
-                              </View>
-                              <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
-                              <View style={styles.chartCopy}>
-                                <Text
-                                  numberOfLines={1}
-                                  style={[
-                                    styles.chartTitle,
-                                    String(currentSong?.id || '') === String(song.id || '') && styles.chartTitleActive,
-                                  ]}
-                                >
-                                  {song.name || song.title || 'Untitled Track'}
-                                </Text>
-                                <Text numberOfLines={1} style={styles.chartArtist}>{artistNames(song)}</Text>
-                              </View>
-                            </Pressable>
-                          ))}
+                                onPress={() => {
+                                  if (isCurrent) {
+                                    void togglePlayback();
+                                  } else {
+                                    void playSong(song, trendingSongs);
+                                  }
+                                }}
+                                style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
+                              >
+                                <View style={styles.chartArtworkWrap}>
+                                  <TrackArtwork song={song} size={52} radius={10} />
+                                  {isCurrent && (
+                                    <View style={styles.chartPlaybackOverlay}>
+                                      <Ionicons
+                                        name={isPlaying ? 'pause' : 'play'}
+                                        size={18}
+                                        color="#FFF"
+                                      />
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
+                                <View style={styles.chartCopy}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.chartTitle,
+                                      isCurrent && styles.chartTitleActive,
+                                    ]}
+                                  >
+                                    {song.name || song.title || 'Untitled Track'}
+                                  </Text>
+                                  <Text numberOfLines={1} style={styles.chartArtist}>{artistNames(song)}</Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
                         </View>
                       )}
                     />
@@ -443,44 +539,48 @@ export default function HomeScreen() {
                     onPress={openPlaylist}
                   />
                 )}
-
-                {sections.map((section) => (
-                  <PlaylistRail
-                    key={String(section.id || section._id || section.name)}
-                    title={section.name}
-                    data={section.playlists || []}
-                    onPress={openPlaylist}
-                  />
-                ))}
-
-                {!!mixes.length && (
-                  <View style={styles.section}>
-                    <SectionHeader title="Recommended for You" />
-                    <FlatList
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      data={mixes}
-                      keyExtractor={(item, index) => String(item._mixId || item.id || index)}
-                      initialNumToRender={RAIL_INITIAL_RENDER}
-                      maxToRenderPerBatch={RAIL_BATCH_SIZE}
-                      windowSize={RAIL_WINDOW_SIZE}
-                      contentContainerStyle={styles.rail}
-                      renderItem={({ item }) => (
-                        <PlaylistCard playlist={item} size={140} onPress={() => openMix(item)} />
-                      )}
-                    />
-                  </View>
-                )}
-
-                {!hasContent && !error && (
-                  <View style={styles.empty}>
-                    <Text style={styles.emptyTitle}>Nothing to show yet</Text>
-                    <Text style={styles.emptyBody}>Pull to refresh the Harmonia catalog.</Text>
-                  </View>
-                )}
               </>
             )}
-      </ScrollView>
+          </>
+        }
+        renderItem={({ item: section }) => (
+          <PlaylistRail
+            key={String(section.id || section._id || section.name)}
+            title={section.name}
+            data={section.playlists || []}
+            onPress={openPlaylist}
+          />
+        )}
+        ListFooterComponent={
+          <>
+            {!!mixes.length && (
+              <View style={styles.section}>
+                <SectionHeader title="Recommended for You" />
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={mixes}
+                  keyExtractor={(item, index) => String(item._mixId || item.id || index)}
+                  initialNumToRender={RAIL_INITIAL_RENDER}
+                  maxToRenderPerBatch={RAIL_BATCH_SIZE}
+                  windowSize={RAIL_WINDOW_SIZE}
+                  contentContainerStyle={styles.rail}
+                  renderItem={({ item }) => (
+                    <PlaylistCard playlist={item} size={140} onPress={() => openMix(item)} />
+                  )}
+                />
+              </View>
+            )}
+
+            {!hasContent && !error && !loading && (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>Nothing to show yet</Text>
+                <Text style={styles.emptyBody}>Pull to refresh the Harmonia catalog.</Text>
+              </View>
+            )}
+          </>
+        }
+      />
     </SafeAreaView>
   );
 }

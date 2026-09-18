@@ -78,15 +78,25 @@ export type Playlist = {
   name: string;
   title?: string;
   image?: HarmoniaImage[] | string;
+  images?: HarmoniaImage[] | string[];
+  collageImages?: string[];
   description?: string;
   songCount?: number;
   songIds?: string[];
   tracks?: Song[];
+  songs?: Song[];
   owner?: string;
   subtitle?: string;
   source?: string;
+  sourceType?: string;
+  catalogSource?: string;
   spotifyId?: string;
   sourceUrl?: string;
+  trackMap?: Record<string, string>;
+  genreId?: string;
+  genreName?: string;
+  sectionId?: string;
+  order?: number;
   spotifyImages?: { url: string; width?: number; height?: number }[];
   [key: string]: unknown;
 };
@@ -95,7 +105,11 @@ export type MusicSection = {
   id?: string;
   _id?: string;
   name: string;
+  genreId?: string;
+  genreName?: string;
+  order?: number;
   playlists: Playlist[];
+  [key: string]: unknown;
 };
 
 export type HarmoniaUser = {

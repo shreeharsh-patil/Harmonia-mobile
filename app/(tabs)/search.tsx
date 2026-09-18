@@ -16,14 +16,21 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+
 import { CatalogSearchSkeleton } from '@/src/components/CatalogSearchSkeleton';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { RECENT_SEARCHES_KEY } from '@/src/config';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
-import { BROWSE_CATALOGS, type BrowseCatalog } from '@/src/lib/browseCatalog';
+import {
+  BROWSE_CATALOGS,
+  browseCatalogCoverImages,
+  fetchBrowseCatalogCoverImages,
+  type BrowseCatalog,
+} from '@/src/lib/browseCatalog';
 import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
+import { getStaticHomeSections } from '@/src/lib/staticCatalog';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -49,12 +56,34 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
   const [retrySeq, setRetrySeq] = useState(0);
+  const [catalogCovers, setCatalogCovers] = useState<Record<string, string>>(() =>
+    browseCatalogCoverImages(getStaticHomeSections())
+  );
   const trimmed = query.trim();
 
   useEffect(() => {
     // Purge data created by older builds. Current searches are never stored.
     void AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
   }, []);
+
+  useEffect(() => {
+    if (trimmed) return;
+    let active = true;
+
+    // Keep Browse-all artwork in sync with the current catalog. This request
+    // uses the shared Home cache and never blocks the Search screen.
+    void fetchBrowseCatalogCoverImages()
+      .then((covers) => {
+        if (active) setCatalogCovers(covers);
+      })
+      .catch(() => {
+        // The checked-in category covers remain available offline.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [trimmed]);
 
   useEffect(() => {
     if (!trimmed) {
@@ -404,7 +433,7 @@ export default function SearchScreen() {
 
                 <View style={styles.browseArtworkWrap}>
                   <Image
-                    source={{ uri: category.coverImage }}
+                    source={{ uri: catalogCovers[category.id] || category.coverImage }}
                     style={styles.browseArtwork}
                     contentFit="cover"
                     cachePolicy="memory-disk"
