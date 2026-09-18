@@ -17,9 +17,12 @@ function shareMessage(title: string, subtitle?: string, url?: string) {
 export async function shareSong(song: Song) {
   const title = song.name || song.title || 'Song';
   const artist = artistNames(song);
+  // Keep the private Harmonia API origin out of native share messages. When a
+  // Spotify identity exists, share Spotify's public track URL; otherwise share
+  // only readable song metadata rather than leaking an internal search route.
   const url = song.spotifyId
     ? `https://open.spotify.com/track/${song.spotifyId}`
-    : searchUrl([title, artist].filter(Boolean).join(' '));
+    : undefined;
   await Share.share({ title, message: shareMessage(title, artist, url) });
 }
 
