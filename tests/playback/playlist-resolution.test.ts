@@ -230,16 +230,50 @@ test('Browse all uses current catalog artwork at an appropriate resolution', asy
 
   assert.equal(covers['new-releases'], 'https://cdn.test/fresh-640.jpg');
   assert.equal(covers.english, 'https://cdn.test/hits.jpg');
+  assert.equal(covers.charts, undefined);
   assert.equal(covers.gaming, undefined);
+});
+
+test('featured search categories use their own selected Spotify catalog covers', async () => {
+  const { browseCatalogCoverImages } = await import('../../src/lib/browseCatalog');
+  const covers = browseCatalogCoverImages([
+    {
+      id: 'hindi', name: 'Popular Hindi Playlists', playlists: [
+        { id: 'hindi-cover', name: 'Hot Hits Hindi', image: 'https://cdn.test/hindi-cover.jpg' },
+        { id: 'hindi-default', name: '90s Love Hits', image: 'https://cdn.test/hindi-default.jpg' },
+      ],
+    },
+    {
+      id: 'new', name: 'New & Trending', playlists: [
+        { id: 'new-default', name: 'Trending Bollywood', image: 'https://cdn.test/new-default.jpg' },
+        { id: 'new-cover', name: 'New Releases Hindi', image: 'https://cdn.test/new-cover.jpg' },
+      ],
+    },
+    {
+      id: 'pop', name: 'Pop Hits', playlists: [
+        { id: 'pop-default', name: 'All Things Pop', image: 'https://cdn.test/pop-default.jpg' },
+        { id: 'pop-cover', name: 'Pop Rising', image: 'https://cdn.test/pop-cover.jpg' },
+      ],
+    },
+  ] as any);
+
+  assert.equal(covers.hindi, 'https://cdn.test/hindi-cover.jpg');
+  assert.equal(covers['new-releases'], 'https://cdn.test/new-cover.jpg');
+  assert.equal(covers.pop, 'https://cdn.test/pop-cover.jpg');
 });
 
 test('every Search catalog has a current Spotify thumbnail fallback', async () => {
   const { BROWSE_CATALOGS } = await import('../../src/lib/browseCatalog');
 
-  assert.equal(BROWSE_CATALOGS.length, 30);
+  assert.equal(BROWSE_CATALOGS.length, 42);
+  assert.deepEqual(
+    BROWSE_CATALOGS.slice(0, 6).map((catalog) => catalog.name),
+    ['Hindi', 'English', 'New Releases', 'Punjabi', 'Summer', 'English Sad']
+  );
+  assert.ok(BROWSE_CATALOGS.every((catalog) => !/radio/i.test(catalog.name)));
   assert.ok(BROWSE_CATALOGS.every((catalog) =>
-    catalog.coverImage.startsWith('https://i.scdn.co/image/')
-  ));
+    new URL(catalog.coverImage).hostname.endsWith('scdn.co')
+ ));
 });
 
 test('fetchHomeSections returns all catalog sections from Top Hits to Japanese comics', async () => {

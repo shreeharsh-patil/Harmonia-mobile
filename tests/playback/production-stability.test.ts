@@ -147,12 +147,12 @@ test('radio suggestions fall back to local catalog and direct JioSaavn when back
   assert.match(source, /diversifySuggestions\(seed, candidates/);
 });
 
-test('search UI keeps full Harmonia discovery and opens dedicated browse catalogs', async () => {
+test('search UI keeps full Harmonia discovery and opens dedicated catalog cards', async () => {
   const source = await readFile('app/(tabs)/search.tsx', 'utf8');
   const catalogs = await readFile('src/lib/browseCatalog.ts', 'utf8');
   assert.ok(source.includes('placeholder="What do you want to listen to?"'));
   assert.match(source, /BROWSE_CATALOGS/);
-  assert.match(source, />Browse all</);
+  assert.doesNotMatch(source, />Browse all</);
   assert.match(source, /pathname: '\/catalog\/\[id\]'/);
   assert.doesNotMatch(catalogs, /name: 'Live Radio'/);
   assert.doesNotMatch(catalogs, /id: 'radio'/);

@@ -9,6 +9,8 @@ import {
   fetchDirectJioSaavnLaunchData,
   fetchDirectJioSaavnPlaylist,
   fetchDirectJioSaavnTracks,
+  fetchDirectJioSaavnTrendingAlbums,
+  newestAlbumsFirst,
   searchDirectJioSaavn,
   searchDirectJioSaavnAlbums,
   searchDirectJioSaavnArtists,
@@ -106,16 +108,25 @@ function directAlbumToEntity(album: {
   id: string;
   title: string;
   year: string | null;
+  releaseDate?: string | null;
   image: string | null;
-  artists: string[];
+  artists: string[] | string;
 }): HarmoniaAlbum {
+  const artistsList = Array.isArray(album.artists)
+    ? album.artists
+    : String(album.artists || '')
+        .split(',')
+        .map((a) => a.trim())
+        .filter(Boolean);
+
   return {
     id: album.id,
     name: album.title,
     title: album.title,
     year: album.year || undefined,
+    releaseDate: album.releaseDate || undefined,
     image: album.image ? [{ quality: '500x500', url: album.image }] : [],
-    primaryArtists: album.artists.join(', '),
+    primaryArtists: artistsList.join(', '),
     type: 'album',
   };
 }
@@ -819,7 +830,14 @@ async function fetchDirectTrendingSongs(limit = 30): Promise<Song[]> {
 }
 
 async function fetchTrendingAlbums(limit = 20): Promise<HarmoniaAlbum[]> {
-  const query = 'Latest Hindi Songs';
+  try {
+    const directTrending = await fetchDirectJioSaavnTrendingAlbums({ limit });
+    if (directTrending.length) {
+      return directTrending.map(directAlbumToEntity);
+    }
+  } catch {}
+
+  const query = 'Trending Albums';
 
   if (hasHarmoniaApi()) {
     try {
@@ -828,14 +846,14 @@ async function fetchTrendingAlbums(limit = 20): Promise<HarmoniaAlbum[]> {
         { timeoutMs: 8_000 }
       );
       const albums = payload.data?.albums?.results || [];
-      if (albums.length) return albums.slice(0, limit);
+      if (albums.length) return newestAlbumsFirst(albums).slice(0, limit);
     } catch {
       // Fall back to the direct provider lookup below.
     }
   }
 
   const directAlbums = await searchDirectJioSaavnAlbums(query, { limit });
-  return directAlbums.map(directAlbumToEntity);
+  return newestAlbumsFirst(directAlbums.map(directAlbumToEntity)).slice(0, limit);
 }
 
 async function loadTrendingHomeContent(): Promise<TrendingHomeContent> {

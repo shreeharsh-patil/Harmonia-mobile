@@ -333,25 +333,28 @@ export default function PlaylistScreen() {
     );
   }
 
-  const isSpotifyPlaylist =
-    playlist.source === 'spotify' ||
-    (playlist as any).sourceType === 'spotify' ||
-    Boolean((playlist as any).spotifyId) ||
-    /open\.spotify\.com\/playlist\//i.test(playlist.sourceUrl || (playlist as any).source_url || '') ||
-    Boolean(playlist.spotifyImages?.length);
-
-  const sourceBadgeName = owned
-    ? 'Harmonia'
-    : isSpotifyPlaylist
-      ? 'Spotify'
-      : (playlist.source === 'jiosaavn' || (playlist as any).provider === 'jiosaavn' ? 'JioSaavn' : 'Spotify');
-
-  const owner =
+  const rawOwner =
     typeof playlist.owner === 'string' && playlist.owner
       ? playlist.owner
-      : String((playlist as any).ownerName || (playlist as any).userName || (playlist as any).subtitle || (owned ? 'You' : (isSpotifyPlaylist ? 'Spotify' : 'Harmonia')));
+      : String(
+          (playlist as any).ownerName ||
+            (playlist as any).userName ||
+            (playlist as any).subtitle ||
+            (owned ? 'You' : 'Harmonia')
+        );
+
+  const owner =
+    !rawOwner || rawOwner.trim().toLowerCase() === 'spotify'
+      ? (owned ? 'You' : 'Harmonia')
+      : rawOwner;
+
   const count = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0, songs.length);
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
+
+  const cleanDescription = (playlist.description || '')
+    .replace(/\bon Spotify\b/gi, 'on Harmonia')
+    .replace(/\bSpotify\b/gi, 'Harmonia')
+    .trim();
 
   // Web-style scroll choreography: the hero column drifts up and fades while
   // the artwork shrinks, and the sticky title bar fades in past the artwork.
@@ -456,10 +459,6 @@ export default function PlaylistScreen() {
                 ) : (
                   <Pressable
                     onPress={() => {
-                      if (!token) {
-                        router.push('/login');
-                        return;
-                      }
                       void togglePlaylistLike(playlist);
                     }}
                     style={styles.headerAction}
@@ -521,18 +520,12 @@ export default function PlaylistScreen() {
                 ) : (
                   <>
                     <Text style={styles.title}>{playlistTitle(playlist)}</Text>
-                    {!!playlist.description && (
+                    {!!cleanDescription && (
                       <Text style={styles.description} numberOfLines={2}>
-                        {playlist.description}
+                        {cleanDescription}
                       </Text>
                     )}
                     <View style={styles.metaRow}>
-                      <View style={[styles.sourceBadge, isSpotifyPlaylist && styles.spotifySourceBadge]}>
-                        <Text style={[styles.sourceBadgeText, isSpotifyPlaylist && styles.spotifySourceBadgeText]}>
-                          {sourceBadgeName}
-                        </Text>
-                      </View>
-                      <Text style={styles.metaDot}>•</Text>
                       <Text style={styles.metaText}>{owner}</Text>
                       <Text style={styles.metaDot}>•</Text>
                       <Text style={styles.metaText}>{count} {count === 1 ? 'song' : 'songs'}</Text>
@@ -578,10 +571,6 @@ export default function PlaylistScreen() {
                 {!owned && (
                   <Pressable
                     onPress={() => {
-                      if (!token) {
-                        router.push('/login');
-                        return;
-                      }
                       void togglePlaylistLike(playlist);
                     }}
                     style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
@@ -783,25 +772,6 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 2,
     width: '100%',
-  },
-  sourceBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  spotifySourceBadge: {
-    backgroundColor: '#1ED760',
-  },
-  sourceBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: colors.textStrong,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  spotifySourceBadgeText: {
-    color: '#000000',
   },
   metaDot: { color: colors.textFaint, fontSize: 11 },
   metaText: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },

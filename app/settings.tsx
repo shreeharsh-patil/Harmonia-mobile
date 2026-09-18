@@ -44,7 +44,7 @@ const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const { user, token, signOut } = useAuth();
+  const { user, token } = useAuth();
   const {
     networkAwareQuality,
     wifiQuality,
@@ -66,13 +66,11 @@ export default function SettingsScreen() {
     playbackRate,
     streamQuality,
     sleepTimer,
-    radioEnabled,
     adaptivePipelineEnabled,
     adaptivePipelineStatus,
     setPlaybackRate,
     setStreamQuality,
     setSleepTimer,
-    toggleRadio,
     toggleAdaptivePipeline,
   } = usePlayer();
   const { history, clearHistory } = usePlaybackHistory();
@@ -139,24 +137,16 @@ export default function SettingsScreen() {
     }
   };
 
-  const signOutNow = async () => {
-    try {
-      await signOut();
-      router.replace('/(tabs)');
-    } catch {
-      Alert.alert(
-        'Sign out incomplete',
-        'Harmonia could not remove the saved session from this phone. Please try again.'
-      );
-    }
-  };
-
   const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
+        <Pressable onPress={goBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
         </Pressable>
         <Text style={styles.title}>Settings</Text>
@@ -188,63 +178,14 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={19} color={colors.textFaint} />
           </Pressable>
         ) : (
-          <Pressable
-            onPress={() => router.push('/login')}
-            style={({ pressed }) => [styles.profileHero, pressed && styles.pressed]}
-          >
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Ionicons name="person-outline" size={24} color={colors.textFaint} />
-            </View>
+          <View style={styles.profileHero}>
+            <Image source={require('../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
             <View style={styles.profileHeroCopy}>
-              <Text style={styles.userName}>Guest User</Text>
-              <Text style={styles.userEmail}>Sign in to sync library and playlists</Text>
+              <Text style={styles.userName}>Listen Harmonia</Text>
+              <Text style={styles.userEmail}>Library and playlists are stored locally</Text>
             </View>
-            <View style={styles.signInPill}>
-              <Text style={styles.signInPillText}>Sign in</Text>
-            </View>
-          </Pressable>
+          </View>
         )}
-
-        <Section title="ACCOUNT">
-          {token && user ? (
-            <>
-              <ActionRow
-                icon="create-outline"
-                iconBg="rgba(59,130,246,0.15)"
-                iconColor="#60A5FA"
-                title="Edit profile"
-                detail="Update display name and avatar photo"
-                onPress={() => router.push('/edit-profile')}
-              />
-              <ActionRow
-                icon="musical-notes-outline"
-                iconBg="rgba(16,185,129,0.15)"
-                iconColor="#34D399"
-                title="Import Spotify playlist"
-                detail="Match a public Spotify playlist to Harmonia"
-                onPress={() => router.push('/import-playlist')}
-              />
-              <ActionRow
-                icon="log-out-outline"
-                iconBg="rgba(239,68,68,0.15)"
-                iconColor="#F87171"
-                title="Sign out"
-                detail="Remove this session from this device"
-                destructive
-                onPress={() => void signOutNow()}
-              />
-            </>
-          ) : (
-            <ActionRow
-              icon="log-in-outline"
-              iconBg="rgba(16,185,129,0.15)"
-              iconColor="#34D399"
-              title="Sign in"
-              detail="Sync your Harmonia account"
-              onPress={() => router.push('/login')}
-            />
-          )}
-        </Section>
 
         <Section title="PLAYBACK & QUALITY">
           <SettingLabel title="Audio quality" detail="Used when Harmonia resolves the next playable stream." />
@@ -266,15 +207,6 @@ export default function SettingsScreen() {
             ))}
           </ChoiceRow>
 
-          <ToggleRow
-            icon="radio-outline"
-            iconBg="rgba(16,185,129,0.15)"
-            iconColor="#34D399"
-            title="Harmonia Radio"
-            detail="Continue with related songs when the queue ends"
-            enabled={radioEnabled}
-            onPress={toggleRadio}
-          />
           <ToggleRow
             icon="flash-outline"
             iconBg="rgba(245,158,11,0.15)"
@@ -619,7 +551,7 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.textStrong, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   headerSpacer: { width: 42 },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  content: { paddingHorizontal: 16, paddingBottom: 128 },
   profileHero: {
     flexDirection: 'row',
     alignItems: 'center',

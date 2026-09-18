@@ -169,10 +169,6 @@ export default function ArtistScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    if (!token) {
-                      router.push('/login');
-                      return;
-                    }
                     void toggleArtistLike(artist);
                   }}
                   style={styles.headerAction}

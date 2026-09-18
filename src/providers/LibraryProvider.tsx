@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 import {
   createContext,
@@ -45,6 +46,7 @@ type LibraryContextValue = {
 };
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
+const GUEST_LIBRARY_KEY = 'harmonia.mobile.guest-library.v1';
 
 export function LibraryProvider({ children }: PropsWithChildren) {
   const { token } = useAuth();
@@ -59,6 +61,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const loadGenerationRef = useRef(0);
   const mutationKeysRef = useRef(new Set<string>());
   const tokenRef = useRef(token);
+  const guestLibraryHydratedRef = useRef(false);
 
   useEffect(() => {
     tokenRef.current = token;
@@ -68,14 +71,24 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     const generation = ++loadGenerationRef.current;
 
     if (!token) {
-      setPlaylists([]);
-      setLikedSongs([]);
-      setLikedPlaylists([]);
-      setLikedAlbums([]);
-      setLikedArtists([]);
-      setLoading(false);
-      setRefreshing(false);
-      setError(null);
+      try {
+        const saved = await AsyncStorage.getItem(GUEST_LIBRARY_KEY);
+        const guestLibrary = saved ? JSON.parse(saved) : null;
+        if (generation !== loadGenerationRef.current) return;
+        setPlaylists(Array.isArray(guestLibrary?.playlists) ? guestLibrary.playlists : []);
+        setLikedSongs(Array.isArray(guestLibrary?.likedSongs) ? guestLibrary.likedSongs.map((song: any) => normalizeSong(song)) : []);
+        setLikedPlaylists(Array.isArray(guestLibrary?.likedPlaylists) ? guestLibrary.likedPlaylists : []);
+        setLikedAlbums(Array.isArray(guestLibrary?.likedAlbums) ? guestLibrary.likedAlbums : []);
+        setLikedArtists(Array.isArray(guestLibrary?.likedArtists) ? guestLibrary.likedArtists : []);
+      } catch {
+        if (generation === loadGenerationRef.current) setError('Could not load your on-device library');
+      } finally {
+        if (generation === loadGenerationRef.current) {
+          guestLibraryHydratedRef.current = true;
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
       return;
     }
 
@@ -117,12 +130,23 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     };
   }, [load]);
 
+  useEffect(() => {
+    if (token || !guestLibraryHydratedRef.current) return;
+    const snapshot = {
+      playlists,
+      likedSongs: likedSongs.map((song) => persistenceSafeSong(song)),
+      likedPlaylists,
+      likedAlbums,
+      likedArtists,
+    };
+    AsyncStorage.setItem(GUEST_LIBRARY_KEY, JSON.stringify(snapshot)).catch(() => {});
+  }, [likedAlbums, likedArtists, likedPlaylists, likedSongs, playlists, token]);
+
   const likedIds = useMemo(() => new Set(likedSongs.map((song) => song.id)), [likedSongs]);
 
   const isLiked = useCallback((songId: string) => likedIds.has(String(songId)), [likedIds]);
 
   const toggleLike = useCallback(async (song: Song) => {
-    if (!token) return null;
     const normalized = normalizeSong(song as any);
     if (!normalized.id) return null;
     const accountSafeSong = persistenceSafeSong(normalized);
@@ -135,6 +159,12 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       ? current.filter((item) => item.id !== normalized.id)
       : [normalized, ...current.filter((item) => item.id !== normalized.id)]
     );
+
+    if (!token) {
+      Haptics.selectionAsync().catch(() => {});
+      mutationKeysRef.current.delete(mutationKey);
+      return !previouslyLiked;
+    }
 
     try {
       const result = await toggleLikedSong(token, accountSafeSong);
@@ -176,7 +206,6 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const isArtistLiked = useCallback((id: string) => likedArtistIds.has(String(id)), [likedArtistIds]);
 
   const togglePlaylistLike = useCallback(async (playlist: Playlist) => {
-    if (!token) return null;
     const id = String(playlist.id || playlist._id || '');
     if (!id) return null;
     const mutationKey = `${token}:playlist:${id}`;
@@ -189,6 +218,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       ? current.filter((item) => String(item.id || item._id || '') !== id)
       : [normalized, ...current.filter((item) => String(item.id || item._id || '') !== id)]
     );
+    if (!token) {
+      Haptics.selectionAsync().catch(() => {});
+      mutationKeysRef.current.delete(mutationKey);
+      return !wasLiked;
+    }
     try {
       const result = await toggleLikedEntity(token, 'playlists', normalized);
       if (tokenRef.current !== token) return null;
@@ -212,7 +246,6 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   }, [likedPlaylistIds, token]);
 
   const toggleAlbumLike = useCallback(async (album: HarmoniaAlbum) => {
-    if (!token) return null;
     const id = String(album.id || '');
     if (!id) return null;
     const mutationKey = `${token}:album:${id}`;
@@ -225,6 +258,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       ? current.filter((item) => String(item.id || '') !== id)
       : [normalized, ...current.filter((item) => String(item.id || '') !== id)]
     );
+    if (!token) {
+      Haptics.selectionAsync().catch(() => {});
+      mutationKeysRef.current.delete(mutationKey);
+      return !wasLiked;
+    }
     try {
       const result = await toggleLikedEntity(token, 'albums', normalized);
       if (tokenRef.current !== token) return null;
@@ -248,7 +286,6 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   }, [likedAlbumIds, token]);
 
   const toggleArtistLike = useCallback(async (artist: HarmoniaArtistEntity) => {
-    if (!token) return null;
     const id = String(artist.id || '');
     if (!id) return null;
     const mutationKey = `${token}:artist:${id}`;
@@ -261,6 +298,11 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       ? current.filter((item) => String(item.id || '') !== id)
       : [normalized, ...current.filter((item) => String(item.id || '') !== id)]
     );
+    if (!token) {
+      Haptics.selectionAsync().catch(() => {});
+      mutationKeysRef.current.delete(mutationKey);
+      return !wasLiked;
+    }
     try {
       const result = await toggleLikedEntity(token, 'artists', normalized);
       if (tokenRef.current !== token) return null;
@@ -284,13 +326,26 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   }, [likedArtistIds, token]);
 
   const createPlaylist = useCallback(async (name: string) => {
-    if (!token || !name.trim()) return null;
+    if (!name.trim()) return null;
     const cleanName = name.trim();
     const mutationKey = `${token}:create-playlist:${cleanName.toLowerCase()}`;
     if (mutationKeysRef.current.has(mutationKey)) return null;
     mutationKeysRef.current.add(mutationKey);
 
     try {
+      if (!token) {
+        const playlist: Playlist = {
+          id: `local-${Date.now()}`,
+          name: cleanName,
+          description: 'On this device',
+          songCount: 0,
+          songIds: [],
+          source: 'local',
+        };
+        setPlaylists((current) => [playlist, ...current]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        return playlist;
+      }
       const playlist = await createPlaylistApi(token, cleanName);
       if (tokenRef.current !== token) return null;
       setPlaylists((current) => [playlist, ...current]);
@@ -306,12 +361,21 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   }, [token]);
 
   const addToPlaylist = useCallback(async (playlistId: string, songId: string) => {
-    if (!token) return false;
     const mutationKey = `${token}:add-to-playlist:${playlistId}:${songId}`;
     if (mutationKeysRef.current.has(mutationKey)) return false;
     mutationKeysRef.current.add(mutationKey);
 
     try {
+      if (!token) {
+        setPlaylists((current) => current.map((playlist) => {
+          const id = String(playlist._id || playlist.id || '');
+          if (id !== playlistId) return playlist;
+          const songIds = [...new Set([...(playlist.songIds || []), songId])];
+          return { ...playlist, songIds, songCount: songIds.length };
+        }));
+        Haptics.selectionAsync().catch(() => {});
+        return true;
+      }
       await addSongToPlaylist(token, playlistId, songId);
       if (tokenRef.current !== token) return false;
       setPlaylists((current) => current.map((playlist) => {
@@ -332,7 +396,17 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   }, [token]);
 
   const addSongsToPlaylist = useCallback(async (playlistId: string, songIds: string[]) => {
-    if (!token || !songIds.length) return 0;
+    if (!songIds.length) return 0;
+    if (!token) {
+      setPlaylists((current) => current.map((playlist) => {
+        const id = String(playlist._id || playlist.id || '');
+        if (id !== playlistId) return playlist;
+        const updated = [...new Set([...(playlist.songIds || []), ...songIds])];
+        return { ...playlist, songIds: updated, songCount: updated.length };
+      }));
+      Haptics.selectionAsync().catch(() => {});
+      return songIds.length;
+    }
     let added = 0;
     for (const songId of songIds) {
       try {

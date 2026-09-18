@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
@@ -41,22 +41,7 @@ export default function ProfileScreen() {
   }
 
   if (!token || !user) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={[styles.guest, { paddingBottom: contentBottomInset }]}>
-          <Text style={styles.kicker}>HARMONIA ACCOUNT</Text>
-          <Text style={styles.guestTitle}>Keep your music in sync.</Text>
-          <Text style={styles.body}>One account keeps your library, liked songs, and playlists available across Harmonia.</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/login')}
-            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
-          >
-            <Text style={styles.primaryText}>Sign in</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
+    return <Redirect href="/(tabs)/preferences" />;
   }
 
   const initial = (user.name || user.email || 'H').trim().charAt(0).toUpperCase();
@@ -98,7 +83,7 @@ export default function ProfileScreen() {
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Profile</Text>
           <Pressable
-            onPress={() => router.push('/settings')}
+            onPress={() => router.push('/(tabs)/preferences')}
             style={styles.settingsButton}
             accessibilityLabel="Settings"
           >
@@ -110,9 +95,7 @@ export default function ProfileScreen() {
           {user.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.initial}>{initial}</Text>
-            </View>
+            <Image source={require('../../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
           )}
           <View style={styles.identityCopy}>
             <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
@@ -194,7 +177,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 16, paddingTop: 0 },
   pageHeader: {
     height: 60,

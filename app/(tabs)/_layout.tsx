@@ -108,6 +108,7 @@ export default function TabsLayout() {
             ),
           }}
         />
+        <Tabs.Screen name="preferences" options={{ href: null, title: 'Settings' }} />
         <Tabs.Screen name="catalog" options={{ href: null }} />
         <Tabs.Screen name="playlist/[id]" options={{ href: null }} />
         <Tabs.Screen name="album/[id]" options={{ href: null }} />

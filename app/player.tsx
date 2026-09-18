@@ -118,7 +118,6 @@ export default function PlayerScreen() {
     sleepTimer,
     repeatMode,
     shuffleEnabled,
-    radioEnabled,
     togglePlayback,
     previous,
     next,
@@ -134,7 +133,6 @@ export default function PlayerScreen() {
     setSleepTimer,
     toggleRepeat,
     toggleShuffle,
-    toggleRadio,
   } = usePlayer();
   const { history } = usePlaybackHistory();
   const { position, duration, sleepRemaining } = usePlaybackProgress();
@@ -268,10 +266,6 @@ export default function PlayerScreen() {
   };
 
   const handleLike = () => {
-    if (!token) {
-      router.push('/login');
-      return;
-    }
     void toggleLike(currentSong);
   };
 
@@ -656,26 +650,6 @@ export default function PlayerScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
-
-              <View style={styles.featureRow}>
-                <View style={styles.featureCopy}>
-                  <Text style={styles.toolLabel}>HARMONIA RADIO</Text>
-                  <Text style={styles.featureTitle}>Keep the music going</Text>
-                  <Text style={styles.featureDetail}>Automatically add related tracks when your queue reaches the end.</Text>
-                </View>
-                <Pressable
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    toggleRadio();
-                  }}
-                  style={[styles.featureButton, radioEnabled && styles.featureButtonActive]}
-                  accessibilityLabel={radioEnabled ? 'Turn Harmonia Radio off' : 'Turn Harmonia Radio on'}
-                >
-                  <Text style={[styles.featureButtonText, radioEnabled && styles.featureButtonTextActive]}>
-                    {radioEnabled ? 'On' : 'Off'}
-                  </Text>
-                </Pressable>
-              </View>
 
               <View style={styles.diagnosticsDivider} />
               <Pressable

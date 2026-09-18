@@ -955,10 +955,66 @@ export type DirectSaavnPlaylistSummary = {
   explicit: boolean;
 };
 
+export type DirectSaavnAlbumSummary = {
+  id: string;
+  title: string;
+  year: string | null;
+  releaseDate?: string | null;
+  image: string | null;
+  artists: string[];
+  songCount?: number;
+};
+
 export type DirectSaavnLaunchData = {
   topPlaylists: DirectSaavnPlaylistSummary[];
   charts: DirectSaavnPlaylistSummary[];
+  newAlbums: DirectSaavnAlbumSummary[];
+  trendingAlbums: DirectSaavnAlbumSummary[];
 };
+
+function parseAlbumFromLaunchItem(raw: any): DirectSaavnAlbumSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const isAlbum = raw.type === 'album';
+  const isSongWithAlbum = raw.type === 'song' && raw.more_info?.album_id;
+  if (!isAlbum && !isSongWithAlbum) return null;
+
+  const id = String(isAlbum ? (raw.id || raw.albumid || '') : (raw.more_info?.album_id || '')).trim();
+  const title = decodeHtml(isAlbum ? (raw.title || raw.name || '') : (raw.more_info?.album || raw.title || ''));
+  if (!id || !title) return null;
+
+  const releaseDate = String(raw.more_info?.release_date || raw.release_date || raw.date || '').trim() || null;
+  const year = raw.year ? String(raw.year).trim() : (releaseDate ? releaseDate.slice(0, 4) : null);
+  const songCount = Number(raw.more_info?.song_count || raw.song_count || 0) || (isSongWithAlbum ? 1 : 0);
+  const image = providerImage(raw.image);
+  const artists = rawArtists(raw);
+
+  return {
+    id,
+    title,
+    year,
+    releaseDate,
+    image,
+    artists,
+    songCount,
+  };
+}
+
+export function albumReleaseTime(album: { year?: string | number | null; releaseDate?: string | null }) {
+  const releaseDate = album?.releaseDate;
+  if (releaseDate) {
+    const timestamp = Date.parse(releaseDate);
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  const yearMatch = String(album?.year || releaseDate || '').match(/(?:19|20)\d{2}/);
+  return yearMatch ? Date.UTC(Number(yearMatch[0]), 0, 1) : 0;
+}
+
+export function newestAlbumsFirst<T extends { year?: string | number | null; releaseDate?: string | null }>(albums: T[]): T[] {
+  return albums
+    .map((album, index) => ({ album, index, releaseTime: albumReleaseTime(album) }))
+    .sort((a, b) => b.releaseTime - a.releaseTime || a.index - b.index)
+    .map(({ album }) => album);
+}
 
 export async function fetchDirectJioSaavnLaunchData({
   fetchImpl = fetch,
@@ -979,7 +1035,7 @@ export async function fetchDirectJioSaavnLaunchData({
     }, { fetchImpl, signal, timeoutMs });
 
     if (!payload || typeof payload !== 'object') {
-      return { topPlaylists: [], charts: [] };
+      return { topPlaylists: [], charts: [], newAlbums: [], trendingAlbums: [] };
     }
 
     const parsePlaylist = (raw: any): DirectSaavnPlaylistSummary | null => {
@@ -1005,10 +1061,84 @@ export async function fetchDirectJioSaavnLaunchData({
       .map(parsePlaylist)
       .filter(Boolean) as DirectSaavnPlaylistSummary[];
 
-    return { topPlaylists, charts };
+    const newAlbums = (Array.isArray(payload.new_albums) ? payload.new_albums : [])
+      .map(parseAlbumFromLaunchItem)
+      .filter(Boolean) as DirectSaavnAlbumSummary[];
+
+    const trendingAlbums = (Array.isArray(payload.new_trending) ? payload.new_trending : [])
+      .map(parseAlbumFromLaunchItem)
+      .filter(Boolean) as DirectSaavnAlbumSummary[];
+
+    return { topPlaylists, charts, newAlbums, trendingAlbums };
   } catch (error: any) {
     if (signal?.aborted || error?.name === 'AbortError') throw error;
-    return { topPlaylists: [], charts: [] };
+    return { topPlaylists: [], charts: [], newAlbums: [], trendingAlbums: [] };
   }
+}
+
+export async function fetchDirectJioSaavnTrending({
+  fetchImpl = fetch,
+  signal,
+  timeoutMs = 8000,
+}: {
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+} = {}): Promise<DirectSaavnAlbumSummary[]> {
+  try {
+    const payload = await requestJson({
+      __call: 'content.getTrending',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'web6dot0',
+    }, { fetchImpl, signal, timeoutMs });
+
+    const rawList = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : []);
+    return rawList
+      .map(parseAlbumFromLaunchItem)
+      .filter(Boolean) as DirectSaavnAlbumSummary[];
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return [];
+  }
+}
+
+export async function fetchDirectJioSaavnTrendingAlbums({
+  fetchImpl = fetch,
+  signal,
+  timeoutMs = 8000,
+  limit = 20,
+}: {
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  limit?: number;
+} = {}): Promise<DirectSaavnAlbumSummary[]> {
+  const [launchResult, trendingResult] = await Promise.allSettled([
+    fetchDirectJioSaavnLaunchData({ fetchImpl, signal, timeoutMs }),
+    fetchDirectJioSaavnTrending({ fetchImpl, signal, timeoutMs }),
+  ]);
+
+  const candidates: DirectSaavnAlbumSummary[] = [
+    ...(launchResult.status === 'fulfilled' ? (launchResult.value.newAlbums || []) : []),
+    ...(launchResult.status === 'fulfilled' ? (launchResult.value.trendingAlbums || []) : []),
+    ...(trendingResult.status === 'fulfilled' ? trendingResult.value : []),
+  ];
+
+  const seenIds = new Set<string>();
+  const seenTitles = new Set<string>();
+  const unique: DirectSaavnAlbumSummary[] = [];
+
+  for (const item of candidates) {
+    const id = String(item.id).trim();
+    const titleKey = item.title.toLowerCase().trim();
+    if (!id || seenIds.has(id) || (titleKey && seenTitles.has(titleKey))) continue;
+    seenIds.add(id);
+    if (titleKey) seenTitles.add(titleKey);
+    unique.push(item);
+  }
+
+  return newestAlbumsFirst(unique).slice(0, limit);
 }
 

@@ -40,6 +40,9 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+// Harmonia mobile is intentionally guest-first. The provider remains in place
+// for shared app interfaces, but does not restore or contact account services.
+const AUTHENTICATION_ENABLED = false;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [token, setToken] = useState<string | null>(null);
@@ -163,6 +166,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let active = true;
+    if (!AUTHENTICATION_ENABLED) {
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
     const startupGeneration = sessionGenerationRef.current;
     const subscription = Linking.addEventListener('url', ({ url }) => {
       void processDeepLink(url);

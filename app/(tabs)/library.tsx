@@ -20,6 +20,7 @@ import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import { LibrarySkeleton } from '@/src/components/LibrarySkeleton';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
+import { playlistFreshness } from '@/src/lib/homeSections';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -79,10 +80,10 @@ export default function LibraryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (token) void refresh();
+      void refresh();
 
       const sub = AppState.addEventListener('change', (state) => {
-        if (state === 'active' && token) {
+        if (state === 'active') {
           void refresh();
         }
       });
@@ -101,10 +102,6 @@ export default function LibraryScreen() {
   };
 
   const submitPlaylist = async () => {
-    if (!token) {
-      router.push('/login');
-      return;
-    }
     if (!newPlaylist.trim() || creating) return;
     setCreating(true);
     try {
@@ -132,6 +129,8 @@ export default function LibraryScreen() {
       ? merged.filter((playlist) => String(playlist.name || '').toLowerCase().includes(normalizedQuery))
       : merged;
 
+    const sorted = [...filtered].sort((a, b) => playlistFreshness(b) - playlistFreshness(a));
+
     const likedCard = {
       id: 'liked-songs',
       _id: 'liked-songs',
@@ -140,7 +139,7 @@ export default function LibraryScreen() {
       songCount: likedSongs.length,
     } as Playlist;
 
-    return [likedCard, ...filtered];
+    return [likedCard, ...sorted];
   }, [likedPlaylists, likedSongs.length, normalizedQuery, playlists]);
 
   const filteredAlbums = useMemo(
@@ -158,16 +157,6 @@ export default function LibraryScreen() {
   );
 
   const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
-
-  const accountGate = (
-    <View style={[styles.accountGate, { paddingBottom: contentBottomInset }]}>
-      <Text style={styles.gateTitle}>Your library, everywhere.</Text>
-      <Text style={styles.gateBody}>Sign in to keep your liked songs, playlists, saved albums, and followed artists in sync.</Text>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/login')} style={styles.signIn}>
-        <Text style={styles.signInText}>Sign in</Text>
-      </Pressable>
-    </View>
-  );
 
   const openPlaylist = (playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
@@ -190,14 +179,14 @@ export default function LibraryScreen() {
         <Pressable onPress={() => openPlaylist(item)} style={({ pressed }) => [styles.listRow, pressed && styles.pressed]}>
           {liked ? (
             <View style={styles.likedListArtwork}>
-              <Ionicons name="heart" size={25} color="#FFF" />
+              <Ionicons name="heart" size={25} color="#FF3155" />
             </View>
           ) : (
-            <PlaylistArtwork playlist={item} size={62} radius={2} />
+            <PlaylistArtwork playlist={item} size={62} radius={12} />
           )}
           <View style={styles.listCopy}>
             <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
-            <Text numberOfLines={1} style={styles.itemMeta}>{liked ? 'Playlist' : `${count} ${count === 1 ? 'song' : 'songs'}`}</Text>
+            <Text numberOfLines={1} style={styles.itemMeta}>{liked ? `Playlist · ${likedSongs.length} ${likedSongs.length === 1 ? 'song' : 'songs'}` : `${count} ${count === 1 ? 'song' : 'songs'}`}</Text>
           </View>
         </Pressable>
       );
@@ -210,10 +199,10 @@ export default function LibraryScreen() {
       >
         {liked ? (
           <View style={[styles.likedArtwork, { width: gridArtworkSize, height: gridArtworkSize }]}>
-            <Ionicons name="heart" size={68} color="#FFF" />
+            <Ionicons name="heart" size={68} color="#FF3155" />
           </View>
         ) : (
-          <PlaylistArtwork playlist={item} size={gridArtworkSize} radius={0} />
+          <PlaylistArtwork playlist={item} size={gridArtworkSize} radius={12} />
         )}
         <Text numberOfLines={1} style={styles.itemTitle}>{item.name}</Text>
         <Text numberOfLines={1} style={styles.itemMeta}>
@@ -235,7 +224,7 @@ export default function LibraryScreen() {
         style={({ pressed }) => [styles.gridCard, { width: gridArtworkSize }, pressed && styles.pressed]}
       >
         {cover ? (
-          <Image source={{ uri: cover }} style={{ width: gridArtworkSize, height: gridArtworkSize }} contentFit="cover" cachePolicy="memory-disk" />
+          <Image source={{ uri: cover }} style={[styles.entityArtwork, { width: gridArtworkSize, height: gridArtworkSize }]} contentFit="cover" cachePolicy="memory-disk" />
         ) : (
           <View style={[styles.entityFallback, { width: gridArtworkSize, height: gridArtworkSize }]}>
             <Ionicons name="disc-outline" size={46} color="#777" />
@@ -272,13 +261,11 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.push('/profile')} accessibilityLabel="Open profile">
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/preferences')} accessibilityLabel="Open settings">
           {user?.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.avatarText}>{initial}</Text>
-            </View>
+            <Image source={require('../../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
           )}
         </Pressable>
 
@@ -370,7 +357,7 @@ export default function LibraryScreen() {
         </Pressable>
       </View>
 
-      {!token ? accountGate : loading ? (
+      {loading ? (
         <LibrarySkeleton />
       ) : tab === 'playlists' ? (
         <FlatList<Playlist>
@@ -526,10 +513,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   gridRow: { justifyContent: 'space-between' },
   gridCard: { marginBottom: 22 },
-  // Liked Songs tile uses the web's emerald gradient cover identity
-  likedArtwork: { backgroundColor: colors.accentDark, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-  likedListArtwork: { width: 62, height: 62, borderRadius: 12, backgroundColor: colors.accentDark, alignItems: 'center', justifyContent: 'center' },
+  likedArtwork: { backgroundColor: '#9D95D8', alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  likedListArtwork: { width: 62, height: 62, borderRadius: 12, backgroundColor: '#9D95D8', alignItems: 'center', justifyContent: 'center' },
   artistArtwork: { borderRadius: 999 },
+  entityArtwork: { borderRadius: 12 },
   entityFallback: { backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   itemTitle: { color: colors.text, fontSize: 14, fontWeight: '600', marginTop: 9 },
   itemMeta: { color: colors.muted, fontSize: 12, fontWeight: '400', marginTop: 3 },

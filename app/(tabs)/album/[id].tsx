@@ -201,10 +201,6 @@ export default function AlbumScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    if (!token) {
-                      router.push('/login');
-                      return;
-                    }
                     void toggleAlbumLike(album);
                   }}
                   style={styles.headerAction}
@@ -270,10 +266,6 @@ export default function AlbumScreen() {
 
                 <Pressable
                   onPress={() => {
-                    if (!token) {
-                      router.push('/login');
-                      return;
-                    }
                     void toggleAlbumLike(album);
                   }}
                   style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}

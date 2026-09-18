@@ -370,7 +370,7 @@ export default function HomeScreen() {
                 style={({ pressed }) => [styles.quickCard, { width: quickCardWidth }, pressed && styles.pressed]}
               >
                 <View style={styles.likedArtwork}>
-                  <Ionicons name="heart" size={18} color="#FFF" />
+                  <Ionicons name="heart" size={18} color="#FF3155" />
                 </View>
                 <Text numberOfLines={2} style={styles.quickTitle}>Liked Songs</Text>
               </Pressable>
@@ -400,7 +400,7 @@ export default function HomeScreen() {
               <>
                 {!!trendingAlbums.length && (
                   <AlbumRail
-                    title="Latest Albums"
+                    title="Trending Albums"
                     albums={trendingAlbums}
                     onPress={openAlbum}
                   />
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentDark,
+    backgroundColor: '#9D95D8',
   },
   quickTitle: {
     flex: 1,

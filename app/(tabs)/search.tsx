@@ -25,6 +25,7 @@ import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
 import {
   BROWSE_CATALOGS,
+  browseCatalogColor,
   browseCatalogCoverImages,
   fetchBrowseCatalogCoverImages,
   type BrowseCatalog,
@@ -410,37 +411,36 @@ export default function SearchScreen() {
           contentContainerStyle={[styles.idleContent, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.browseHead}>
-            <Text style={styles.browseTitle}>Browse all</Text>
-          </View>
-
           <View style={styles.browseGrid}>
-            {BROWSE_CATALOGS.map((category) => (
-              <Pressable
-                key={category.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Browse ${category.name}`}
-                onPress={() => openBrowseCategory(category)}
-                style={({ pressed }) => [
-                  styles.browseCard,
-                  { backgroundColor: category.color },
-                  pressed && styles.browseCardPressed,
-                ]}
-              >
-                <View style={styles.browseCardCopy}>
-                  <Text numberOfLines={2} style={styles.browseCardTitle}>{category.name}</Text>
-                </View>
+            {BROWSE_CATALOGS.map((category) => {
+              const cover = catalogCovers[category.id] || category.coverImage;
+              return (
+                <Pressable
+                  key={category.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Browse ${category.name}`}
+                  onPress={() => openBrowseCategory(category)}
+                  style={({ pressed }) => [
+                    styles.browseCard,
+                    { backgroundColor: browseCatalogColor(category) },
+                    pressed && styles.browseCardPressed,
+                  ]}
+                >
+                  <View style={styles.browseCardCopy}>
+                    <Text numberOfLines={2} style={styles.browseCardTitle}>{category.name}</Text>
+                  </View>
 
-                <View style={styles.browseArtworkWrap}>
-                  <Image
-                    source={{ uri: catalogCovers[category.id] || category.coverImage }}
-                    style={styles.browseArtwork}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                </View>
-              </Pressable>
-            ))}
+                  <View style={styles.browseArtworkWrap}>
+                    <Image
+                      source={{ uri: cover }}
+                      style={styles.browseArtwork}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </ScrollView>
       ) : error && !results ? (
@@ -814,9 +814,7 @@ const styles = StyleSheet.create({
   entityTitle: { color: colors.text, fontSize: 13, fontWeight: '600', marginTop: 8 },
   entityMeta: { color: colors.muted, fontSize: 11, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
-  idleContent: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 24 },
-  browseHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
-  browseTitle: { color: colors.text, fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  idleContent: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 16 },
   browseGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   browseCard: {
     width: '48.4%',
@@ -825,16 +823,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.13)',
     shadowColor: '#000',
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
   },
   browseCardPressed: { opacity: 0.88, transform: [{ scale: 0.985 }] },
   browseCardCopy: { paddingHorizontal: 14, paddingTop: 15, paddingRight: '30%' },
-  browseCardTitle: { color: '#FFF', fontSize: 17, lineHeight: 21, fontWeight: '800', letterSpacing: -0.25 },
+  browseCardTitle: {
+    color: '#FFF',
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: '800',
+    letterSpacing: -0.25,
+    textShadowColor: 'rgba(0,0,0,0.22)',
+    textShadowRadius: 3,
+  },
   browseArtworkWrap: {
     position: 'absolute',
     right: -13,

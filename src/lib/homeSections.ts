@@ -178,13 +178,16 @@ export function mergeHomeSections(
         id: remoteMatch.id || baseSec.id,
         _id: remoteMatch._id || baseSec._id,
         name: baseSec.name || remoteMatch.name,
-        playlists: mergeSpotifyPlaylists(
+        playlists: newestFirst(mergeSpotifyPlaylists(
           remoteMatch.playlists || [],
           baseSec.playlists || []
-        ),
+        )),
       });
     } else {
-      merged.push(baseSec);
+      merged.push({
+        ...baseSec,
+        playlists: newestFirst(baseSec.playlists || []),
+      });
     }
   }
 

@@ -271,7 +271,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const [sleepRemaining, setSleepRemaining] = useState(0);
   const [repeatMode, setRepeatModeState] = useState<RepeatMode>('off');
   const [shuffleEnabled, setShuffleEnabledState] = useState(false);
-  const [radioEnabled, setRadioEnabledState] = useState(true);
+  const [radioEnabled, setRadioEnabledState] = useState(false);
   const [adaptivePipelineEnabled, setAdaptivePipelineEnabledState] = useState(true);
   const [adaptivePipelineStatus, setAdaptivePipelineStatus] = useState<AdaptivePipelineStatus>('idle');
   const [pipelineStartQuality, setPipelineStartQuality] = useState<StreamQuality | null>(null);
@@ -302,7 +302,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const sleepDeadlineRef = useRef<number | null>(null);
   const repeatModeRef = useRef<RepeatMode>('off');
   const shuffleRef = useRef(false);
-  const radioRef = useRef(true);
+  const radioRef = useRef(false);
   const adaptivePipelineRef = useRef(true);
   const loadGenerationRef = useRef(0);
   const activeResolutionAbortRef = useRef<AbortController | null>(null);
@@ -1279,7 +1279,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             ? rawSettings.repeatMode
             : 'off',
           shuffleEnabled: Boolean(rawSettings.shuffleEnabled),
-          radioEnabled: rawSettings.radioEnabled !== false,
+          radioEnabled: false,
           adaptivePipelineEnabled: rawSettings.adaptivePipelineEnabled !== false,
         };
         const pendingSettings = pendingSettingsRef.current;

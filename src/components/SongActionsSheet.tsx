@@ -8,13 +8,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
 import { shareSong } from '@/src/lib/share';
-import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -32,7 +30,6 @@ function playlistId(playlist: Playlist) {
 
 export function SongActionsSheet({ song, visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
   const { playlists, isLiked, toggleLike, addToPlaylist } = useLibrary();
   const { playNext, addToQueue, streamQuality } = usePlayer();
   const {
@@ -63,12 +60,9 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
     setMessage(confirmation);
   };
 
-  const requireAccount = () => {
-    if (token) return true;
-    onClose();
-    router.push('/login');
-    return false;
-  };
+  // Library changes work on-device for guests, so actions never interrupt
+  // listening with an account prompt.
+  const requireAccount = () => true;
 
   const close = () => {
     setShowPlaylists(false);
