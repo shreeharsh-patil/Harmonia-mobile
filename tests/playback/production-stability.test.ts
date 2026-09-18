@@ -80,7 +80,7 @@ test('home feed does not let stale account requests overwrite newer state', asyn
 
 test('home quick access refreshes and preserves recently played playlist metadata', async () => {
   const home = await readFile('app/(tabs)/index.tsx', 'utf8');
-  const playlist = await readFile('app/playlist/[id].tsx', 'utf8');
+  const playlist = await readFile('app/(tabs)/playlist/[id].tsx', 'utf8');
   const api = await readFile('src/lib/api.ts', 'utf8');
 
   assert.match(home, /const refreshRecentPlaylistsSilently = useCallback/);
@@ -99,10 +99,10 @@ test('OAuth deep links dedupe one-time mobile tickets', async () => {
 
 test('detail routes ignore stale navigation responses', async () => {
   const paths = [
-    'app/album/[id].tsx',
-    'app/artist/[id].tsx',
-    'app/playlist/[id].tsx',
-    'app/mix/[id].tsx',
+    'app/(tabs)/album/[id].tsx',
+    'app/(tabs)/artist/[id].tsx',
+    'app/(tabs)/playlist/[id].tsx',
+    'app/(tabs)/mix/[id].tsx',
   ];
 
   for (const path of paths) {
@@ -403,18 +403,18 @@ test('playlist artwork falls back through web-compatible fields and track artwor
   assert.match(source, /artworkUrl\(normalizeSong\(track as any\), targetSize\)/);
 });
 
-test('native recovery tracks the active resolution source before retrying candidates', async () => {
+test('native recovery tracks failed stream URLs before retrying candidates', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /activeSourceRef/);
-  assert.match(source, /activeSourceRef\.current === 'embedded'/);
+  assert.match(source, /failedStreamUrlsRef/);
+  assert.match(source, /failedStreamUrlsRef\.current\.urls\.add/);
   assert.match(source, /getAudioCandidates\(/);
-  assert.match(source, /embeddedCandidateIndex/);
+  assert.match(source, /nextEmbeddedCandidateIndex/);
 });
 
 
 test('embedded CDN failure does not blacklist the fresh provider fallback', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
-  assert.match(source, /activeSourceRef\.current !== 'embedded'/);
+  assert.match(source, /failedStreamUrlsRef/);
   assert.match(source, /\? \[failedProvider\]/);
 });
 
@@ -439,10 +439,10 @@ test('tab screens share dynamic bottom insets with the floating mini player', as
 
 test('stack detail screens reserve the real bottom safe area instead of tab-player padding', async () => {
   for (const path of [
-    'app/album/[id].tsx',
-    'app/artist/[id].tsx',
-    'app/playlist/[id].tsx',
-    'app/mix/[id].tsx',
+    'app/(tabs)/album/[id].tsx',
+    'app/(tabs)/artist/[id].tsx',
+    'app/(tabs)/playlist/[id].tsx',
+    'app/(tabs)/mix/[id].tsx',
     'app/settings.tsx',
   ]) {
     const source = await readFile(path, 'utf8');
@@ -450,10 +450,10 @@ test('stack detail screens reserve the real bottom safe area instead of tab-play
   }
 
   for (const path of [
-    'app/album/[id].tsx',
-    'app/artist/[id].tsx',
-    'app/playlist/[id].tsx',
-    'app/mix/[id].tsx',
+    'app/(tabs)/album/[id].tsx',
+    'app/(tabs)/artist/[id].tsx',
+    'app/(tabs)/playlist/[id].tsx',
+    'app/(tabs)/mix/[id].tsx',
   ]) {
     const source = await readFile(path, 'utf8');
     assert.doesNotMatch(source, /paddingBottom: 150/);
@@ -508,10 +508,10 @@ test('large music lists use bounded render batches', async () => {
   for (const path of [
     'app/(tabs)/search.tsx',
     'app/(tabs)/library.tsx',
-    'app/album/[id].tsx',
-    'app/artist/[id].tsx',
-    'app/playlist/[id].tsx',
-    'app/mix/[id].tsx',
+    'app/(tabs)/album/[id].tsx',
+    'app/(tabs)/artist/[id].tsx',
+    'app/(tabs)/playlist/[id].tsx',
+    'app/(tabs)/mix/[id].tsx',
   ]) {
     const source = await readFile(path, 'utf8');
     assert.match(source, /initialNumToRender=\{SONG_LIST_INITIAL_RENDER\}/);
@@ -581,7 +581,7 @@ test('Canvas fully unmounts when motion is disabled and proxy work is bounded', 
   const renderer = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
 
-  assert.match(renderer, /!!canvasUrl && enableMotion && isPlaying && foreground && !batterySaver && !reduceMotion/);
+  assert.match(renderer, /!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion/);
   assert.match(canvas, /CANVAS_TIMEOUT_MS = 10_000/);
   assert.match(canvas, /const controller = new AbortController\(\)/);
   assert.match(canvas, /signal: controller\.signal/);
@@ -831,7 +831,7 @@ test('home India chart refreshes dynamically without polling in the background',
 test('search cancellation does not fall through to provider fallback work', async () => {
   const api = await readFile('src/lib/api.ts', 'utf8');
   const search = api.match(
-    /export async function searchMusic\([\s\S]*?\n\}\n\nexport async function fetchAlbum/
+    /export async function searchMusic\([\s\S]*?\r?\n\}\r?\n\r?\nexport async function fetchAlbum/
   )?.[0] || '';
 
   assert.match(search, /catch \(cause: any\)/);

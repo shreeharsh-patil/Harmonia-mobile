@@ -11,11 +11,13 @@ import {
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
+import { CatalogDetailSkeleton } from '@/src/components/CatalogDetailSkeleton';
 import { SongRow } from '@/src/components/SongRow';
+import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { fetchArtist, fetchArtistAlbums, fetchArtistSongs } from '@/src/lib/api';
-import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -29,6 +31,7 @@ import { usePlayer } from '@/src/providers/PlayerProvider';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Song } from '@/src/types';
 
 export default function ArtistScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
@@ -115,7 +118,7 @@ export default function ArtistScreen() {
   };
 
   if (loading && !artist) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color="#FFF" /></View></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><CatalogDetailSkeleton /></SafeAreaView>;
   }
 
   if (!artist) {
@@ -131,8 +134,9 @@ export default function ArtistScreen() {
     );
   }
 
-  const cover = imageUrl(artist.image as any, 208);
+  const cover = entityImageUrl(artist, 208);
   const followerText = artist.followerCount ? `${Number(artist.followerCount).toLocaleString()} followers` : '';
+  const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -144,7 +148,7 @@ export default function ArtistScreen() {
         updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
         windowSize={SONG_LIST_WINDOW_SIZE}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: contentBottomInset }]}
         ListHeaderComponent={
           <View>
             <View style={styles.top}>
@@ -195,7 +199,7 @@ export default function ArtistScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.albumRail}>
                   {albums.slice(0, 16).map((album, index) => {
                     const albumId = String(album.id || '');
-                    const albumCover = imageUrl(album.image as any, 126);
+                    const albumCover = entityImageUrl(album, 126);
                     return (
                       <Pressable
                         key={albumId || `${albumTitle(album)}-${index}`}
@@ -263,10 +267,10 @@ const styles = StyleSheet.create({
   title: { color: '#F4F4F4', fontSize: 31, lineHeight: 36, fontWeight: '800', textAlign: 'center', letterSpacing: -0.9, marginTop: 7 },
   meta: { color: '#777', fontSize: 12, marginTop: 7 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  primary: { minWidth: 116, height: 46, borderRadius: 15, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
-  primaryText: { color: '#080808', fontSize: 13, fontWeight: '800' },
-  secondary: { minWidth: 116, height: 46, borderRadius: 15, backgroundColor: '#141414', borderWidth: StyleSheet.hairlineWidth, borderColor: '#292929', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
-  secondaryText: { color: '#EDEDED', fontSize: 13, fontWeight: '800' },
+  primary: { minWidth: 116, height: 46, borderRadius: 23, backgroundColor: '#1ED760', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
+  primaryText: { color: '#061108', fontSize: 13, fontWeight: '800' },
+  secondary: { minWidth: 116, height: 46, borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.38)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.26)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
+  secondaryText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   sectionTitle: { color: '#EDEDED', fontSize: 18, fontWeight: '800', marginBottom: 10 },
   albumSection: { marginBottom: 28 },
   albumRail: { gap: 12, paddingRight: 10 },

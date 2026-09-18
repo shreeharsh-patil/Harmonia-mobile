@@ -131,6 +131,9 @@ export function classifyPlaybackError(error: unknown): PlaybackPipelineError {
   if (lower.includes('401') || lower.includes('login_required') || lower.includes('authentication')) {
     return new PlaybackPipelineError(PlaybackErrorType.AUTH_ERROR, message, { cause: error });
   }
+  if (lower.includes('source error') || lower.includes('playback source')) {
+    return new PlaybackPipelineError(PlaybackErrorType.PROVIDER_ERROR, message, { cause: error });
+  }
 
   return new PlaybackPipelineError(
     PlaybackErrorType.UNKNOWN,

@@ -10,10 +10,12 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { importSpotifyPlaylist } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
+import { colors } from '@/src/theme';
 
 export default function ImportPlaylistScreen() {
   const { token } = useAuth();
@@ -59,30 +61,59 @@ export default function ImportPlaylistScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View>
-          <Pressable onPress={() => router.back()} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
-          <Text style={styles.kicker}>SPOTIFY IMPORT</Text>
-          <Text style={styles.title}>Bring a playlist to Harmonia.</Text>
-          <Text style={styles.subtitle}>Paste a public Spotify playlist link. Harmonia matches each track to its playable catalog source and keeps the original playlist order.</Text>
+          <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
+          </Pressable>
+          <View style={styles.headerHero}>
+            <Text style={styles.kicker}>SPOTIFY IMPORT</Text>
+            <Text style={styles.title}>Bring a playlist to Harmonia.</Text>
+            <Text style={styles.subtitle}>
+              Paste a public Spotify playlist link. Harmonia matches each track to its playable catalog source and keeps the original playlist order.
+            </Text>
+          </View>
         </View>
-        <View style={styles.form}>
+
+        <View style={styles.formCard}>
           <TextInput
             value={url}
             onChangeText={setUrl}
             placeholder="https://open.spotify.com/playlist/..."
-            placeholderTextColor="#606060"
+            placeholderTextColor={colors.textFaint}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
             style={styles.input}
             onSubmitEditing={submit}
           />
-          {!!status && <Text style={styles.success}>{status}</Text>}
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <Pressable disabled={busy} onPress={submit} style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
-            {busy ? <ActivityIndicator color="#050505" /> : <Text style={styles.primaryText}>Import playlist</Text>}
+          {!!status && (
+            <View style={styles.statusBox}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.accentBright} />
+              <Text style={styles.success}>{status}</Text>
+            </View>
+          )}
+          {!!error && (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color={colors.danger} />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          )}
+          <Pressable
+            disabled={busy || !url.trim()}
+            onPress={submit}
+            style={({ pressed }) => [
+              styles.primary,
+              (!url.trim() || busy) && styles.primaryDisabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            {busy ? (
+              <ActivityIndicator color="#061108" />
+            ) : (
+              <Text style={styles.primaryText}>Import playlist</Text>
+            )}
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -91,18 +122,65 @@ export default function ImportPlaylistScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
-  screen: { flex: 1, paddingHorizontal: 24, paddingBottom: 32, justifyContent: 'space-between' },
-  back: { width: 44, height: 44, justifyContent: 'center' },
-  backText: { color: '#EEE', fontSize: 38 },
-  kicker: { color: '#666', fontSize: 11, fontWeight: '800', letterSpacing: 1.8, marginTop: 28 },
-  title: { color: '#FFF', fontSize: 34, lineHeight: 39, fontWeight: '850' as any, letterSpacing: -1.1, marginTop: 8 },
-  subtitle: { color: '#858585', fontSize: 15, lineHeight: 22, marginTop: 12 },
-  form: { gap: 12 },
-  input: { minHeight: 56, borderRadius: 16, borderWidth: 1, borderColor: '#242424', backgroundColor: '#101010', color: '#FFF', paddingHorizontal: 17, fontSize: 14 },
-  success: { color: '#84D7A0', fontSize: 13, lineHeight: 19 },
-  error: { color: '#FF7979', fontSize: 13, lineHeight: 19 },
-  primary: { height: 54, borderRadius: 16, backgroundColor: '#F2F2F2', alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: '#050505', fontSize: 16, fontWeight: '800' },
-  pressed: { opacity: 0.72 },
+  safe: { flex: 1, backgroundColor: colors.background },
+  screen: { flex: 1, paddingHorizontal: 20, paddingBottom: 32, justifyContent: 'space-between' },
+  back: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  headerHero: { marginTop: 24 },
+  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
+  title: { color: colors.textStrong, fontSize: 32, lineHeight: 38, fontWeight: '900', letterSpacing: -0.9, marginTop: 8 },
+  subtitle: { color: colors.textMuted, fontSize: 14, lineHeight: 21, marginTop: 10 },
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 18,
+    gap: 12,
+  },
+  input: {
+    minHeight: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    color: colors.textStrong,
+    paddingHorizontal: 16,
+    fontSize: 14,
+  },
+  statusBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16,185,129,0.1)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  success: { color: colors.accentBright, fontSize: 13, fontWeight: '600', flex: 1 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  error: { color: colors.danger, fontSize: 13, fontWeight: '600', flex: 1 },
+  primary: {
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.accentBright,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryDisabled: { opacity: 0.4 },
+  primaryText: { color: '#061108', fontSize: 15, fontWeight: '800' },
+  pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
 });

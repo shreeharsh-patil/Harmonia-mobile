@@ -24,7 +24,7 @@ import {
   fetchRecommendedMixes,
   fetchTrendingHomeContent,
 } from '@/src/lib/api';
-import { albumTitle, imageUrl } from '@/src/lib/entities';
+import { albumTitle, entityImageUrl } from '@/src/lib/entities';
 import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
@@ -615,7 +615,7 @@ const AlbumRail = memo(function AlbumRail({
         windowSize={RAIL_WINDOW_SIZE}
         contentContainerStyle={styles.rail}
         renderItem={({ item }) => {
-          const cover = imageUrl(item.image as any, 140);
+          const cover = entityImageUrl(item, 140);
           return (
             <Pressable
               onPress={() => onPress(item)}

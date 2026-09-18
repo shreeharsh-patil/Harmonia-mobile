@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   LayoutChangeEvent,
@@ -84,7 +84,7 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
 
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { token } = useAuth();
   const { batterySaver } = usePreferences();
   const { isLiked, toggleLike } = useLibrary();
@@ -144,11 +144,18 @@ export default function PlayerScreen() {
   const [lyrics, setLyrics] = useState<LyricsResult | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
+  const [hasCanvas, setHasCanvas] = useState(false);
   const lyricsScrollRef = useRef<ScrollView>(null);
   const lyricLineLayouts = useRef<Record<number, { y: number; height: number }>>({});
   const [lyricsViewportHeight, setLyricsViewportHeight] = useState(0);
 
   const cover = artworkUrl(currentSong, 360);
+  const canvasTrackKey = String(currentSong?.id || currentSong?.songId || '');
+  const onCanvasAvailabilityChange = useCallback((available: boolean) => setHasCanvas(available), []);
+
+  useEffect(() => {
+    setHasCanvas(false);
+  }, [canvasTrackKey]);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
   const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
   const activeWord = useMemo(
@@ -245,6 +252,7 @@ export default function PlayerScreen() {
   const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
   const progressThumbLeft = progress * progressUsableWidth;
   const compactArtwork = panel === 'queue' || panel === 'tools';
+  const showCanvasOnly = hasCanvas && panel === 'none';
   const playerContentWidth = Math.max(0, width - 32);
   const artworkSize = compactArtwork ? Math.min(244, playerContentWidth) : playerContentWidth;
   const controlsFixedWidth = 40 + 50 + 64 + 50 + 40;
@@ -300,7 +308,7 @@ export default function PlayerScreen() {
 
   return (
     <View style={styles.root}>
-      {!!cover && (
+      {!!cover && !showCanvasOnly && (
         <Image
           source={{ uri: cover }}
           blurRadius={batterySaver ? 0 : 12}
@@ -310,13 +318,22 @@ export default function PlayerScreen() {
           recyclingKey={String(currentSong.id || cover)}
         />
       )}
-      <View style={styles.backdropTint} />
+      {!showCanvasOnly && <View style={styles.backdropTint} />}
       <Image
         source={{ uri: PLAYER_BACKGROUND_FADE }}
         contentFit="fill"
         style={StyleSheet.absoluteFill}
         cachePolicy="memory"
       />
+      <ArtworkRenderer
+        song={currentSong}
+        size={Math.max(width, height)}
+        enableMotion={panel === 'none'}
+        isPlaying={isPlaying}
+        fullScreen
+        canvasOnly
+      />
+      <View pointerEvents="none" style={styles.canvasTint} />
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
@@ -335,25 +352,34 @@ export default function PlayerScreen() {
         <ScrollView
           style={styles.playerScroll}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.scroll, panel === 'none' && styles.scrollNowPlaying]}
+          contentContainerStyle={[
+            styles.scroll,
+            panel === 'none' && styles.scrollNowPlaying,
+            showCanvasOnly && styles.scrollCanvasOnly,
+          ]}
           bounces={false}
         >
-          <View
-            style={[
-              styles.artworkWrap,
-              panel === 'none' && styles.artworkWrapExpanded,
-              compactArtwork && styles.artworkWrapCompact,
-            ]}
-          >
-            <ArtworkRenderer
-              song={currentSong}
-              size={artworkSize}
-              radius={14}
-              enableMotion={panel === 'none'}
-              isPlaying={isPlaying}
-              style={styles.artwork}
-            />
-          </View>
+          {!showCanvasOnly && (
+            <View
+              style={[
+                styles.artworkWrap,
+                panel === 'none' && styles.artworkWrapExpanded,
+                compactArtwork && styles.artworkWrapCompact,
+              ]}
+            >
+              <ArtworkRenderer
+                song={currentSong}
+                size={artworkSize}
+                radius={14}
+                enableMotion={panel === 'none'}
+                isPlaying={isPlaying}
+                hideArtworkWhenCanvas
+                renderMotion={false}
+                onCanvasAvailabilityChange={onCanvasAvailabilityChange}
+                style={styles.artwork}
+              />
+            </View>
+          )}
 
           <View style={styles.meta}>
             <View style={styles.metaCopy}>
@@ -930,10 +956,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#121212' },
   backdropImage: { opacity: 0.94, transform: [{ scale: 1.55 }] },
   backdropTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.08)' },
+  canvasTint: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.28)' },
   safe: { flex: 1, paddingHorizontal: 16 },
   playerScroll: { flex: 1 },
   scroll: { paddingBottom: 8 },
   scrollNowPlaying: { flexGrow: 1 },
+  scrollCanvasOnly: { justifyContent: 'flex-end', paddingBottom: 28 },
   header: { height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   roundButton: {
     width: 40,

@@ -13,7 +13,8 @@ export const HARMONIA_STREAM_API_URL = publicUrl(
 );
 
 export const SPOTIFY_CANVAS_API_URL = publicUrl(
-  process.env.EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL
+  process.env.EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL ||
+    process.env.SPOTIFY_CANVAS_API_URL
 );
 
 export const HAS_HARMONIA_API = Boolean(HARMONIA_API_URL);

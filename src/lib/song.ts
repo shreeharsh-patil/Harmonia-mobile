@@ -78,12 +78,19 @@ export function artistNames(song?: Song | null) {
 export function normalizeArtworkUrl(value: unknown) {
   const trimmed = String(value || '').trim();
   if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return '';
-  return trimmed
+  const normalized = trimmed
     .replace(/^http:\/\//i, 'https://')
     .replace(
       /^https:\/\/image-cdn-[^.]+\.spotifycdn\.com\/image\//i,
       'https://i.scdn.co/image/'
     );
+
+  // A catalog image may occasionally contain an upstream HTML error body
+  // instead of a URL. Do not pass it to expo-image as an artwork source.
+  if (/[<>\r\n]/.test(normalized)) return '';
+  if (/^(https?|file|content):\/\/\S+$/i.test(normalized)) return normalized;
+  if (/^data:image\//i.test(normalized)) return normalized;
+  return '';
 }
 
 function imageScore(image: any) {

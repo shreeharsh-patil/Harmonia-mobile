@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
-import { albumTitle, imageUrl } from '@/src/lib/entities';
+import { albumTitle, entityImageUrl } from '@/src/lib/entities';
 import type { CatalogItem } from '@/src/lib/browseCatalog';
 
 export const CatalogEntityCard = memo(function CatalogEntityCard({
@@ -26,7 +26,7 @@ export const CatalogEntityCard = memo(function CatalogEntityCard({
       ? `${count} ${count === 1 ? 'song' : 'songs'}`
       : item.data.subtitle || item.data.owner || 'Playlist'
     : item.data.primaryArtists || item.data.year || 'Album';
-  const cover = isPlaylist ? '' : imageUrl(item.data.image as any, size);
+  const cover = isPlaylist ? '' : entityImageUrl(item.data, size);
 
   const open = () => {
     const id = String(item.data.id || (isPlaylist ? item.data._id : '') || '');

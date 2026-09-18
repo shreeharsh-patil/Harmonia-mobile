@@ -91,7 +91,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="library"
           options={{
-            title: 'Your Library',
+            title: 'Library',
             tabBarIcon: ({ color, focused }) => (
               <TabIcon active="library" inactive="library-outline" color={String(color)} focused={focused} />
             ),
@@ -107,6 +107,10 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen name="catalog" options={{ href: null }} />
+        <Tabs.Screen name="playlist/[id]" options={{ href: null }} />
+        <Tabs.Screen name="album/[id]" options={{ href: null }} />
+        <Tabs.Screen name="artist/[id]" options={{ href: null }} />
+        <Tabs.Screen name="mix/[id]" options={{ href: null }} />
       </Tabs>
 
       <View

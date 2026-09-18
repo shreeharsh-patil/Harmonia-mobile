@@ -23,22 +23,23 @@ import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlaybackHistory, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
+import { colors } from '@/src/theme';
 
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
-  { value: 'automatic', label: 'Automatic' },
+  { value: 'automatic', label: 'Auto' },
   { value: 'data-saver', label: 'Data Saver' },
   { value: 'normal', label: 'Normal' },
   { value: 'high', label: 'High' },
-  { value: 'maximum', label: 'Maximum' },
+  { value: 'maximum', label: 'Max' },
 ];
 
 const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
   { value: 'off', label: 'Off' },
-  { value: 15, label: '15 min' },
-  { value: 30, label: '30 min' },
-  { value: 45, label: '45 min' },
-  { value: 60, label: '60 min' },
+  { value: 15, label: '15m' },
+  { value: 30, label: '30m' },
+  { value: 45, label: '45m' },
+  { value: 60, label: '60m' },
   { value: 'track', label: 'End of track' },
 ];
 
@@ -150,31 +151,102 @@ export default function SettingsScreen() {
     }
   };
 
+  const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.back}>
-          <Ionicons name="chevron-back" size={23} color="#F2F2F2" />
+        <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
+          <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
         </Pressable>
         <Text style={styles.title}>Settings</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {token && user ? (
+          <Pressable
+            onPress={() => router.push('/(tabs)/profile')}
+            style={({ pressed }) => [styles.profileHero, pressed && styles.pressed]}
+          >
+            {user.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.initialText}>{initial}</Text>
+              </View>
+            )}
+            <View style={styles.profileHeroCopy}>
+              <Text numberOfLines={1} style={styles.userName}>{user.name || 'Harmonia User'}</Text>
+              <Text numberOfLines={1} style={styles.userEmail}>{user.email}</Text>
+              <View style={styles.badgeRow}>
+                <View style={styles.profileBadge}>
+                  <Text style={styles.profileBadgeText}>Harmonia Account</Text>
+                </View>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={19} color={colors.textFaint} />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => router.push('/login')}
+            style={({ pressed }) => [styles.profileHero, pressed && styles.pressed]}
+          >
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Ionicons name="person-outline" size={24} color={colors.textFaint} />
+            </View>
+            <View style={styles.profileHeroCopy}>
+              <Text style={styles.userName}>Guest User</Text>
+              <Text style={styles.userEmail}>Sign in to sync library and playlists</Text>
+            </View>
+            <View style={styles.signInPill}>
+              <Text style={styles.signInPillText}>Sign in</Text>
+            </View>
+          </Pressable>
+        )}
+
         <Section title="ACCOUNT">
           {token && user ? (
             <>
-              <StaticRow icon="person-outline" title={user.name || 'Harmonia account'} detail={user.email} />
-              <ActionRow icon="create-outline" title="Edit profile" detail="Update your name and profile picture" onPress={() => router.push('/edit-profile')} />
-              <ActionRow icon="musical-notes-outline" title="Import Spotify playlist" detail="Match a public Spotify playlist to Harmonia" onPress={() => router.push('/import-playlist')} />
-              <ActionRow icon="log-out-outline" title="Sign out" detail="Remove this account from this phone" destructive onPress={() => void signOutNow()} />
+              <ActionRow
+                icon="create-outline"
+                iconBg="rgba(59,130,246,0.15)"
+                iconColor="#60A5FA"
+                title="Edit profile"
+                detail="Update display name and avatar photo"
+                onPress={() => router.push('/edit-profile')}
+              />
+              <ActionRow
+                icon="musical-notes-outline"
+                iconBg="rgba(16,185,129,0.15)"
+                iconColor="#34D399"
+                title="Import Spotify playlist"
+                detail="Match a public Spotify playlist to Harmonia"
+                onPress={() => router.push('/import-playlist')}
+              />
+              <ActionRow
+                icon="log-out-outline"
+                iconBg="rgba(239,68,68,0.15)"
+                iconColor="#F87171"
+                title="Sign out"
+                detail="Remove this session from this device"
+                destructive
+                onPress={() => void signOutNow()}
+              />
             </>
           ) : (
-            <ActionRow icon="log-in-outline" title="Sign in" detail="Sync your Harmonia account" onPress={() => router.push('/login')} />
+            <ActionRow
+              icon="log-in-outline"
+              iconBg="rgba(16,185,129,0.15)"
+              iconColor="#34D399"
+              title="Sign in"
+              detail="Sync your Harmonia account"
+              onPress={() => router.push('/login')}
+            />
           )}
         </Section>
 
-        <Section title="PLAYBACK">
+        <Section title="PLAYBACK & QUALITY">
           <SettingLabel title="Audio quality" detail="Used when Harmonia resolves the next playable stream." />
           <ChoiceRow>
             {QUALITY_OPTIONS.map((item) => (
@@ -187,14 +259,17 @@ export default function SettingsScreen() {
             ))}
           </ChoiceRow>
 
-          <SettingLabel title="Playback speed" detail="Applies immediately to the native player." />
+          <SettingLabel title="Playback speed" detail="Applies immediately to native player playback." />
           <ChoiceRow>
             {RATE_OPTIONS.map((rate) => (
               <Choice key={rate} label={`${rate}×`} active={playbackRate === rate} onPress={() => setPlaybackRate(rate)} />
             ))}
           </ChoiceRow>
+
           <ToggleRow
             icon="radio-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
             title="Harmonia Radio"
             detail="Continue with related songs when the queue ends"
             enabled={radioEnabled}
@@ -202,6 +277,8 @@ export default function SettingsScreen() {
           />
           <ToggleRow
             icon="flash-outline"
+            iconBg="rgba(245,158,11,0.15)"
+            iconColor="#FBBF24"
             title="Instant stream upgrade"
             detail={adaptivePipelineEnabled
               ? `Fast start → background quality promotion · ${adaptivePipelineStatus}`
@@ -214,6 +291,8 @@ export default function SettingsScreen() {
         <Section title="NETWORK & POWER">
           <ToggleRow
             icon="wifi-outline"
+            iconBg="rgba(59,130,246,0.15)"
+            iconColor="#60A5FA"
             title="Network-aware quality"
             detail={`Use separate quality profiles · current: ${String(networkType || 'unknown').toLowerCase()}`}
             enabled={networkAwareQuality}
@@ -243,6 +322,8 @@ export default function SettingsScreen() {
           </ChoiceRow>
           <ToggleRow
             icon="download-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
             title="Wi-Fi-only downloads"
             detail="Block offline downloads on cellular data"
             enabled={wifiOnlyDownloads}
@@ -250,6 +331,8 @@ export default function SettingsScreen() {
           />
           <ToggleRow
             icon="leaf-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
             title="Battery saver"
             detail="Caps streams to Data Saver, disables Canvas and skips next-track preloading"
             enabled={batterySaver}
@@ -258,7 +341,7 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="PLAYER">
-          <SettingLabel title="Sleep timer" detail="Stops playback at the selected time or at the end of the track." />
+          <SettingLabel title="Sleep timer" detail="Stops playback at selected duration or track completion." />
           <ChoiceRow>
             {TIMER_OPTIONS.map((item) => (
               <Choice
@@ -272,6 +355,8 @@ export default function SettingsScreen() {
           {currentSong && (
             <ActionRow
               icon="analytics-outline"
+              iconBg="rgba(99,102,241,0.15)"
+              iconColor="#818CF8"
               title="Playback diagnostics"
               detail="Open Now Playing → Tools → Advanced"
               onPress={() => router.push({ pathname: '/player', params: { panel: 'tools' } })}
@@ -281,12 +366,16 @@ export default function SettingsScreen() {
 
         <Section title="DOWNLOADS">
           <StaticRow
-            icon="download-outline"
+            icon="cloud-download-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
             title="Downloaded music"
             detail={`${downloads.length} track${downloads.length === 1 ? '' : 's'} · ${formatBytes(totalBytes)}`}
           />
           <ActionRow
             icon="trash-outline"
+            iconBg="rgba(239,68,68,0.15)"
+            iconColor="#F87171"
             title="Remove all downloads"
             detail={downloads.length ? 'Delete offline audio stored by Harmonia' : 'No downloaded tracks'}
             destructive
@@ -296,9 +385,17 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="LOCAL MUSIC">
-          <StaticRow icon="musical-notes-outline" title="On-device library" detail={`${localSongs.length} track${localSongs.length === 1 ? '' : 's'} loaded`} />
+          <StaticRow
+            icon="folder-outline"
+            iconBg="rgba(245,158,11,0.15)"
+            iconColor="#FBBF24"
+            title="On-device library"
+            detail={`${localSongs.length} track${localSongs.length === 1 ? '' : 's'} loaded`}
+          />
           <ActionRow
             icon="scan-outline"
+            iconBg="rgba(59,130,246,0.15)"
+            iconColor="#60A5FA"
             title={localSongs.length ? 'Rescan music library' : 'Scan music library'}
             detail="Permission is requested only when you use this feature"
             disabled={localLoading}
@@ -306,9 +403,11 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="DATA">
+        <Section title="DATA & STORAGE">
           <ActionRow
             icon="time-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
             title="Clear listening history"
             detail={history.length ? `${history.length} local history entries` : 'No local listening history'}
             disabled={!history.length}
@@ -316,30 +415,42 @@ export default function SettingsScreen() {
           />
           <ActionRow
             icon="images-outline"
+            iconBg="rgba(236,72,153,0.15)"
+            iconColor="#F472B6"
             title="Clear artwork cache"
             detail="Free cached image storage without touching downloads"
             onPress={() => void clearArtworkCache()}
           />
         </Section>
 
-        <Section title="ABOUT">
-          <StaticRow icon="information-circle-outline" title="Harmonia Mobile" detail={`Version ${APP_VERSION} · Android build ${ANDROID_BUILD_VERSION}`} />
+        <Section title="ABOUT HARMONIA">
+          <StaticRow
+            icon="information-circle-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Harmonia Mobile"
+            detail={`Version ${APP_VERSION} · Android build ${ANDROID_BUILD_VERSION}`}
+          />
           <ActionRow
             icon="cloud-download-outline"
+            iconBg="rgba(59,130,246,0.15)"
+            iconColor="#60A5FA"
             title="Check for updates"
-            detail={checkingUpdate ? 'Checking for updates…' : 'Compare this build with the latest published release'}
+            detail={checkingUpdate ? 'Checking for updates…' : 'Compare this build with latest published release'}
             disabled={checkingUpdate}
             onPress={() => void checkUpdates()}
           />
           <ActionRow
             icon="logo-github"
-            title="GitHub"
-            detail="Open the Harmonia Mobile repository"
+            iconBg="rgba(255,255,255,0.08)"
+            iconColor="#E4E4E7"
+            title="GitHub Repository"
+            detail="Open the Harmonia Mobile source repository"
             onPress={() => void Linking.openURL('https://github.com/shreeharsh-patil/Harmonia-mobile')}
           />
         </Section>
 
-        <Text style={styles.footer}>Harmonia Mobile · Built for uninterrupted listening</Text>
+        <Text style={styles.footer}>HARMONIA MOBILE • UNINTERRUPTED LISTENING</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -369,7 +480,14 @@ function ChoiceRow({ children }: { children: React.ReactNode }) {
 
 function Choice({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.choice, active && styles.choiceActive]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.choice,
+        active && styles.choiceActive,
+        pressed && styles.pressed,
+      ]}
+    >
       <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text>
     </Pressable>
   );
@@ -377,12 +495,16 @@ function Choice({ label, active, onPress }: { label: string; active: boolean; on
 
 function ToggleRow({
   icon,
+  iconBg,
+  iconColor,
   title,
   detail,
   enabled,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  iconBg?: string;
+  iconColor?: string;
   title: string;
   detail: string;
   enabled: boolean;
@@ -390,7 +512,9 @@ function ToggleRow({
 }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-      <View style={styles.icon}><Ionicons name={icon} size={19} color="#A6A6A6" /></View>
+      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
+        <Ionicons name={icon} size={18} color={iconColor || colors.accentBright} />
+      </View>
       <View style={styles.rowCopy}>
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDetail}>{detail}</Text>
@@ -402,10 +526,24 @@ function ToggleRow({
   );
 }
 
-function StaticRow({ icon, title, detail }: { icon: keyof typeof Ionicons.glyphMap; title: string; detail: string }) {
+function StaticRow({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  detail,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg?: string;
+  iconColor?: string;
+  title: string;
+  detail: string;
+}) {
   return (
     <View style={styles.row}>
-      <View style={styles.icon}><Ionicons name={icon} size={19} color="#A6A6A6" /></View>
+      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
+        <Ionicons name={icon} size={18} color={iconColor || colors.textMuted} />
+      </View>
       <View style={styles.rowCopy}>
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowDetail}>{detail}</Text>
@@ -416,6 +554,8 @@ function StaticRow({ icon, title, detail }: { icon: keyof typeof Ionicons.glyphM
 
 function ActionRow({
   icon,
+  iconBg,
+  iconColor,
   title,
   detail,
   onPress,
@@ -423,6 +563,8 @@ function ActionRow({
   disabled = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
+  iconBg?: string;
+  iconColor?: string;
   title: string;
   detail: string;
   onPress: () => void;
@@ -430,13 +572,23 @@ function ActionRow({
   disabled?: boolean;
 }) {
   return (
-    <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed, disabled && styles.disabled]}>
-      <View style={styles.icon}><Ionicons name={icon} size={19} color={destructive ? '#D98282' : '#A6A6A6'} /></View>
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+      ]}
+    >
+      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
+        <Ionicons name={icon} size={18} color={destructive ? colors.danger : (iconColor || colors.textMuted)} />
+      </View>
       <View style={styles.rowCopy}>
         <Text style={[styles.rowTitle, destructive && styles.destructive]}>{title}</Text>
         <Text style={styles.rowDetail}>{detail}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={17} color="#4D4D4D" />
+      <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
     </Pressable>
   );
 }
@@ -447,32 +599,149 @@ function formatBytes(bytes: number) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
-  header: { height: 62, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#F5F5F5', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    height: 60,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  back: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { color: colors.textStrong, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   headerSpacer: { width: 42 },
-  content: { paddingHorizontal: 18, paddingBottom: 32 },
-  section: { marginTop: 22 },
-  sectionTitle: { color: '#595959', fontSize: 9, fontWeight: '800', letterSpacing: 1.7, marginBottom: 8, paddingHorizontal: 4 },
-  group: { borderRadius: 17, borderWidth: StyleSheet.hairlineWidth, borderColor: '#242424', backgroundColor: '#0F0F0F', overflow: 'hidden' },
-  row: { minHeight: 68, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#202020' },
-  icon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#171717', alignItems: 'center', justifyContent: 'center' },
-  rowCopy: { flex: 1, minWidth: 0, marginLeft: 11 },
-  rowTitle: { color: '#E7E7E7', fontSize: 14, fontWeight: '700' },
-  rowDetail: { color: '#666', fontSize: 11, lineHeight: 16, marginTop: 3 },
-  destructive: { color: '#E28B8B' },
-  toggleTrack: { width: 42, height: 24, borderRadius: 12, backgroundColor: '#292929', padding: 3, justifyContent: 'center' },
-  toggleTrackOn: { backgroundColor: '#EDEDED' },
-  toggleThumb: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#777' },
-  toggleThumbOn: { backgroundColor: '#080808', alignSelf: 'flex-end' },
-  pressed: { opacity: 0.62 },
-  disabled: { opacity: 0.42 },
+  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  profileHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#18181B' },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16,185,129,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  initialText: { color: colors.accentBright, fontSize: 22, fontWeight: '900' },
+  profileHeroCopy: { flex: 1, minWidth: 0, marginLeft: 14 },
+  userName: { color: colors.textStrong, fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
+  userEmail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  badgeRow: { flexDirection: 'row', marginTop: 6 },
+  profileBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(16,185,129,0.25)',
+  },
+  profileBadgeText: { color: colors.accentBright, fontSize: 10, fontWeight: '700' },
+  signInPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: colors.accentBright,
+  },
+  signInPillText: { color: '#061108', fontSize: 12, fontWeight: '800' },
+  section: { marginTop: 24 },
+  sectionTitle: {
+    color: colors.textFaint,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  group: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  row: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  icon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowCopy: { flex: 1, minWidth: 0, marginLeft: 12 },
+  rowTitle: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
+  rowDetail: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  destructive: { color: colors.danger },
+  toggleTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleTrackOn: { backgroundColor: colors.accentBright },
+  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#888' },
+  toggleThumbOn: { backgroundColor: '#061108', alignSelf: 'flex-end' },
+  pressed: { opacity: 0.65 },
+  disabled: { opacity: 0.38 },
   settingLabel: { paddingHorizontal: 14, paddingTop: 14 },
-  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, paddingHorizontal: 13, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#202020' },
-  choice: { height: 34, borderRadius: 11, borderWidth: StyleSheet.hairlineWidth, borderColor: '#292929', backgroundColor: '#141414', paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
-  choiceActive: { backgroundColor: '#EDEDED', borderColor: '#EDEDED' },
-  choiceText: { color: '#8B8B8B', fontSize: 11, fontWeight: '700' },
-  choiceTextActive: { color: '#090909' },
-  footer: { color: '#3F3F3F', fontSize: 9, lineHeight: 15, textAlign: 'center', letterSpacing: 0.6, marginTop: 28 },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  choice: {
+    height: 34,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceActive: {
+    backgroundColor: colors.accentBright,
+    borderColor: colors.accentBright,
+  },
+  choiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  choiceTextActive: { color: '#061108', fontWeight: '800' },
+  footer: {
+    color: colors.textFaint,
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 15,
+    textAlign: 'center',
+    letterSpacing: 1.2,
+    marginTop: 32,
+  },
 });

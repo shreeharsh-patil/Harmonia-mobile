@@ -11,9 +11,11 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { updateProfile } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
+import { colors } from '@/src/theme';
 
 export default function EditProfileScreen() {
   const { token, user, refreshUser } = useAuth();
@@ -74,7 +76,9 @@ export default function EditProfileScreen() {
   if (!token || !user) {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.center}><Text style={styles.error}>Sign in before editing your profile.</Text></View>
+        <View style={styles.center}>
+          <Text style={styles.error}>Sign in before editing your profile.</Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -82,47 +86,189 @@ export default function EditProfileScreen() {
   const initial = (name || user.email || 'H').trim().charAt(0).toUpperCase();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.headerButton}><Text style={styles.back}>‹</Text></Pressable>
-        <Text style={styles.headerTitle}>Edit profile</Text>
-        <Pressable disabled={busy} onPress={save} style={styles.headerButton}>
-          {busy ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.save}>Save</Text>}
+        <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
+          <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Pressable
+          disabled={busy || name.trim().length < 2}
+          onPress={save}
+          style={({ pressed }) => [
+            styles.saveButton,
+            (busy || name.trim().length < 2) && styles.saveDisabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          {busy ? (
+            <ActivityIndicator color="#061108" size="small" />
+          ) : (
+            <Text style={styles.saveText}>Save</Text>
+          )}
         </Pressable>
       </View>
 
       <View style={styles.content}>
-        <Pressable onPress={pickImage} style={styles.avatarWrap}>
-          {image ? <Image source={{ uri: image }} style={styles.avatar} contentFit="cover" /> : <View style={[styles.avatar, styles.fallback]}><Text style={styles.initial}>{initial}</Text></View>}
-          <View style={styles.changeBadge}><Text style={styles.changeText}>Change photo</Text></View>
+        <Pressable onPress={pickImage} style={({ pressed }) => [styles.avatarWrap, pressed && styles.pressed]}>
+          <View style={styles.avatarShell}>
+            {image ? (
+              <Image source={{ uri: image }} style={styles.avatar} contentFit="cover" />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.initial}>{initial}</Text>
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={16} color="#061108" />
+            </View>
+          </View>
+          <View style={styles.changeBadge}>
+            <Ionicons name="image-outline" size={15} color={colors.accentBright} />
+            <Text style={styles.changeText}>Change photo</Text>
+          </View>
         </Pressable>
 
-        <Text style={styles.label}>DISPLAY NAME</Text>
-        <TextInput value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor="#666" style={styles.input} maxLength={80} />
-        <Text style={styles.email}>{user.email}</Text>
-        {!!error && <Text style={styles.error}>{error}</Text>}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>DISPLAY NAME</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            placeholderTextColor={colors.textFaint}
+            style={styles.input}
+            maxLength={80}
+          />
+          <Text style={styles.emailLabel}>ACCOUNT EMAIL</Text>
+          <View style={styles.emailBox}>
+            <Ionicons name="mail-outline" size={16} color={colors.textFaint} />
+            <Text style={styles.email}>{user.email}</Text>
+          </View>
+        </View>
+
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+            <Text style={styles.error}>{error}</Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
-  header: { height: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
-  headerButton: { minWidth: 56, height: 46, alignItems: 'center', justifyContent: 'center' },
-  back: { color: '#EEE', fontSize: 36, lineHeight: 38 },
-  headerTitle: { color: '#F1F1F1', fontSize: 17, fontWeight: '800' },
-  save: { color: '#F1F1F1', fontSize: 14, fontWeight: '800' },
-  content: { paddingHorizontal: 24, paddingTop: 24 },
-  avatarWrap: { alignSelf: 'center', alignItems: 'center', marginBottom: 38 },
-  avatar: { width: 126, height: 126, borderRadius: 42, backgroundColor: '#161616' },
-  fallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#EFEFEF' },
-  initial: { color: '#080808', fontSize: 45, fontWeight: '900' },
-  changeBadge: { marginTop: 12, height: 36, borderRadius: 12, backgroundColor: '#151515', paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' },
-  changeText: { color: '#D8D8D8', fontSize: 12, fontWeight: '700' },
-  label: { color: '#5D5D5D', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 8 },
-  input: { height: 54, borderRadius: 16, borderWidth: 1, borderColor: '#242424', backgroundColor: '#101010', color: '#FFF', paddingHorizontal: 17, fontSize: 16 },
-  email: { color: '#616161', fontSize: 12, marginTop: 12, paddingHorizontal: 3 },
-  error: { color: '#FF7979', fontSize: 13, lineHeight: 19, marginTop: 16 },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    height: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  back: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { color: colors.textStrong, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  saveButton: {
+    height: 36,
+    paddingHorizontal: 18,
+    borderRadius: 18,
+    backgroundColor: colors.accentBright,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveDisabled: { opacity: 0.4 },
+  saveText: { color: '#061108', fontSize: 13, fontWeight: '800' },
+  content: { paddingHorizontal: 20, paddingTop: 28 },
+  avatarWrap: { alignSelf: 'center', alignItems: 'center', marginBottom: 32 },
+  avatarShell: { position: 'relative' },
+  avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: colors.surface },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  initial: { color: colors.accentBright, fontSize: 44, fontWeight: '900' },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.accentBright,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  changeBadge: {
+    marginTop: 14,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  changeText: { color: colors.textStrong, fontSize: 12, fontWeight: '700' },
+  fieldGroup: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 18,
+  },
+  label: { color: colors.textFaint, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8 },
+  input: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    color: colors.textStrong,
+    paddingHorizontal: 15,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  emailLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginTop: 18, marginBottom: 8 },
+  emailBox: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  email: { color: colors.textMuted, fontSize: 14 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239,68,68,0.25)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 16,
+  },
+  error: { color: colors.danger, fontSize: 13, flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
+  pressed: { opacity: 0.75 },
 });

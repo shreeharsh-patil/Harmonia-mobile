@@ -16,8 +16,9 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
+import { LibrarySkeleton } from '@/src/components/LibrarySkeleton';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
-import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -207,7 +208,7 @@ export default function LibraryScreen() {
 
   const renderAlbum = ({ item }: { item: HarmoniaAlbum }) => {
     const id = String(item.id || '');
-    const cover = imageUrl(item.image as any, gridArtworkSize);
+    const cover = entityImageUrl(item, gridArtworkSize);
     return (
       <Pressable
         disabled={!id}
@@ -229,7 +230,7 @@ export default function LibraryScreen() {
 
   const renderArtist = ({ item }: { item: HarmoniaArtistEntity }) => {
     const id = String(item.id || '');
-    const cover = imageUrl(item.image as any, gridArtworkSize);
+    const cover = entityImageUrl(item, gridArtworkSize);
     return (
       <Pressable
         disabled={!id}
@@ -351,7 +352,7 @@ export default function LibraryScreen() {
       </View>
 
       {!token ? accountGate : loading ? (
-        <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
+        <LibrarySkeleton />
       ) : tab === 'playlists' ? (
         <FlatList<Playlist>
           key={`playlists-${viewMode}`}

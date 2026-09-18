@@ -1,6 +1,5 @@
 import { Image } from 'expo-image';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
+import { ProfileSkeleton } from '@/src/components/ProfileSkeleton';
 import { APP_VERSION } from '@/src/config';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -33,7 +33,11 @@ export default function ProfileScreen() {
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   if (loading) {
-    return <SafeAreaView style={styles.safe}><View style={styles.center}><ActivityIndicator color="#FFF" /></View></SafeAreaView>;
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ProfileSkeleton />
+      </SafeAreaView>
+    );
   }
 
   if (!token || !user) {
@@ -43,7 +47,11 @@ export default function ProfileScreen() {
           <Text style={styles.kicker}>HARMONIA ACCOUNT</Text>
           <Text style={styles.guestTitle}>Keep your music in sync.</Text>
           <Text style={styles.body}>One account keeps your library, liked songs, and playlists available across Harmonia.</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/login')} style={styles.primary}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/login')}
+            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+          >
             <Text style={styles.primaryText}>Sign in</Text>
           </Pressable>
         </View>
@@ -85,11 +93,16 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void doRefresh()} tintColor="#FFF" />}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Profile</Text>
-          <Pressable onPress={() => router.push('/settings')} style={styles.settingsButton} accessibilityLabel="Settings">
-            <Ionicons name="settings-outline" size={20} color="#DADADA" />
+          <Pressable
+            onPress={() => router.push('/settings')}
+            style={styles.settingsButton}
+            accessibilityLabel="Settings"
+          >
+            <Ionicons name="settings-outline" size={21} color={colors.textStrong} />
           </Pressable>
         </View>
 
@@ -97,14 +110,20 @@ export default function ProfileScreen() {
           {user.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}><Text style={styles.initial}>{initial}</Text></View>
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.initial}>{initial}</Text>
+            </View>
           )}
           <View style={styles.identityCopy}>
             <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
             <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
           </View>
-          <Pressable onPress={() => router.push('/edit-profile')} style={styles.editButton} accessibilityLabel="Edit profile">
-            <Ionicons name="pencil-outline" size={17} color="#DADADA" />
+          <Pressable
+            onPress={() => router.push('/edit-profile')}
+            style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
+            accessibilityLabel="Edit profile"
+          >
+            <Ionicons name="pencil-outline" size={17} color={colors.textStrong} />
           </Pressable>
         </View>
 
@@ -149,16 +168,21 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardKicker}>SYNC</Text>
           <Text style={styles.cardTitle}>Connected to Harmonia</Text>
-          <Text style={styles.cardBody}>Your liked songs and playlists are safely synced across your Harmonia devices.</Text>
-          <Pressable onPress={() => void doRefresh()} style={styles.secondary}>
+          <Text style={styles.cardBody}>Your liked songs, albums, artists and playlists are safely synced across your Harmonia devices.</Text>
+          <Pressable
+            onPress={() => void doRefresh()}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+          >
+            <Ionicons name="sync-outline" size={15} color={colors.textStrong} />
             <Text style={styles.secondaryText}>Sync now</Text>
           </Pressable>
         </View>
 
         <Pressable
           onPress={() => void doSignOut()}
-          style={styles.logout}
+          style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
         >
+          <Ionicons name="log-out-outline" size={17} color={colors.danger} />
           <Text style={styles.logoutText}>Sign out</Text>
         </Pressable>
 
@@ -173,52 +197,130 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 16, paddingTop: 0 },
   pageHeader: {
-    height: 56,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: -16,
-    marginBottom: 24,
+    marginBottom: 20,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-    backgroundColor: 'rgba(0,0,0,0.96)',
+    backgroundColor: 'rgba(7,7,7,0.96)',
   },
   pageTitle: { color: colors.textStrong, fontSize: 28, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
-  settingsButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   identity: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#151515' },
-  avatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#ECECEC' },
-  initial: { color: '#080808', fontSize: 30, fontWeight: '900' },
+  avatar: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.surface },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  initial: { color: colors.accentBright, fontSize: 30, fontWeight: '900' },
   identityCopy: { flex: 1, minWidth: 0, marginLeft: 16 },
-  editButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-  name: { color: '#F4F4F4', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
-  email: { color: '#777', fontSize: 13, marginTop: 5 },
-  stats: { height: 90, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 16, marginTop: 26, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  editButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  name: { color: colors.textStrong, fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  email: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  stats: {
+    height: 88,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    marginTop: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
   stat: { flex: 1, alignItems: 'center' },
-  statValue: { color: '#F2F2F2', fontSize: 23, fontWeight: '800' },
-  statLabel: { color: '#6D6D6D', fontSize: 11, fontWeight: '600', marginTop: 4 },
-  rule: { height: 42, width: StyleSheet.hairlineWidth, backgroundColor: '#2A2A2A' },
+  statValue: { color: colors.textStrong, fontSize: 22, fontWeight: '800' },
+  statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 },
+  rule: { height: 38, width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   listeningSummary: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  listeningMetric: { flex: 1, minHeight: 66, borderRadius: 14, backgroundColor: '#0F0F0F', borderWidth: StyleSheet.hairlineWidth, borderColor: '#222', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  listeningValue: { color: '#E8E8E8', fontSize: 17, fontWeight: '800' },
-  listeningLabel: { color: '#616161', fontSize: 9, fontWeight: '650' as any, textAlign: 'center', marginTop: 4 },
-  librarySummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 },
-  librarySummaryText: { color: '#686868', fontSize: 11, fontWeight: '600' },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#444' },
-  card: { backgroundColor: colors.surface, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 18, marginTop: 16 },
-  cardKicker: { color: '#5F5F5F', fontSize: 9, fontWeight: '800', letterSpacing: 1.6 },
-  cardTitle: { color: '#EDEDED', fontSize: 18, fontWeight: '800', marginTop: 7 },
-  cardBody: { color: '#747474', fontSize: 13, lineHeight: 20, marginTop: 7 },
-  secondary: { alignSelf: 'flex-start', height: 38, borderRadius: 12, backgroundColor: '#1C1C1C', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', marginTop: 15 },
-  secondaryText: { color: '#D6D6D6', fontSize: 12, fontWeight: '700' },
-  logout: { height: 50, borderRadius: 15, borderWidth: StyleSheet.hairlineWidth, borderColor: '#352020', backgroundColor: '#130D0D', alignItems: 'center', justifyContent: 'center', marginTop: 20 },
-  logoutText: { color: '#E78787', fontSize: 14, fontWeight: '750' as any },
-  version: { color: '#3F3F3F', fontSize: 9, fontWeight: '700', textAlign: 'center', letterSpacing: 1.2, marginTop: 24 },
-  guest: { flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
-  kicker: { color: '#555', fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
-  guestTitle: { color: '#F4F4F4', fontSize: 30, lineHeight: 35, fontWeight: '800', letterSpacing: -0.9, marginTop: 8 },
-  body: { color: '#777', fontSize: 15, lineHeight: 22, marginTop: 10 },
-  primary: { height: 52, borderRadius: 16, backgroundColor: '#EEE', alignItems: 'center', justifyContent: 'center', marginTop: 25 },
-  primaryText: { color: '#080808', fontSize: 15, fontWeight: '800' },
+  listeningMetric: {
+    flex: 1,
+    minHeight: 66,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  listeningValue: { color: colors.textStrong, fontSize: 17, fontWeight: '800' },
+  listeningLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 4 },
+  librarySummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 },
+  librarySummaryText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textFaint },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: 18,
+    marginTop: 16,
+  },
+  cardKicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
+  cardTitle: { color: colors.textStrong, fontSize: 18, fontWeight: '800', marginTop: 6 },
+  cardBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 },
+  secondary: {
+    alignSelf: 'flex-start',
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+  },
+  secondaryText: { color: colors.textStrong, fontSize: 12, fontWeight: '700' },
+  logout: {
+    height: 50,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239,68,68,0.25)',
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  logoutText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
+  version: { color: colors.textFaint, fontSize: 10, fontWeight: '700', textAlign: 'center', letterSpacing: 1.2, marginTop: 24 },
+  guest: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
+  guestTitle: { color: colors.textStrong, fontSize: 30, lineHeight: 35, fontWeight: '900', letterSpacing: -0.9, marginTop: 8 },
+  body: { color: colors.textMuted, fontSize: 15, lineHeight: 22, marginTop: 10 },
+  primary: {
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.accentBright,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  primaryText: { color: '#061108', fontSize: 15, fontWeight: '800' },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
 });

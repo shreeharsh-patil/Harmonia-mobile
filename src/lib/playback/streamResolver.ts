@@ -359,21 +359,40 @@ function jioSaavnIdOf(track: Song) {
   return id || null;
 }
 
+function hasSpotifyIdentity(track: Song) {
+  const raw = track as any;
+  const explicit = String(raw.spotifyId || raw.spotifyUri || '').trim();
+  if (explicit) return true;
+
+  const source = String(raw.source || raw.provider || '').toLowerCase();
+  const id = String(raw.id || raw.songId || raw.sourceId || '').trim();
+  return source.includes('spotify') || /^[A-Za-z0-9]{22}$/.test(id);
+}
+
+function knownArtistNames(track: Song) {
+  const artists = artistNames(track).trim();
+  return artists && artists !== 'Unknown artist' ? artists : '';
+}
+
 function canResolveWithDirectJioSaavn(track: Song) {
   const source = String((track as any).source || (track as any).provider || '').toLowerCase();
   if (source.includes('podcast') || (track as any).isVideo === true) return false;
   if (jioSaavnIdOf(track)) return true;
 
   const title = String(track.name || track.title || '').trim();
-  const artists = artistNames(track).trim();
-  return Boolean(title && artists && artists !== 'Unknown artist');
+  const artists = knownArtistNames(track);
+  return Boolean(
+    title && title !== 'Unknown track' && (artists || hasSpotifyIdentity(track))
+  );
 }
 
 function canResolveWithDirectYouTube(track: Song) {
   if (youtubeIdOf(track)) return true;
   const title = String(track.name || track.title || '').trim();
-  const artists = artistNames(track).trim();
-  return Boolean(title && artists && artists !== 'Unknown artist');
+  const artists = knownArtistNames(track);
+  return Boolean(
+    title && title !== 'Unknown track' && (artists || hasSpotifyIdentity(track))
+  );
 }
 
 async function fetchJson(
@@ -468,7 +487,7 @@ export function createHarmoniaProviders({
       async resolve(track, options) {
         const explicitId = youtubeIdOf(track);
         const title = String(track.name || track.title || '').trim();
-        const artists = artistNames(track).trim();
+        const artists = knownArtistNames(track);
 
         const match = explicitId
           ? {
@@ -578,7 +597,7 @@ export function createHarmoniaProviders({
       async resolve(track, options) {
         const directId = jioSaavnIdOf(track);
         const title = String(track.name || track.title || '').trim();
-        const artists = artistNames(track).trim();
+        const artists = knownArtistNames(track);
 
         let direct = directId
           ? await fetchDirectJioSaavnTrack(directId, {
@@ -800,7 +819,15 @@ export class StreamResolver {
     for (const provider of sourceOrderForTrack(track, this.providers)) {
       if (excluded.has(provider.id)) continue;
       if (!provider.canResolve(track, options)) continue;
-      if (provider.id !== 'embedded' && !this.health.isAvailable(provider.id)) continue;
+      // Circuit breakers protect speculative preloads and background work, but
+      // an explicit user play must always probe the available fallbacks. If all
+      // providers are cooling down, skipping them here produces the misleading
+      // "all providers failed" error without making a single request.
+      if (
+        provider.id !== 'embedded' &&
+        options.priority !== 'high' &&
+        !this.health.isAvailable(provider.id)
+      ) continue;
 
       const startedAt = this.now();
 

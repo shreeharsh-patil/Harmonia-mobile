@@ -85,6 +85,9 @@ export type Playlist = {
   owner?: string;
   subtitle?: string;
   source?: string;
+  spotifyId?: string;
+  sourceUrl?: string;
+  spotifyImages?: { url: string; width?: number; height?: number }[];
   [key: string]: unknown;
 };
 

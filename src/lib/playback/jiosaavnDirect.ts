@@ -44,6 +44,19 @@ function normalizeText(value: unknown) {
     .trim();
 }
 
+function titleForRecordingMatch(value: unknown) {
+  return decodeHtml(value)
+    .replace(/\((?:with|feat\.?|ft\.?|featuring)\s+[^)]*\)/gi, ' ')
+    .replace(/\[(?:with|feat\.?|ft\.?|featuring)\s+[^\]]*\]/gi, ' ')
+    .replace(/\b(?:feat\.?|ft\.?|featuring)\b.*$/gi, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim();
+}
+
+function normalizeRecordingTitle(value: unknown) {
+  return titleForRecordingMatch(value).toLowerCase();
+}
+
 function decryptMediaUrl(encrypted: string) {
   if (!encrypted) return null;
 
@@ -191,8 +204,8 @@ function matchScore(
   raw: any,
   target: { title: string; artist?: string | null; duration?: number | null }
 ) {
-  const targetTitle = normalizeText(target.title);
-  const candidateTitle = normalizeText(raw?.title);
+  const targetTitle = normalizeRecordingTitle(target.title);
+  const candidateTitle = normalizeRecordingTitle(raw?.title);
   if (!targetTitle || !candidateTitle) return 0;
 
   let score = 0;
@@ -298,7 +311,7 @@ export async function findDirectJioSaavnTrack(
   if (!title) return null;
 
   try {
-    const query = [title, target.artist].filter(Boolean).join(' ');
+    const query = [titleForRecordingMatch(title), target.artist].filter(Boolean).join(' ');
     const payload = await requestJson({
       __call: 'search.getResults',
       _format: 'json',
@@ -432,7 +445,7 @@ export async function fetchDirectJioSaavnTracks(
     chunks.push(cleanIds.slice(index, index + 50));
   }
 
-  const resolved = await Promise.all(chunks.map(async (chunk) => {
+  const fetchChunk = async (chunk: string[]) => {
     try {
       const payload = await requestJson({
         __call: 'song.getDetails',
@@ -450,10 +463,23 @@ export async function fetchDirectJioSaavnTracks(
       if (signal?.aborted || error?.name === 'AbortError') throw error;
       return [];
     }
-  }));
+  };
+
+  const resolved = await Promise.all(chunks.map(fetchChunk));
 
   const byId = new Map<string, DirectSaavnTrack>();
   for (const track of resolved.flat()) byId.set(String(track.id), track);
+
+  // Provider batch responses occasionally omit otherwise valid ids, and a
+  // transient failure used to make every omitted song silently disappear from
+  // a playlist. Retry only the missing ids in small groups to recover partial
+  // batches without turning a 100-song playlist into 100 network requests.
+  const missing = cleanIds.filter((id) => !byId.has(id));
+  for (let index = 0; index < missing.length; index += 10) {
+    const retried = await fetchChunk(missing.slice(index, index + 10));
+    for (const track of retried) byId.set(String(track.id), track);
+  }
+
   return cleanIds.map((id) => byId.get(id)).filter(Boolean) as DirectSaavnTrack[];
 }
 

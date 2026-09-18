@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 import { artworkUrl, bestArtworkUrl, normalizeArtworkUrl, normalizeSong } from '@/src/lib/song';
@@ -8,15 +8,20 @@ function isPlaceholderArtwork(url: string) {
   const normalized = String(url || '').trim().toLowerCase();
   return !normalized ||
     normalized.endsWith('/default-playlist-image.png') ||
+    normalized.endsWith('/def-playlist-image.jpg') ||
     normalized.startsWith('data:image/svg+xml');
 }
 
-function playlistArtwork(playlist: Playlist, targetSize: number) {
+export function playlistArtworkUrl(playlist: Playlist, targetSize: number, extraTracks?: Song[]) {
   const raw = playlist as any;
   for (const field of [
+    // Match the web client's shared artwork resolver: an explicit Spotify
+    // image is the canonical identity, before provider/catalog artwork.
     raw.spotifyImages,
+    raw.spotifyImage,
     raw.image,
     raw.images,
+    raw.collageImages,
     raw.cover,
     raw.coverUrl,
     raw.coverImage,
@@ -32,6 +37,7 @@ function playlistArtwork(playlist: Playlist, targetSize: number) {
   // Web Harmonia derives a playlist cover from its tracks when the stored
   // playlist image is missing/default. Do the same on mobile.
   const tracks = [
+    ...(Array.isArray(extraTracks) ? extraTracks : []),
     ...(Array.isArray(raw.tracks) ? raw.tracks : []),
     ...(Array.isArray(raw.songs) ? raw.songs : []),
     ...(Array.isArray(raw.sourceTracks) ? raw.sourceTracks : []),
@@ -39,23 +45,104 @@ function playlistArtwork(playlist: Playlist, targetSize: number) {
 
   for (const track of tracks) {
     const url = artworkUrl(normalizeSong(track as any), targetSize);
-    if (url) return normalizeArtworkUrl(url);
+    if (url && !isPlaceholderArtwork(url)) return normalizeArtworkUrl(url);
   }
 
   return '';
+}
+
+export function getPlaylistCollageUrls(playlist: Playlist, extraTracks?: Song[]): string[] {
+  const raw = playlist as any;
+  if (Array.isArray(raw.collageImages) && raw.collageImages.length >= 4) {
+    const valid = raw.collageImages.filter((u: any) => typeof u === 'string' && !isPlaceholderArtwork(u));
+    if (valid.length >= 4) return valid.slice(0, 4);
+  }
+
+  const tracks = [
+    ...(Array.isArray(extraTracks) ? extraTracks : []),
+    ...(Array.isArray(raw.tracks) ? raw.tracks : []),
+    ...(Array.isArray(raw.songs) ? raw.songs : []),
+    ...(Array.isArray(raw.sourceTracks) ? raw.sourceTracks : []),
+  ] as Song[];
+
+  const seen = new Set<string>();
+  const tiles: string[] = [];
+
+  for (const track of tracks) {
+    const url = artworkUrl(normalizeSong(track as any), 300);
+    if (!url || isPlaceholderArtwork(url) || seen.has(url)) continue;
+    seen.add(url);
+    tiles.push(url);
+    if (tiles.length === 4) break;
+  }
+
+  return tiles;
 }
 
 export const PlaylistArtwork = memo(function PlaylistArtwork({
   playlist,
   size,
   radius = 16,
+  tracks,
 }: {
   playlist: Playlist;
   size: number;
   radius?: number;
+  tracks?: Song[];
 }) {
-  const url = playlistArtwork(playlist, size);
-  if (!url) {
+  const raw = playlist as any;
+  const singleUrl = playlistArtworkUrl(playlist, size, tracks);
+  const collageTiles = useMemo(() => getPlaylistCollageUrls(playlist, tracks), [playlist, tracks]);
+
+  // If a collage of 4 unique images is available and there is no dedicated high-res cover
+  const showCollage = !singleUrl && collageTiles.length >= 4;
+
+  if (showCollage) {
+    const half = Math.floor(size / 2);
+    return (
+      <View
+        style={[
+          styles.collageContainer,
+          { width: size, height: size, borderRadius: radius },
+        ]}
+      >
+        <View style={styles.collageRow}>
+          <Image
+            source={{ uri: collageTiles[0] }}
+            style={{ width: half, height: half }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={String(raw?._id || playlist.id || collageTiles[0])}
+          />
+          <Image
+            source={{ uri: collageTiles[1] }}
+            style={{ width: half, height: half }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={String(raw?._id || playlist.id || collageTiles[1])}
+          />
+        </View>
+        <View style={styles.collageRow}>
+          <Image
+            source={{ uri: collageTiles[2] }}
+            style={{ width: half, height: half }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={String(raw?._id || playlist.id || collageTiles[2])}
+          />
+          <Image
+            source={{ uri: collageTiles[3] }}
+            style={{ width: half, height: half }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={String(raw?._id || playlist.id || collageTiles[3])}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (!singleUrl) {
     return (
       <View style={[styles.fallback, { width: size, height: size, borderRadius: radius }]}>
         <Text style={[styles.icon, { fontSize: size * 0.25 }]}>♫</Text>
@@ -65,12 +152,12 @@ export const PlaylistArtwork = memo(function PlaylistArtwork({
 
   return (
     <Image
-      source={{ uri: url }}
+      source={{ uri: singleUrl }}
       style={{ width: size, height: size, borderRadius: radius, backgroundColor: '#151515' }}
       contentFit="cover"
       transition={140}
       cachePolicy="memory-disk"
-      recyclingKey={String((playlist as any)._id || playlist.id || url)}
+      recyclingKey={String(raw?._id || playlist.id || singleUrl)}
     />
   );
 });
@@ -84,4 +171,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   icon: { color: '#6F6F6F', fontWeight: '800' },
+  collageContainer: {
+    overflow: 'hidden',
+    backgroundColor: '#151515',
+    flexDirection: 'column',
+  },
+  collageRow: {
+    flexDirection: 'row',
+  },
 });

@@ -8,12 +8,14 @@ export const colors = {
   borderStrong: '#323232',
   text: '#E2E8F0',
   textStrong: '#FAFAFA',
+  textMuted: '#A2A2A2',
+  textFaint: '#707070',
   muted: '#A2A2A2',
   mutedDim: '#707070',
-  accent: '#006239',
-  accentBright: '#4ADE80',
+  accent: '#10B981',
+  accentBright: '#1ED760',
   accentDark: '#064E3B',
-  danger: '#EDE9E8',
+  danger: '#EF4444',
 } as const;
 
 export const radii = {

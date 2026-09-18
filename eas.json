@@ -6,16 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+      }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_HARMONIA_API_URL": "https://backend-harmonia.vercel.app"
+      }
     }
   }
 }

@@ -45,6 +45,12 @@
     "android": {
       "package": "com.harmonia.app",
       "versionCode": 7,
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#070707",
         "foregroundImage": "./assets/harmonia-icon.png"
@@ -54,6 +60,11 @@
       "bundleIdentifier": "com.harmonia.app",
       "buildNumber": "7",
       "supportsTablet": false,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      },
       "config": {
         "usesNonExemptEncryption": false
       }

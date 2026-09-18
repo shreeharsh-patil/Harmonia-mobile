@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import {
   setAudioModeAsync,
   requestNotificationPermissionsAsync,
@@ -39,6 +40,7 @@ import {
   captureRecoveryPosition,
   getPlaybackRecoveryPolicy,
   MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
+  nextUntriedCandidateIndex,
 } from '@/src/lib/playback/recoveryPolicy';
 import { createQueueWindow } from '@/src/lib/playback/playbackSnapshot';
 import {
@@ -75,6 +77,11 @@ function audioSourceKey(url: string, headers?: Record<string, string> | null) {
     ? Object.entries(headers).sort(([a], [b]) => a.localeCompare(b))
     : [];
   return `${url}|${JSON.stringify(normalizedHeaders)}`;
+}
+
+function isExpoGoRuntime() {
+  return Constants.executionEnvironment === ExecutionEnvironment.StoreClient ||
+    (Constants as any).appOwnership === 'expo';
 }
 
 function localDayKey(date = new Date()) {
@@ -297,6 +304,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   const activeResolutionAbortRef = useRef<AbortController | null>(null);
   const activeProviderRef = useRef<string | null>(null);
   const activeSourceRef = useRef<PlaybackDiagnostics['source'] | null>(null);
+  const activeStreamUrlRef = useRef<string | null>(null);
+  const failedStreamUrlsRef = useRef<{ trackId: string | null; urls: Set<string> }>({
+    trackId: null,
+    urls: new Set(),
+  });
   const lastPlaybackErrorRef = useRef<PlaybackPipelineError | null>(null);
   const awaitingNetworkRecoveryRef = useRef(false);
   const unshuffledQueueRef = useRef<Song[]>([]);
@@ -557,24 +569,33 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const setLockScreenMetadata = useCallback((song: Song) => {
+    if (Platform.OS === 'android' && isExpoGoRuntime()) {
+      return;
+    }
+
     const title = String(song.title || song.name || '').trim() || 'Harmonia';
     const artist = artistNames(song).trim();
     const albumTitle = albumName(song).trim();
 
-    player.setActiveForLockScreen(
-      true,
-      {
-        title,
-        artist: artist || undefined,
-        albumTitle: albumTitle || undefined,
-        artworkUrl: artworkUrl(song, 512) || undefined,
-      },
-      {
-        isLiveStream: false,
-        showSeekBackward: true,
-        showSeekForward: true,
-      }
-    );
+    try {
+      player.setActiveForLockScreen(
+        true,
+        {
+          title,
+          artist: artist || undefined,
+          albumTitle: albumTitle || undefined,
+          artworkUrl: artworkUrl(song, 512) || undefined,
+        },
+        {
+          isLiveStream: false,
+          showSeekBackward: true,
+          showSeekForward: true,
+        }
+      );
+    } catch {
+      // Safe fallback when running in Expo Go or when lock screen notification
+      // permissions are pending on the device.
+    }
   }, [player]);
 
   const loadIndex = useCallback(async (
@@ -623,6 +644,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
 
     if (!options.recovery) {
       recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
+      failedStreamUrlsRef.current = { trackId: stable.id, urls: new Set() };
     }
 
     try {
@@ -657,6 +679,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         const plan = await createAdaptivePipeline(stable, effectiveQualityRef.current, {
           signal: controller.signal,
           excludeProviders: options.excludeProviders,
+          priority: 'high',
           recoveryAttempt: options.recoveryAttempt,
           skipEmbedded: options.skipEmbedded,
         });
@@ -706,6 +729,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       setQueue(nextQueue);
 
       player.replace(nativeAudioSource(resolved.url, resolved.headers));
+      activeStreamUrlRef.current = resolved.url;
       player.setPlaybackRate(rateRef.current);
       setPlaybackState('LOADING');
 
@@ -787,6 +811,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             player.pause();
             lockScreenReadyKeyRef.current = null;
             player.replace(nativeAudioSource(candidate.url, candidate.headers));
+            activeStreamUrlRef.current = candidate.url;
             player.setPlaybackRate(rateRef.current);
             pendingSeek.current = resumeAt;
             restoredPosition.current = resumeAt;
@@ -1101,13 +1126,35 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const restoreGeneration = loadGenerationRef.current;
 
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: 'doNotMix',
-    }).catch(() => {});
+    // Expo Go cannot register this app's background media service. Retain
+    // foreground playback when that native-only setup is unavailable instead
+    // of silently leaving the audio session unconfigured.
+    const isExpoGo = isExpoGoRuntime();
 
-    if (Platform.OS === 'android') {
+    setAudioModeAsync(
+      isExpoGo
+        ? {
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+            interruptionMode: 'doNotMix',
+          }
+        : {
+            playsInSilentMode: true,
+            shouldPlayInBackground: true,
+            interruptionMode: 'doNotMix',
+          }
+    ).catch(() =>
+      setAudioModeAsync({
+        playsInSilentMode: true,
+        shouldPlayInBackground: false,
+        interruptionMode: 'doNotMix',
+      }).catch(() => {})
+    );
+
+    // Expo Go does not include this app's generated media playback service.
+    // Requesting its notification permission there attempts to bind that
+    // missing service and can poison the foreground player session.
+    if (Platform.OS === 'android' && !isExpoGo) {
       requestNotificationPermissionsAsync().catch(() => {});
     }
 
@@ -1680,6 +1727,23 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             'Device is offline.'
           );
 
+      if (__DEV__) {
+        console.warn('[HarmoniaPlayback] starting recovery', {
+          trackId,
+          errorType: failure.type,
+          provider: activeProviderRef.current,
+          source: activeSourceRef.current,
+          attempt: recoveryStateRef.current.attempts + 1,
+        });
+      }
+
+      if (failedStreamUrlsRef.current.trackId !== trackId) {
+        failedStreamUrlsRef.current = { trackId, urls: new Set() };
+      }
+      if (hasNativeFailure && activeStreamUrlRef.current) {
+        failedStreamUrlsRef.current.urls.add(activeStreamUrlRef.current);
+      }
+
       try {
         while (
           !cancelled &&
@@ -1687,16 +1751,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           recoveryStateRef.current.attempts < MAX_AUTOMATIC_RECOVERY_ATTEMPTS
         ) {
           const completedAttempts = recoveryStateRef.current.attempts;
-          const nextEmbeddedCandidateIndex = completedAttempts + 1;
           const recoverySong = queueRef.current[indexRef.current];
           if (!recoverySong || recoverySong.id !== trackId) return;
           const embeddedCandidates = getAudioCandidates(
             recoverySong,
             effectiveQualityRef.current
           );
+          const nextEmbeddedCandidateIndex = nextUntriedCandidateIndex(
+            embeddedCandidates,
+            failedStreamUrlsRef.current.urls
+          );
           const hasNextCandidate =
-            activeSourceRef.current === 'embedded' &&
-            embeddedCandidates.length > nextEmbeddedCandidateIndex;
+            hasNativeFailure && nextEmbeddedCandidateIndex >= 0;
           const policy = getPlaybackRecoveryPolicy(failure.type, completedAttempts, {
             online: networkConnected,
             hasNextCandidate,

@@ -23,11 +23,11 @@ type StaticCatalogSnapshot = {
 const bundledCatalog = require('../../assets/catalog/harmonia-catalog.json') as StaticCatalogSnapshot;
 
 const CURATED_SECTIONS = [
-  { id: '6a033dd076732f7db81ee4da', title: 'Popular Hindi Playlists' },
-  { id: '6a0348173bcc78e22f236fdb', title: 'New & Trending' },
-  { id: '6a04102c17b699631f90592a', title: 'Bollywood Romance' },
-  { id: '6a041b0d17b699631f905947', title: 'Chill & Sad' },
-  { id: '6a38b276d0a0b98c1b5c1fd8', title: 'Popular Party Playlists' },
+  { id: '6a033dd076732f7db81ee4da', sectionIds: ['6a0300000000000000000005', '6a033dd076732f7db81ee4da'], title: 'Popular Hindi Playlists' },
+  { id: '6a0348173bcc78e22f236fdb', sectionIds: ['6a0300000000000000000001', '6a0348173bcc78e22f236fdb'], title: 'New & Trending' },
+  { id: '6a04102c17b699631f90592a', sectionIds: ['6a0300000000000000000002', '6a04102c17b699631f90592a'], title: 'Bollywood Romance' },
+  { id: '6a041b0d17b699631f905947', sectionIds: ['6a0300000000000000000003', '6a041b0d17b699631f905947'], title: 'Chill & Sad' },
+  { id: '6a38b276d0a0b98c1b5c1fd8', sectionIds: ['6a0300000000000000000004', '6a38b276d0a0b98c1b5c1fd8'], title: 'Popular Party Playlists' },
   { id: '6a04071717b699631f905913', title: 'English Top Hits' },
   { id: '6a047203f2b5dded647a6dcf', title: 'English New & Trending' },
   { id: '6a0680775b5c126be7357acc', title: 'Pop Essentials' },
@@ -217,10 +217,32 @@ export function getStaticHomeSections(): MusicSection[] {
   );
 
   const curated = CURATED_SECTIONS
-    .map(({ id, title }) => {
-      const section = byId.get(id);
-      if (!section?.playlists?.length) return null;
-      return { ...section, id, _id: id, name: title };
+    .map((item) => {
+      const ids: string[] = 'sectionIds' in item ? [...item.sectionIds] : [item.id];
+      const matchingSections = ids.map((id) => byId.get(id)).filter(Boolean) as (MusicSection & { genreId?: string; genreName?: string })[];
+      if (!matchingSections.length) return null;
+
+      const playlistMap = new Map<string, Playlist>();
+      for (const section of matchingSections) {
+        for (const playlist of section?.playlists || []) {
+          const pid = String(playlist.id || playlist._id || '').trim();
+          if (pid && !playlistMap.has(pid)) {
+            playlistMap.set(pid, playlist);
+          }
+        }
+      }
+
+      const mergedPlaylists = [...playlistMap.values()];
+      if (!mergedPlaylists.length) return null;
+
+      return {
+        id: item.id,
+        _id: item.id,
+        name: item.title,
+        genreId: matchingSections[0]?.genreId || '',
+        genreName: matchingSections[0]?.genreName || '',
+        playlists: mergedPlaylists,
+      };
     })
     .filter(Boolean) as MusicSection[];
 

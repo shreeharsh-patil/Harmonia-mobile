@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,15 +8,18 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
 import { SongRow } from '@/src/components/SongRow';
+import { ExploreSkeleton } from '@/src/components/ExploreSkeleton';
 import {
   fetchHomeSections,
   fetchRecommendedMixes,
 } from '@/src/lib/api';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { usePlaybackHistory, usePlayer, type PlaybackHistoryEntry } from '@/src/providers/PlayerProvider';
+import { colors } from '@/src/theme';
 import type { MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
 
 function uniqueRecentSongs(history: PlaybackHistoryEntry[]) {
@@ -93,7 +95,7 @@ export default function ExploreScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.back} accessibilityLabel="Go back">
-          <Text style={styles.backText}>‹</Text>
+          <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
         </Pressable>
         <View style={styles.headerCopy}>
           <Text style={styles.kicker}>DISCOVER</Text>
@@ -122,16 +124,14 @@ export default function ExploreScreen() {
         )}
 
         {loading && !sections.length ? (
-          <View style={styles.loading}>
-            <ActivityIndicator color="#FFF" />
-          </View>
+          <ExploreSkeleton />
         ) : (
           <>
             {!!recentSongs.length && (
               <View style={styles.section}>
                 <View style={styles.sectionHead}>
                   <Text style={styles.sectionTitle}>Jump back in</Text>
-                  <Text style={styles.sectionMeta}>{recentSongs.length}</Text>
+                  <Text style={styles.sectionMeta}>{recentSongs.length} tracks</Text>
                 </View>
                 <View style={styles.songList}>
                   {recentSongs.slice(0, 6).map((song) => (
@@ -168,7 +168,7 @@ export default function ExploreScreen() {
               <View key={String(section.id || section._id || section.name)} style={styles.section}>
                 <View style={styles.sectionHead}>
                   <Text style={styles.sectionTitle}>{section.name}</Text>
-                  <Text style={styles.sectionMeta}>{section.playlists?.length || 0}</Text>
+                  <Text style={styles.sectionMeta}>{section.playlists?.length || 0} playlists</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                   {(section.playlists || []).map((playlist, index) => (
@@ -196,29 +196,73 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
-  header: { height: 72, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18 },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#121212', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  backText: { color: '#F2F2F2', fontSize: 32, lineHeight: 34, marginTop: -2 },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  back: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
   headerCopy: { flex: 1 },
-  kicker: { color: '#595959', fontSize: 9, fontWeight: '800', letterSpacing: 1.7 },
-  title: { color: '#FFF', fontSize: 28, fontWeight: '850' as any, letterSpacing: -0.8, marginTop: 2 },
-  content: { paddingHorizontal: 18, paddingBottom: 48 },
-  hero: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#292929', backgroundColor: '#101010', padding: 20, marginTop: 8, marginBottom: 28 },
-  heroKicker: { color: '#666', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
-  heroTitle: { color: '#F5F5F5', fontSize: 27, lineHeight: 31, fontWeight: '850' as any, letterSpacing: -0.8, marginTop: 9, maxWidth: 320 },
-  heroBody: { color: '#777', fontSize: 13, lineHeight: 20, marginTop: 10, maxWidth: 340 },
+  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
+  title: { color: colors.textStrong, fontSize: 24, fontWeight: '900', letterSpacing: -0.6, marginTop: 1 },
+  content: { paddingHorizontal: 16, paddingBottom: 48 },
+  hero: {
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: 20,
+    marginTop: 16,
+    marginBottom: 28,
+  },
+  heroKicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
+  heroTitle: {
+    color: colors.textStrong,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+    marginTop: 8,
+    maxWidth: 320,
+  },
+  heroBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 8, maxWidth: 340 },
   section: { marginBottom: 30 },
-  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 13 },
-  sectionTitle: { color: '#F3F3F3', fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
-  sectionMeta: { color: '#5B5B5B', fontSize: 11, fontWeight: '700' },
-  rail: { gap: 12, paddingRight: 18 },
-  songList: { borderRadius: 18, overflow: 'hidden', backgroundColor: '#0D0D0D', borderWidth: StyleSheet.hairlineWidth, borderColor: '#202020', paddingHorizontal: 8, paddingVertical: 4 },
-  loading: { minHeight: 260, alignItems: 'center', justifyContent: 'center' },
-  errorBox: { borderRadius: 14, backgroundColor: '#171010', padding: 14, marginBottom: 22 },
-  error: { color: '#EE8A8A', fontSize: 13, fontWeight: '600' },
-  retry: { color: '#777', fontSize: 11, marginTop: 4 },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
+  sectionTitle: { color: colors.textStrong, fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
+  sectionMeta: { color: colors.textFaint, fontSize: 12, fontWeight: '700' },
+  rail: { gap: 14, paddingRight: 16 },
+  songList: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  errorBox: {
+    borderRadius: 14,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239,68,68,0.25)',
+    padding: 14,
+    marginBottom: 22,
+  },
+  error: { color: colors.danger, fontSize: 13, fontWeight: '600' },
+  retry: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   empty: { minHeight: 260, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  emptyTitle: { color: '#DDD', fontSize: 17, fontWeight: '800' },
-  emptyBody: { color: '#686868', fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: 'center' },
+  emptyTitle: { color: colors.textStrong, fontSize: 17, fontWeight: '800' },
+  emptyBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: 'center' },
 });

@@ -86,12 +86,15 @@ function dedupeItems(items: CatalogItem[]) {
 
 function curatedSectionsFor(catalog: BrowseCatalog, sections: MusicSection[]): CatalogSection[] {
   const matchers: Record<string, string[]> = {
-    hindi: ['hindi', 'new & trending', 'bollywood', 'chill & sad', 'devotional'],
+    hindi: ['hindi', 'new & trending', 'bollywood', 'bollywood romance', 'chill & sad', 'devotional'],
     english: ['english'],
     pop: ['pop essentials'],
     party: ['party', 'dance hits'],
     'dance-electronic': ['dance hits', 'party'],
     'new-releases': ['new & trending', 'new releases'],
+    love: ['bollywood romance', 'romance', 'love'],
+    chill: ['chill & sad', 'chill'],
+    mood: ['mood', 'chill & sad', 'romance'],
   };
   const terms = matchers[catalog.id] || [];
   if (!terms.length) return [];

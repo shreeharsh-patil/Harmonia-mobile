@@ -12,7 +12,7 @@ export function PlaylistCard({
   size?: number;
 }) {
   const name = playlist.name || playlist.title || 'Playlist';
-  const songCount = Number(playlist.songCount || 0);
+  const songCount = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0);
 
   return (
     <Pressable
@@ -25,7 +25,7 @@ export function PlaylistCard({
       <Text numberOfLines={1} style={styles.title}>
         {name}
       </Text>
-      {!!(playlist.songCount || playlist.subtitle || playlist.owner) && (
+      {!!(songCount || playlist.subtitle || playlist.owner) && (
         <Text numberOfLines={1} style={styles.subtitle}>
           {songCount
             ? `${songCount} ${songCount === 1 ? 'song' : 'songs'}`

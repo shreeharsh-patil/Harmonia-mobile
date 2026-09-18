@@ -18,8 +18,12 @@ import {
   captureRecoveryPosition,
   getPlaybackRecoveryPolicy,
   MAX_AUTOMATIC_RECOVERY_ATTEMPTS,
+  nextUntriedCandidateIndex,
 } from '../../src/lib/playback/recoveryPolicy';
-import { PlaybackErrorType } from '../../src/lib/playback/playbackErrors';
+import {
+  PlaybackErrorType,
+  classifyPlaybackError,
+} from '../../src/lib/playback/playbackErrors';
 import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
 import {
   artistNames,
@@ -28,6 +32,7 @@ import {
   persistenceSafeSong,
 } from '../../src/lib/song';
 import {
+  fetchDirectJioSaavnTracks,
   searchDirectJioSaavn,
   searchDirectJioSaavnAlbums,
   searchDirectJioSaavnArtists,
@@ -95,6 +100,26 @@ function saavnDetails(id: string, url: string, options: { supports320?: boolean;
     },
   };
 }
+
+test('catalog batches retry only provider-omitted song ids', async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const ids = new URL(String(input)).searchParams.get('pids') || '';
+    calls.push(ids);
+    if (ids === 'song-a,song-b') {
+      return json(saavnDetails('song-a', 'https://aac.saavncdn.com/a_160.mp4'));
+    }
+    if (ids === 'song-b') {
+      return json(saavnDetails('song-b', 'https://aac.saavncdn.com/b_160.mp4'));
+    }
+    return json({});
+  };
+
+  const tracks = await fetchDirectJioSaavnTracks(['song-a', 'song-b'], { fetchImpl });
+
+  assert.deepEqual(tracks.map((track) => track.id), ['song-a', 'song-b']);
+  assert.deepEqual(calls, ['song-a,song-b', 'song-b']);
+});
 
 test('1 embedded audio is selected without a network request', async () => {
   let requests = 0;
@@ -239,6 +264,53 @@ test('6 metadata-only Spotify tracks try direct JioSaavn before backend fallback
   assert.equal(result.source, 'backend-search');
   assert.equal(saavnSearchCalls, 1);
   assert.equal(streamCalls, 1);
+});
+
+test('Spotify tracks with a title but no artist still resolve by recording title', async () => {
+  const queries: string[] = [];
+  const providers = createHarmoniaProviders({
+    streamApiBase: '',
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+      queries.push(url.searchParams.get('q') || '');
+      return json({
+        results: [{
+          id: 'B6d7Dnf9',
+          title: 'KALYANI (with Shreya Ghoshal) - Remix',
+          image: 'https://c.saavncdn.com/475/cover-150x150.jpg',
+          more_info: {
+            album: 'KALYANI',
+            duration: '269',
+            encrypted_media_url: encryptedSaavnUrl(
+              'https://aac.saavncdn.com/475/kalyani_160.mp4'
+            ),
+            '320kbps': 'true',
+            artistMap: {
+              primary_artists: [{ id: 'artist-1', name: 'ARJN' }],
+            },
+          },
+        }],
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: '2y8mkajKikV5S1PRCMQ5WL',
+    songId: '2y8mkajKikV5S1PRCMQ5WL',
+    name: 'KALYANI (with Shreya Ghoshal) - Remix',
+    title: 'KALYANI (with Shreya Ghoshal) - Remix',
+    source: 'spotify',
+    artist: undefined,
+    primaryArtists: undefined,
+    artists: undefined,
+  }), { quality: 'normal', priority: 'high' });
+
+  assert.equal(result.source, 'jiosaavn');
+  assert.match(result.url, /kalyani_160\.mp4/);
+  assert.deepEqual(queries, ['KALYANI Remix']);
 });
 
 test('7 expired resolved-stream cache entries are rejected', () => {
@@ -405,6 +477,7 @@ test('20 background audio and lock-screen integration remain enabled', async () 
   assert.match(source, /setActiveForLockScreen/);
   assert.match(source, /showSeekBackward: true/);
   assert.match(source, /showSeekForward: true/);
+  assert.match(source, /Platform\.OS === 'android' && !isExpoGo/);
 });
 
 test('21 obvious webpage URLs are rejected as audio candidates', () => {
@@ -430,6 +503,34 @@ test('22 provider health enters cooldown after repeated failures and later recov
   assert.equal(health.isAvailable('youtube'), true);
   health.recordSuccess('youtube', 120);
   assert.equal(health.get('youtube').consecutiveFailures, 0);
+});
+
+test('explicit playback probes a provider even while speculative work is cooling down', async () => {
+  let calls = 0;
+  const health = new ProviderHealthManager({ failureThreshold: 1, cooldownMs: 60_000 });
+  health.recordFailure('jiosaavn');
+
+  const resolver = new StreamResolver([{
+    id: 'jiosaavn',
+    canResolve: () => true,
+    resolve: async (track) => {
+      calls += 1;
+      return {
+        url: 'https://aac.saavncdn.com/001/recovered_160.mp4',
+        track,
+        provider: 'jiosaavn',
+      };
+    },
+  }], { healthManager: health });
+
+  const result = await resolver.resolve(song({ source: 'jiosaavn' }), {
+    priority: 'high',
+    forceFresh: true,
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.provider, 'jiosaavn');
+  assert.equal(health.get('jiosaavn').consecutiveFailures, 0);
 });
 
 test('23 stream expiry honors provider expiry and safety-aware cache freshness', () => {
@@ -1108,6 +1209,32 @@ test('43 decode failures prefer another embedded candidate like Harmonia Web', (
       { hasNextCandidate: true }
     ).action,
     'next-candidate'
+  );
+});
+
+test('provider source errors try each unfailed quality candidate', () => {
+  const candidates = [
+    { url: 'https://aac.saavncdn.com/kalyani_320.mp4' },
+    { url: 'https://aac.saavncdn.com/kalyani_160.mp4' },
+    { url: 'https://aac.saavncdn.com/kalyani_96.mp4' },
+  ];
+  const failed = new Set([candidates[2].url]);
+
+  assert.equal(nextUntriedCandidateIndex(candidates, failed), 0);
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.PROVIDER_ERROR, 0, {
+      hasNextCandidate: true,
+    }).action,
+    'next-candidate'
+  );
+
+  failed.add(candidates[0].url);
+  assert.equal(nextUntriedCandidateIndex(candidates, failed), 1);
+  failed.add(candidates[1].url);
+  assert.equal(nextUntriedCandidateIndex(candidates, failed), -1);
+  assert.equal(
+    classifyPlaybackError(new Error('Android player failed: Source error')).type,
+    PlaybackErrorType.PROVIDER_ERROR
   );
 });
 

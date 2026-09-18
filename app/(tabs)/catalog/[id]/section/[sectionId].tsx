@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CatalogEntityCard } from '@/src/components/CatalogEntityCard';
+import { CatalogSectionSkeleton } from '@/src/components/CatalogSectionSkeleton';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
   fetchBrowseCatalogSections,
@@ -106,7 +106,7 @@ export default function CatalogSectionScreen() {
       </View>
 
       {loading && !section ? (
-        <View style={styles.center}><ActivityIndicator color="#FFF" /></View>
+        <CatalogSectionSkeleton />
       ) : section ? (
         <FlatList
           data={section.items}

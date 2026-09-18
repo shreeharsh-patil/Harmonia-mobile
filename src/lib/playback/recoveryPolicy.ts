@@ -11,6 +11,16 @@ export type PlaybackRecoveryAction =
   | 'refresh-stream'
   | 'fail';
 
+export function nextUntriedCandidateIndex(
+  candidates: readonly { url: string }[],
+  failedUrls: ReadonlySet<string>
+) {
+  return candidates.findIndex((candidate) => {
+    const url = String(candidate?.url || '').trim();
+    return Boolean(url) && !failedUrls.has(url);
+  });
+}
+
 export function getPlaybackRecoveryPolicy(
   errorType: PlaybackErrorTypeValue,
   attempt = 0,
@@ -29,7 +39,11 @@ export function getPlaybackRecoveryPolicy(
   if (
     (errorType === PlaybackErrorType.AUDIO_DECODING_ERROR ||
       errorType === PlaybackErrorType.TRACK_UNAVAILABLE ||
-      errorType === PlaybackErrorType.INVALID_STREAM_URL) &&
+      errorType === PlaybackErrorType.INVALID_STREAM_URL ||
+      errorType === PlaybackErrorType.STREAM_URL_EXPIRED ||
+      errorType === PlaybackErrorType.PLAYER_NOT_READY ||
+      errorType === PlaybackErrorType.PROVIDER_ERROR ||
+      errorType === PlaybackErrorType.UNKNOWN) &&
     hasNextCandidate
   ) {
     return { action: 'next-candidate' as const, delayMs: 0 };

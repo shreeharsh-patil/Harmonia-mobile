@@ -16,29 +16,34 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
+import { CatalogSearchSkeleton } from '@/src/components/CatalogSearchSkeleton';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { RECENT_SEARCHES_KEY } from '@/src/config';
 import { SongActionsSheet } from '@/src/components/SongActionsSheet';
 import { SongRow } from '@/src/components/SongRow';
 import { searchMusic } from '@/src/lib/api';
 import { BROWSE_CATALOGS, type BrowseCatalog } from '@/src/lib/browseCatalog';
-import { albumTitle, artistTitle, imageUrl } from '@/src/lib/entities';
+import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
   SONG_LIST_INITIAL_RENDER,
   SONG_LIST_WINDOW_SIZE,
 } from '@/src/lib/listPerformance';
+import { artistNames } from '@/src/lib/song';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist, SearchPayload, Song } from '@/src/types';
 
+type SearchTab = 'all' | 'songs' | 'albums' | 'artists' | 'playlists';
+
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const { isLiked } = useLibrary();
-  const { currentSong, playSong } = usePlayer();
+  const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
   const [query, setQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<SearchTab>('all');
   const [results, setResults] = useState<SearchPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +61,7 @@ export default function SearchScreen() {
       setResults(null);
       setLoading(false);
       setError(null);
+      setActiveTab('all');
       return;
     }
 
@@ -91,6 +97,13 @@ export default function SearchScreen() {
   const albums = useMemo(() => results?.albums?.results || [], [results]);
   const artists = useMemo(() => results?.artists?.results || [], [results]);
   const playlists = useMemo(() => results?.playlists?.results || [], [results]);
+  const topResult = useMemo(() => {
+    if (results?.topQuery?.results?.[0]) return results.topQuery.results[0];
+    if (results?.topQuery && !(results.topQuery as any).results) return results.topQuery;
+    if (songs.length) return { ...songs[0], type: 'song' as const };
+    return null;
+  }, [results, songs]);
+
   const hasResults = songs.length || albums.length || artists.length || playlists.length;
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
@@ -120,20 +133,128 @@ export default function SearchScreen() {
     router.push({ pathname: '/catalog/[id]', params: { id: category.id } });
   };
 
+  const isTopItemActive = topResult && (topResult as any).id === currentSong?.id;
+
+  const handleTopResultPlay = async () => {
+    if (!topResult) return;
+    if ((topResult as any).type === 'song' || !(topResult as any).type) {
+      if (isTopItemActive) {
+        await togglePlayback();
+      } else {
+        Keyboard.dismiss();
+        await playSong(topResult as Song, songs.length ? songs : [topResult as Song]);
+      }
+    } else if ((topResult as any).type === 'album') {
+      openAlbum(topResult as HarmoniaAlbum);
+    } else if ((topResult as any).type === 'artist') {
+      openArtist(topResult as HarmoniaArtistEntity);
+    } else if ((topResult as any).type === 'playlist') {
+      openPlaylist(topResult as Playlist);
+    }
+  };
+
+  const topResultCover = topResult ? entityImageUrl(topResult, 180) : '';
+
+  const topResultView = topResult && activeTab === 'all' ? (
+    <View style={styles.topResultSection}>
+      <Text style={styles.sectionTitle}>Top result</Text>
+      <Pressable
+        onPress={() => void handleTopResultPlay()}
+        style={({ pressed }) => [styles.topResultCard, pressed && styles.topResultPressed]}
+      >
+        <View style={styles.topResultContent}>
+          <View style={styles.topResultArtworkWrap}>
+            {topResultCover ? (
+              <Image
+                source={{ uri: topResultCover }}
+                style={[
+                  styles.topResultArtwork,
+                  (topResult as any).type === 'artist' && styles.topResultArtistArtwork,
+                ]}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.topResultArtwork,
+                  styles.imageFallback,
+                  (topResult as any).type === 'artist' && styles.topResultArtistArtwork,
+                ]}
+              >
+                <Ionicons
+                  name={(topResult as any).type === 'artist' ? 'person' : 'musical-note'}
+                  size={32}
+                  color="#666"
+                />
+              </View>
+            )}
+          </View>
+
+          <View style={styles.topResultCopy}>
+            <Text numberOfLines={1} style={styles.topResultTitle}>
+              {(topResult as any).name || (topResult as any).title}
+            </Text>
+            <View style={styles.topResultBadgeRow}>
+              <View style={styles.typeBadge}>
+                <Text style={styles.typeBadgeText}>
+                  {String((topResult as any).type || 'Song').toUpperCase()}
+                </Text>
+              </View>
+              {!!artistNames(topResult as any) && (
+                <>
+                  <Text style={styles.metaDot}>•</Text>
+                  <Text numberOfLines={1} style={styles.topResultArtist}>
+                    {artistNames(topResult as any)}
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            void handleTopResultPlay();
+          }}
+          style={({ pressed }) => [styles.topResultPlayBtn, pressed && styles.pressed]}
+          accessibilityLabel="Play top result"
+        >
+          <Ionicons
+            name={isTopItemActive && isPlaying ? 'pause' : 'play'}
+            size={22}
+            color="#061108"
+            style={isTopItemActive && isPlaying ? undefined : { marginLeft: 2 }}
+          />
+        </Pressable>
+      </Pressable>
+    </View>
+  ) : null;
+
   const header = (
     <>
-      {!!artists.length && (
+      {topResultView}
+
+      {activeTab === 'all' && !!artists.length && (
         <SearchRail title="Artists">
           {artists.slice(0, 12).map((artist, index) => {
-            const cover = imageUrl(artist.image as any, 112);
+            const cover = entityImageUrl(artist, 112);
             const id = String(artist.id || '');
             const navigable = Boolean(id && !id.startsWith('search-'));
             return (
-              <Pressable key={id || `artist-${index}`} disabled={!navigable} onPress={() => openArtist(artist)} style={styles.artistCard}>
+              <Pressable
+                key={id || `artist-${index}`}
+                disabled={!navigable}
+                onPress={() => openArtist(artist)}
+                style={styles.artistCard}
+              >
                 {cover ? (
                   <Image source={{ uri: cover }} style={styles.artistImage} contentFit="cover" cachePolicy="memory-disk" />
                 ) : (
-                  <View style={[styles.artistImage, styles.imageFallback]}><Ionicons name="person-outline" size={30} color="#575757" /></View>
+                  <View style={[styles.artistImage, styles.imageFallback]}>
+                    <Ionicons name="person-outline" size={30} color="#575757" />
+                  </View>
                 )}
                 <Text numberOfLines={1} style={styles.entityTitle}>{artistTitle(artist)}</Text>
                 <Text numberOfLines={1} style={styles.entityMeta}>{navigable ? 'Artist' : 'Artist result'}</Text>
@@ -143,18 +264,25 @@ export default function SearchScreen() {
         </SearchRail>
       )}
 
-      {!!albums.length && (
+      {activeTab === 'all' && !!albums.length && (
         <SearchRail title="Albums">
           {albums.slice(0, 12).map((album, index) => {
-            const cover = imageUrl(album.image as any, 126);
+            const cover = entityImageUrl(album, 126);
             const id = String(album.id || '');
             const navigable = Boolean(id && !id.startsWith('search-'));
             return (
-              <Pressable key={id || `album-${index}`} disabled={!navigable} onPress={() => openAlbum(album)} style={styles.albumCard}>
+              <Pressable
+                key={id || `album-${index}`}
+                disabled={!navigable}
+                onPress={() => openAlbum(album)}
+                style={styles.albumCard}
+              >
                 {cover ? (
                   <Image source={{ uri: cover }} style={styles.albumImage} contentFit="cover" cachePolicy="memory-disk" />
                 ) : (
-                  <View style={[styles.albumImage, styles.imageFallback]}><Ionicons name="disc-outline" size={30} color="#575757" /></View>
+                  <View style={[styles.albumImage, styles.imageFallback]}>
+                    <Ionicons name="disc-outline" size={30} color="#575757" />
+                  </View>
                 )}
                 <Text numberOfLines={1} style={styles.entityTitle}>{albumTitle(album)}</Text>
                 <Text numberOfLines={1} style={styles.entityMeta}>{album.primaryArtists || album.year || 'Album'}</Text>
@@ -164,7 +292,7 @@ export default function SearchScreen() {
         </SearchRail>
       )}
 
-      {!!playlists.length && (
+      {activeTab === 'all' && !!playlists.length && (
         <SearchRail title="Playlists">
           {playlists.slice(0, 12).map((playlist, index) => (
             <PlaylistCard
@@ -177,9 +305,17 @@ export default function SearchScreen() {
         </SearchRail>
       )}
 
-      {!!songs.length && <Text style={styles.sectionTitle}>Songs</Text>}
+      {(activeTab === 'all' || activeTab === 'songs') && !!songs.length && (
+        <Text style={styles.sectionTitle}>Songs</Text>
+      )}
     </>
   );
+
+  const displayedSongs = useMemo(() => {
+    if (activeTab === 'songs') return songs;
+    if (activeTab === 'all') return songs;
+    return [];
+  }, [activeTab, songs]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -198,12 +334,46 @@ export default function SearchScreen() {
             onSubmitEditing={Keyboard.dismiss}
             style={styles.input}
           />
-          {!!query && (
-            <Pressable accessibilityRole="button" onPress={() => setQuery('')} style={styles.clear} accessibilityLabel="Clear search">
+          {loading && (
+            <ActivityIndicator size="small" color={colors.accentBright} style={styles.spinner} />
+          )}
+          {!!query && !loading && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setQuery('')}
+              style={styles.clear}
+              accessibilityLabel="Clear search"
+            >
               <Ionicons name="close-circle" size={21} color="#7A7A7A" />
             </Pressable>
           )}
         </View>
+
+        {/* Category Pills Bar (Mirrors Web App) */}
+        {!!trimmed && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsRow}
+            style={styles.tabsScroll}
+          >
+            {(['all', 'songs', 'albums', 'artists', 'playlists'] as SearchTab[]).map((tab) => {
+              const active = activeTab === tab;
+              const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+              return (
+                <Pressable
+                  key={tab}
+                  onPress={() => setActiveTab(tab)}
+                  style={[styles.tabChip, active && styles.tabChipActive]}
+                >
+                  <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {!trimmed ? (
@@ -243,7 +413,6 @@ export default function SearchScreen() {
               </Pressable>
             ))}
           </View>
-
         </ScrollView>
       ) : error && !results ? (
         <View style={styles.center}>
@@ -253,9 +422,89 @@ export default function SearchScreen() {
             <Text style={styles.retryText}>Try again</Text>
           </Pressable>
         </View>
+      ) : activeTab === 'artists' ? (
+        <ScrollView
+          contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.artistsGrid}>
+            {artists.map((artist, index) => {
+              const cover = entityImageUrl(artist, 140);
+              const id = String(artist.id || '');
+              const navigable = Boolean(id && !id.startsWith('search-'));
+              return (
+                <Pressable
+                  key={id || `artist-${index}`}
+                  disabled={!navigable}
+                  onPress={() => openArtist(artist)}
+                  style={styles.artistGridCard}
+                >
+                  {cover ? (
+                    <Image source={{ uri: cover }} style={styles.artistGridImage} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[styles.artistGridImage, styles.imageFallback]}>
+                      <Ionicons name="person-outline" size={36} color="#575757" />
+                    </View>
+                  )}
+                  <Text numberOfLines={1} style={styles.gridCardTitle}>{artistTitle(artist)}</Text>
+                  <Text numberOfLines={1} style={styles.gridCardSubtitle}>Artist</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : activeTab === 'albums' ? (
+        <ScrollView
+          contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.albumsGrid}>
+            {albums.map((album, index) => {
+              const cover = entityImageUrl(album, 160);
+              const id = String(album.id || '');
+              const navigable = Boolean(id && !id.startsWith('search-'));
+              return (
+                <Pressable
+                  key={id || `album-${index}`}
+                  disabled={!navigable}
+                  onPress={() => openAlbum(album)}
+                  style={styles.albumGridCard}
+                >
+                  {cover ? (
+                    <Image source={{ uri: cover }} style={styles.albumGridImage} contentFit="cover" cachePolicy="memory-disk" />
+                  ) : (
+                    <View style={[styles.albumGridImage, styles.imageFallback]}>
+                      <Ionicons name="disc-outline" size={36} color="#575757" />
+                    </View>
+                  )}
+                  <Text numberOfLines={1} style={styles.gridCardTitle}>{albumTitle(album)}</Text>
+                  <Text numberOfLines={1} style={styles.gridCardSubtitle}>
+                    {album.primaryArtists || album.year || 'Album'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : activeTab === 'playlists' ? (
+        <ScrollView
+          contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.albumsGrid}>
+            {playlists.map((playlist, index) => (
+              <PlaylistCard
+                key={String(playlist.id || playlist._id || index)}
+                playlist={playlist}
+                size={160}
+                onPress={() => openPlaylist(playlist)}
+              />
+            ))}
+          </View>
+        </ScrollView>
       ) : (
         <FlatList<Song>
-          data={songs}
+          data={displayedSongs}
           keyExtractor={(item, index) => item.id || String(index)}
           initialNumToRender={SONG_LIST_INITIAL_RENDER}
           maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
@@ -263,15 +512,24 @@ export default function SearchScreen() {
           windowSize={SONG_LIST_WINDOW_SIZE}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={header}
-          ListEmptyComponent={!loading && !hasResults ? <Text style={styles.empty}>No results found for “{trimmed}”.</Text> : null}
-          renderItem={({ item }) => (
+          ListEmptyComponent={
+            loading ? (
+              <CatalogSearchSkeleton />
+            ) : !hasResults ? (
+              <Text style={styles.empty}>No results found for “{trimmed}”.</Text>
+            ) : null
+          }
+          renderItem={({ item, index }) => (
             <SongRow
               song={item}
+              index={index}
+              showIndex={true}
+              isPlaying={isPlaying && currentSong?.id === item.id}
               active={currentSong?.id === item.id}
               onMorePress={() => setActionSong(item)}
               onPress={() => {
                 Keyboard.dismiss();
-                void playSong(item, songs);
+                void playSong(item, displayedSongs);
               }}
               trailing={isLiked(item.id) ? <Text style={styles.likedIndicator}>♥</Text> : null}
             />
@@ -281,7 +539,6 @@ export default function SearchScreen() {
         />
       )}
 
-      {loading && <View style={styles.inlineLoading}><ActivityIndicator color="#AAA" size="small" /></View>}
       {!!error && !!results && (
         <Text
           numberOfLines={1}
@@ -311,29 +568,209 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     backgroundColor: 'rgba(18,18,18,0.96)',
   },
-  pageTitle: { color: colors.text, fontSize: 30, lineHeight: 36, fontWeight: '800', letterSpacing: -0.8, marginBottom: 14 },
+  pageTitle: {
+    color: colors.text,
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    marginBottom: 12,
+  },
   searchBox: {
-    height: 54,
+    height: 52,
     borderRadius: 12,
     backgroundColor: colors.surfaceRaised,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    gap: 11,
+    paddingHorizontal: 14,
+    gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  input: { flex: 1, color: colors.textStrong, fontSize: 16, fontWeight: '600', paddingVertical: 0 },
+  input: {
+    flex: 1,
+    color: colors.textStrong,
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  spinner: { width: 28, height: 28 },
   clear: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
+  tabsScroll: { marginTop: 10 },
+  tabsRow: { gap: 8, paddingRight: 10 },
+  tabChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  tabChipActive: {
+    backgroundColor: colors.accentBright,
+    borderColor: colors.accentBright,
+  },
+  tabChipText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tabChipTextActive: {
+    color: '#061108',
+    fontWeight: '800',
+  },
+  topResultSection: {
+    marginBottom: 20,
+  },
+  topResultCard: {
+    backgroundColor: '#181818',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#2A2A2A',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  topResultPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  topResultContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 56,
+  },
+  topResultArtworkWrap: {
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  topResultArtwork: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  topResultArtistArtwork: {
+    borderRadius: 40,
+  },
+  topResultCopy: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 14,
+    justifyContent: 'center',
+  },
+  topResultTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  topResultBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  typeBadge: {
+    backgroundColor: 'rgba(30,215,96,0.15)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  typeBadgeText: {
+    color: colors.accentBright,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  metaDot: {
+    color: '#555555',
+    fontSize: 12,
+  },
+  topResultArtist: {
+    color: '#A3A3A3',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  topResultPlayBtn: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.accentBright,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.accentBright,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
   results: { paddingHorizontal: 16, paddingTop: 14 },
-  railSection: { marginBottom: 27, paddingTop: 8 },
+  resultsGridContent: { paddingHorizontal: 16, paddingTop: 16 },
+  artistsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 18,
+  },
+  artistGridCard: {
+    width: '47%',
+    alignItems: 'center',
+  },
+  artistGridImage: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: colors.surface,
+  },
+  albumsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 18,
+  },
+  albumGridCard: {
+    width: '47%',
+  },
+  albumGridImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceRaised,
+  },
+  gridCardTitle: {
+    color: colors.textStrong,
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  gridCardSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  railSection: { marginBottom: 24, paddingTop: 6 },
   rail: { gap: 12, paddingRight: 10 },
-  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', marginBottom: 12 },
+  sectionTitle: {
+    color: colors.textStrong,
+    fontSize: 19,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
   artistCard: { width: 118 },
   artistImage: { width: 112, height: 112, borderRadius: 56, backgroundColor: colors.surface },
   albumCard: { width: 126 },
@@ -382,7 +819,7 @@ const styles = StyleSheet.create({
   retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: colors.textStrong, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: colors.background, fontWeight: '800', fontSize: 12 },
   empty: { color: colors.muted, textAlign: 'center', paddingVertical: 60 },
-  inlineLoading: { position: 'absolute', top: 76, right: 32 },
   nonBlockingError: { position: 'absolute', left: 20, right: 20, color: '#FCA5A5', fontSize: 11, backgroundColor: '#241414', borderRadius: 10, padding: 9 },
   likedIndicator: { color: '#FFF', fontSize: 17, marginLeft: 8 },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
 });

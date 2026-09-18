@@ -1,5 +1,6 @@
 import { HARMONIA_API_URL, HAS_HARMONIA_API } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
+import { selectDatabaseSpotifySections } from '@/src/lib/homeSections';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
 import {
   fetchDirectJioSaavnAlbum,
@@ -535,19 +536,22 @@ let trendingHomeCache: { data: TrendingHomeContent; expiresAt: number } | null =
 let trendingHomeRequest: Promise<TrendingHomeContent> | null = null;
 
 async function loadHomeSections(): Promise<MusicSection[]> {
+  const fallback = getStaticHomeSections();
   if (HAS_HARMONIA_API) {
     try {
       const curated = await requestJson<{ success: true; data: MusicSection[] }>('/api/curated-music');
-      if (Array.isArray(curated.data) && curated.data.length) return curated.data;
+      const spotifySections = selectDatabaseSpotifySections(curated.data);
+      if (spotifySections.length) return spotifySections;
     } catch {}
 
     try {
       const feed = await requestJson<{ success: true; data: { sections: MusicSection[] } }>('/api/music-feed?all=true');
-      if (Array.isArray(feed.data?.sections) && feed.data.sections.length) return feed.data.sections;
+      const spotifySections = selectDatabaseSpotifySections(feed.data?.sections);
+      if (spotifySections.length) return spotifySections;
     } catch {}
   }
 
-  return getStaticHomeSections();
+  return fallback;
 }
 
 export async function fetchHomeSections(
@@ -560,7 +564,12 @@ export async function fetchHomeSections(
   if (homeSectionsRequest) return homeSectionsRequest;
 
   const request = loadHomeSections().then((data) => {
-    homeSectionsCache = { data, expiresAt: Date.now() + HOME_SECTIONS_TTL_MS };
+    // Do not pin a transient empty response for ten minutes. The checked-in
+    // snapshot normally prevents this, but a failed first launch should still
+    // recover immediately when the backend becomes reachable.
+    if (data.length) {
+      homeSectionsCache = { data, expiresAt: Date.now() + HOME_SECTIONS_TTL_MS };
+    }
     return data;
   });
   homeSectionsRequest = request;
@@ -766,19 +775,32 @@ export async function fetchTrendingHomeContent(
 }
 
 export async function searchMusic(query: string, limit = 30, signal?: AbortSignal): Promise<SearchPayload> {
+  let backendPlaylists: Playlist[] = [];
   if (HAS_HARMONIA_API) {
     try {
       const payload = await requestJson<{ success: true; data: SearchPayload }>(
         `/api/search?query=${encodeURIComponent(query)}&limit=${limit}&page=1`,
         { signal }
       );
-      return {
-        ...payload.data,
-        songs: {
-          ...payload.data.songs,
-          results: (payload.data.songs?.results || []).map((song) => normalizeSong(song as any)),
-        },
-      };
+      const categoryResults = <T>(value: any): T[] =>
+        Array.isArray(value) ? value : Array.isArray(value?.results) ? value.results : [];
+      const backendSongs = categoryResults<Song>(payload.data.songs);
+      const backendAlbums = categoryResults<HarmoniaAlbum>(payload.data.albums);
+      const backendArtists = categoryResults<HarmoniaArtistEntity>(payload.data.artists);
+      backendPlaylists = categoryResults<Playlist>(payload.data.playlists);
+
+      // A full discovery backend may satisfy search outright. Backend Harmonia
+      // deliberately returns catalog playlists only, so keep those and merge
+      // them with the direct on-device provider results below.
+      if (backendSongs.length || backendAlbums.length || backendArtists.length) {
+        return {
+          ...payload.data,
+          songs: { total: backendSongs.length, start: 0, results: backendSongs.map((song) => normalizeSong(song as any)) },
+          albums: { total: backendAlbums.length, start: 0, results: backendAlbums },
+          artists: { total: backendArtists.length, start: 0, results: backendArtists },
+          playlists: { total: backendPlaylists.length, start: 0, results: backendPlaylists },
+        };
+      }
     } catch (cause: any) {
       // A cancelled query belongs to an older input value. Propagate the abort
       // instead of starting fallback provider work for a result the UI has
@@ -822,7 +844,7 @@ export async function searchMusic(query: string, limit = 30, signal?: AbortSigna
   const albums = mergeAlbums(local.albums?.results || [], providerAlbums, providerLimit);
   const artists = mergeArtists(local.artists?.results || [], providerArtists, providerLimit);
   const playlists = mergePlaylists(
-    local.playlists?.results || [],
+    mergePlaylists(backendPlaylists, local.playlists?.results || [], providerLimit),
     providerPlaylists,
     providerLimit
   );
@@ -968,6 +990,18 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
         `/api/playlists/${encodeURIComponent(id)}`
       );
       if (payload.data) return payload.data;
+    } catch {}
+
+    // Some catalog deployments return playlist summaries from the curated feed
+    // but do not expose their corresponding public detail route. Preserve that
+    // metadata so fetchPlaylistSongs can resolve a matching provider playlist
+    // by title instead of treating a visible card as unavailable.
+    try {
+      const sections = await fetchHomeSections();
+      const curated = sections
+        .flatMap((section) => section.playlists || [])
+        .find((playlist) => String(playlist.id || playlist._id || '') === id);
+      if (curated) return curated;
     } catch {}
   }
 
@@ -1282,6 +1316,7 @@ export async function fetchLyrics(song: Song, signal?: AbortSignal): Promise<Lyr
   return best ? { ...best, lyricsProvider: 'LRCLib' } : null;
 }
 
+
 export async function resolvePlayableSong(
   song: Song,
   quality: StreamQuality = 'automatic'
@@ -1301,11 +1336,20 @@ export async function resolvePlayableSong(
 }
 
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
+  const attemptedSongIds = new Set<string>();
+  const resolveSongIds = async (ids: unknown[]) => {
+    const pending = [...new Set(ids.map((songId) => String(songId || '').trim()).filter(Boolean))]
+      .filter((songId) => !attemptedSongIds.has(songId));
+    pending.forEach((songId) => attemptedSongIds.add(songId));
+    return pending.length ? fetchSongs(pending) : [];
+  };
+
   if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
     return playlist.tracks.map((song) => normalizeSong(song as any));
   }
   if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
-    return fetchSongs(playlist.songIds.slice(0, 100));
+    const songs = await resolveSongIds(playlist.songIds);
+    if (songs.length) return songs;
   }
 
   const id = String(playlist.id || playlist._id || '');
@@ -1316,7 +1360,8 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     return bundled.tracks.map((song) => normalizeSong(song as any));
   }
   if (bundled?.songIds?.length) {
-    return fetchSongs(bundled.songIds.slice(0, 100));
+    const songs = await resolveSongIds(bundled.songIds);
+    if (songs.length) return songs;
   }
 
   if (HAS_HARMONIA_API) {
@@ -1325,14 +1370,43 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
         `/api/playlists/${encodeURIComponent(id)}`
       );
       const value = payload.data || {};
-      if (Array.isArray(value.songs)) return value.songs.map((song: any) => normalizeSong(song));
-      if (Array.isArray(value.tracks)) return value.tracks.map((song: any) => normalizeSong(song));
-      if (Array.isArray(value.songIds)) return fetchSongs(value.songIds.slice(0, 100));
+      if (Array.isArray(value.songs) && value.songs.length) {
+        return value.songs.map((song: any) => normalizeSong(song));
+      }
+      if (Array.isArray(value.tracks) && value.tracks.length) {
+        return value.tracks.map((song: any) => normalizeSong(song));
+      }
+      if (Array.isArray(value.songIds) && value.songIds.length) {
+        const songs = await resolveSongIds(value.songIds);
+        if (songs.length) return songs;
+      }
     } catch {}
   }
 
   const direct = await fetchDirectJioSaavnPlaylist(id);
   if (direct?.tracks?.length) return direct.tracks.map(directTrackToSong);
+
+  // Spotify scrape fallback: if the playlist is from Spotify or has a Spotify sourceUrl
+  const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || '');
+  if (HAS_HARMONIA_API && (sourceUrl.includes('open.spotify.com/playlist') || (playlist.source === 'spotify' && id))) {
+    try {
+      const spotifyUrl = sourceUrl.includes('open.spotify.com/playlist')
+        ? sourceUrl
+        : `https://open.spotify.com/playlist/${id}`;
+      const payload = await requestJson<{ success?: boolean; event?: string; data?: { tracks?: any[] } }>(
+        '/api/scrape-playlist',
+        {
+          method: 'POST',
+          body: JSON.stringify({ playlistUrl: spotifyUrl }),
+          timeoutMs: 15_000,
+        }
+      );
+      const rawTracks = payload.data?.tracks || [];
+      if (rawTracks.length) {
+        return rawTracks.map((track: any) => normalizeSong(track));
+      }
+    } catch {}
+  }
 
   const title = String(playlist.name || playlist.title || '').trim();
   if (title) {
@@ -1342,6 +1416,11 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
       const fallback = await fetchDirectJioSaavnPlaylist(match.id);
       if (fallback?.tracks?.length) return fallback.tracks.map(directTrackToSong);
     }
+
+    // Curated backend cards can omit both song IDs and a provider URL. Keep
+    // those cards usable by falling back to catalog tracks for their title.
+    const tracks = await searchDirectJioSaavn(title, { limit: 30 });
+    if (tracks.length) return tracks.map(directTrackToSong);
   }
 
   return [];

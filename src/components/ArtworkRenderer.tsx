@@ -12,6 +12,11 @@ type Props = {
   radius?: number;
   enableMotion?: boolean;
   isPlaying?: boolean;
+  fullScreen?: boolean;
+  canvasOnly?: boolean;
+  hideArtworkWhenCanvas?: boolean;
+  renderMotion?: boolean;
+  onCanvasAvailabilityChange?: (available: boolean) => void;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -74,6 +79,11 @@ export function ArtworkRenderer({
   radius = 20,
   enableMotion = true,
   isPlaying = false,
+  fullScreen = false,
+  canvasOnly = false,
+  hideArtworkWhenCanvas = false,
+  renderMotion = true,
+  onCanvasAvailabilityChange,
   style,
 }: Props) {
   const { batterySaver } = usePreferences();
@@ -106,10 +116,14 @@ export function ArtworkRenderer({
   }, []);
 
   useEffect(() => {
+    onCanvasAvailabilityChange?.(Boolean(canvasUrl));
+  }, [canvasUrl, onCanvasAvailabilityChange]);
+
+  useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
-    if (!enableMotion || !isPlaying || batterySaver || reduceMotion || !foreground) {
+    if (!enableMotion || batterySaver || reduceMotion || !foreground) {
       return () => {
         active = false;
         controller.abort();
@@ -145,12 +159,19 @@ export function ArtworkRenderer({
       active = false;
       controller.abort();
     };
-  }, [batterySaver, canvasLookupKey, enableMotion, foreground, isPlaying, reduceMotion]);
+  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion]);
 
   return (
-    <View style={[{ width: size, height: size, borderRadius: radius }, styles.shell, style]}>
-      <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
-      {!!canvasUrl && enableMotion && isPlaying && foreground && !batterySaver && !reduceMotion && (
+    <View style={[
+      fullScreen ? styles.fullScreenShell : { width: size, height: size, borderRadius: radius },
+      styles.shell,
+      (canvasOnly || (hideArtworkWhenCanvas && canvasUrl)) && styles.transparentShell,
+      style,
+    ]}>
+      {!canvasOnly && !(hideArtworkWhenCanvas && canvasUrl) && (
+        <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
+      )}
+      {renderMotion && !!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion && (
         <MotionCanvas url={canvasUrl} active={foreground} />
       )}
     </View>
@@ -159,5 +180,7 @@ export function ArtworkRenderer({
 
 const styles = StyleSheet.create({
   shell: { overflow: 'hidden', backgroundColor: '#101010' },
+  fullScreenShell: StyleSheet.absoluteFill,
+  transparentShell: { backgroundColor: 'transparent' },
   artwork: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
 });
