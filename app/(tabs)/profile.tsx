@@ -44,7 +44,6 @@ export default function ProfileScreen() {
     return <Redirect href="/(tabs)/preferences" />;
   }
 
-  const initial = (user.name || user.email || 'H').trim().charAt(0).toUpperCase();
   const dailyEntries = Object.entries(listeningStats.dailySeconds || {});
   const today = localDayKey();
   const weekKeys = new Set(Array.from({ length: 7 }, (_, offset) => {

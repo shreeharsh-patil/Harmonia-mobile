@@ -32,7 +32,6 @@ import {
 } from '@/src/lib/listPerformance';
 import { shareAlbum } from '@/src/lib/share';
 import { artistNames } from '@/src/lib/song';
-import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
@@ -45,7 +44,6 @@ export default function AlbumScreen() {
   const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { token } = useAuth();
   const { isAlbumLiked, toggleAlbumLike } = useLibrary();
   const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
 

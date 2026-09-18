@@ -21,7 +21,6 @@ import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc, type LyricLine } from '@/src/lib/lyrics';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
-import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlaybackHistory, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
@@ -120,7 +119,11 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
     <>
       <Pressable
         onLayout={onProgressLayout}
-        onPress={(event) => void seek((event.nativeEvent.locationX / progressWidth) * duration)}
+        onPress={(event) => {
+          const width = Math.max(1, progressWidth);
+          const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / width));
+          void seek(ratio * duration);
+        }}
         style={styles.track}
       >
         <PlaybackProgressFill
@@ -227,7 +230,6 @@ const LyricLines = memo(function LyricLines({
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
   const { width, height } = useWindowDimensions();
-  const { token } = useAuth();
   const { batterySaver } = usePreferences();
   const { isLiked, toggleLike } = useLibrary();
   const {

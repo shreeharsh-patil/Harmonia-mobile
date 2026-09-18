@@ -27,7 +27,6 @@ import {
   SONG_LIST_WINDOW_SIZE,
 } from '@/src/lib/listPerformance';
 import { shareArtist } from '@/src/lib/share';
-import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
@@ -39,7 +38,6 @@ export default function ArtistScreen() {
   const { batterySaver } = usePreferences();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const { token } = useAuth();
   const { isArtistLiked, toggleArtistLike } = useLibrary();
   const { currentSong, playSong } = usePlayer();
   const [artist, setArtist] = useState<HarmoniaArtistEntity | null>(null);

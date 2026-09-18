@@ -162,8 +162,6 @@ export default function LibraryScreen() {
     [likedArtists, normalizedQuery]
   );
 
-  const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
-
   const openPlaylist = (playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (id === 'liked-songs') {
