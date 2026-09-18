@@ -25,7 +25,10 @@ export const TrackArtwork = memo(function TrackArtwork({ song, size, radius = 12
   const [resolvedUrl, setResolvedUrl] = useState<string>(cachedUrl);
 
   useEffect(() => {
-    if (initialUrl || !songId) return;
+    if (initialUrl || !songId) {
+      setResolvedUrl('');
+      return;
+    }
 
     const fromCache = trackArtworkCache.get(songId);
     if (fromCache) {
@@ -33,6 +36,9 @@ export const TrackArtwork = memo(function TrackArtwork({ song, size, radius = 12
       return;
     }
 
+    // Do not display the previous track's artwork while a new lookup is in
+    // flight. Recycling is useful for the native bitmap, not React state.
+    setResolvedUrl('');
     let active = true;
     void resolveTrackArtwork(songId).then((result) => {
       if (active && result) {

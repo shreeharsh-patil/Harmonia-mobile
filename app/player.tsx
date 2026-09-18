@@ -467,7 +467,7 @@ export default function PlayerScreen() {
       {!!cover && !showCanvasOnly && (
         <Image
           source={{ uri: cover }}
-          blurRadius={batterySaver ? 0 : 12}
+          blurRadius={batterySaver ? 0 : Platform.OS === 'android' ? 6 : 12}
           contentFit="cover"
           style={[StyleSheet.absoluteFill, styles.backdropImage]}
           cachePolicy="memory-disk"
@@ -899,7 +899,7 @@ export default function PlayerScreen() {
           {!!cover && (
             <Image
               source={{ uri: cover }}
-              blurRadius={batterySaver ? 0 : 16}
+              blurRadius={batterySaver ? 0 : Platform.OS === 'android' ? 8 : 14}
               contentFit="cover"
               style={[StyleSheet.absoluteFill, styles.lyricsBackdropImage]}
               cachePolicy="memory-disk"

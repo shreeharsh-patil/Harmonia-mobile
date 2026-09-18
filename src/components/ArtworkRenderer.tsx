@@ -123,7 +123,7 @@ export function ArtworkRenderer({
     const controller = new AbortController();
     let active = true;
 
-    if (!enableMotion || batterySaver || reduceMotion || !foreground) {
+    if (!enableMotion || !isPlaying || batterySaver || reduceMotion || !foreground) {
       return () => {
         active = false;
         controller.abort();
@@ -159,7 +159,7 @@ export function ArtworkRenderer({
       active = false;
       controller.abort();
     };
-  }, [batterySaver, canvasLookupKey, enableMotion, foreground, reduceMotion]);
+  }, [batterySaver, canvasLookupKey, enableMotion, foreground, isPlaying, reduceMotion]);
 
   return (
     <View style={[
@@ -172,7 +172,7 @@ export function ArtworkRenderer({
         <TrackArtwork song={song} size={size} radius={radius} style={styles.artwork} />
       )}
       {renderMotion && !!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion && (
-        <MotionCanvas url={canvasUrl} active={foreground} />
+        <MotionCanvas url={canvasUrl} active={foreground && isPlaying} />
       )}
     </View>
   );

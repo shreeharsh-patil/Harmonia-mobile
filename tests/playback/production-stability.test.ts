@@ -567,7 +567,7 @@ test('lyrics overlay uses one artwork-driven gradient and measured line position
   assert.match(source, /lyricLineLayouts/);
   assert.match(source, /lyricsViewportHeight \* 0\.43/);
   assert.match(source, /event\.nativeEvent\.layout\.height/);
-  assert.match(source, /blurRadius=\{batterySaver \? 0 : 16\}/);
+  assert.match(source, /blurRadius=\{batterySaver \? 0 : Platform\.OS === 'android' \? 8 : 14\}/);
   assert.match(source, /source=\{\{ uri: PLAYER_BACKGROUND_FADE \}\}/);
   assert.match(source, /lyricsBackdropGradient/);
   assert.match(source, /distance === 3/);
@@ -583,6 +583,8 @@ test('Canvas fully unmounts when motion is disabled and proxy work is bounded', 
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
 
   assert.match(renderer, /!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion/);
+  assert.match(renderer, /active=\{foreground && isPlaying\}/);
+  assert.match(renderer, /!enableMotion \|\| !isPlaying/);
   assert.match(canvas, /CANVAS_TIMEOUT_MS = 10_000/);
   assert.match(canvas, /const controller = new AbortController\(\)/);
   assert.match(canvas, /signal: controller\.signal/);
@@ -707,7 +709,7 @@ test('home discovery caches and deduplicates public catalog requests', async () 
 test('now playing backdrop uses a smaller source and low blur cost', async () => {
   const source = await readFile('app/player.tsx', 'utf8');
   assert.match(source, /artworkUrl\(currentSong, 360\)/);
-  assert.match(source, /blurRadius=\{batterySaver \? 0 : 12\}/);
+  assert.match(source, /blurRadius=\{batterySaver \? 0 : Platform\.OS === 'android' \? 6 : 12\}/);
   assert.doesNotMatch(source, /artworkUrl\(currentSong, 720\)/);
   assert.doesNotMatch(source, /blurRadius=\{42\}/);
 });

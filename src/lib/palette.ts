@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { InteractionManager } from 'react-native';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { File, Paths } from 'expo-file-system';
 import jpeg from 'jpeg-js';
@@ -174,11 +175,14 @@ export function useArtworkPalette(
     }
     setPalette(DEFAULT_PALETTE);
     let active = true;
-    void extractArtworkPalette(url).then((value) => {
-      if (active && requestedUrlRef.current === url) setPalette(value);
+    const task = InteractionManager.runAfterInteractions(() => {
+      void extractArtworkPalette(url).then((value) => {
+        if (active && requestedUrlRef.current === url) setPalette(value);
+      });
     });
     return () => {
       active = false;
+      task.cancel();
     };
   }, [url]);
 

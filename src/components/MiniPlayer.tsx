@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -161,7 +162,7 @@ export function MiniPlayer() {
           source={{ uri: ambientArtworkUrl }}
           style={styles.ambientArtwork}
           contentFit="cover"
-          blurRadius={batterySaver ? 0 : 14}
+          blurRadius={batterySaver ? 0 : Platform.OS === 'android' ? 5 : 10}
           cachePolicy="memory-disk"
           recyclingKey={`mini-bg-${String(currentSong.id || ambientArtworkUrl)}`}
         />
@@ -179,7 +180,7 @@ export function MiniPlayer() {
           <View style={styles.copy}>
             <View style={styles.titleRow}>
               <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
-              <EqBars playing={isPlaying} />
+              <EqBars playing={isPlaying && !batterySaver} />
             </View>
             <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
           </View>
