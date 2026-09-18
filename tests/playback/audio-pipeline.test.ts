@@ -407,9 +407,9 @@ test('12 recovery position keeps the furthest known playback point', () => {
 });
 
 test('13 provider fallback policy is bounded', () => {
-  assert.equal(MAX_AUTOMATIC_RECOVERY_ATTEMPTS, 3);
+  assert.equal(MAX_AUTOMATIC_RECOVERY_ATTEMPTS, 4);
   assert.equal(
-    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 3).action,
+    getPlaybackRecoveryPolicy(PlaybackErrorType.STREAM_URL_EXPIRED, 4).action,
     'fail'
   );
 });

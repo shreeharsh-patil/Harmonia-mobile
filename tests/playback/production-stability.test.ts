@@ -415,7 +415,8 @@ test('native recovery tracks failed stream URLs before retrying candidates', asy
 test('embedded CDN failure does not blacklist the fresh provider fallback', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /failedStreamUrlsRef/);
-  assert.match(source, /\? \[failedProvider\]/);
+  assert.match(source, /failedProvidersRef/);
+  assert.match(source, /failedProviders\.length/);
 });
 
 

@@ -313,6 +313,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     trackId: null,
     urls: new Set(),
   });
+  const failedProvidersRef = useRef<{ trackId: string | null; providers: Set<string> }>({
+    trackId: null,
+    providers: new Set(),
+  });
   const lastPlaybackErrorRef = useRef<PlaybackPipelineError | null>(null);
   const awaitingNetworkRecoveryRef = useRef(false);
   const unshuffledQueueRef = useRef<Song[]>([]);
@@ -649,6 +653,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     if (!options.recovery) {
       recoveryStateRef.current = { trackId: stable.id, attempts: 0 };
       failedStreamUrlsRef.current = { trackId: stable.id, urls: new Set() };
+      failedProvidersRef.current = { trackId: stable.id, providers: new Set() };
     }
 
     try {
@@ -853,6 +858,12 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         generation === loadGenerationRef.current &&
         typed.type !== PlaybackErrorType.REQUEST_ABORTED
       ) {
+        if (typed.provider) {
+          if (failedProvidersRef.current.trackId !== stable.id) {
+            failedProvidersRef.current = { trackId: stable.id, providers: new Set() };
+          }
+          failedProvidersRef.current.providers.add(typed.provider.toLowerCase());
+        }
         loadedTrackId.current = null;
         setAdaptivePipelineStatus('upgrade-failed');
         setPlaybackErrorType(typed.type);
@@ -1749,8 +1760,14 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       if (failedStreamUrlsRef.current.trackId !== trackId) {
         failedStreamUrlsRef.current = { trackId, urls: new Set() };
       }
+      if (failedProvidersRef.current.trackId !== trackId) {
+        failedProvidersRef.current = { trackId, providers: new Set() };
+      }
       if (hasNativeFailure && activeStreamUrlRef.current) {
         failedStreamUrlsRef.current.urls.add(activeStreamUrlRef.current);
+      }
+      if (hasNativeFailure && activeProviderRef.current) {
+        failedProvidersRef.current.providers.add(activeProviderRef.current.toLowerCase());
       }
 
       try {
@@ -1803,6 +1820,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
           recoveryStateRef.current.attempts += 1;
           const attempt = recoveryStateRef.current.attempts;
           const failedProvider = activeProviderRef.current;
+          const failedProviders = [...failedProvidersRef.current.providers];
 
           invalidateResolvedStream(trackId);
 
@@ -1832,8 +1850,8 @@ export function PlayerProvider({ children }: PropsWithChildren) {
                 policy.action !== 'next-candidate' &&
                 activeSourceRef.current !== 'embedded' &&
                 attempt >= 3 &&
-                failedProvider
-                  ? [failedProvider]
+                (failedProviders.length ? failedProviders : failedProvider)
+                  ? (failedProviders.length ? failedProviders : [failedProvider as string])
                   : [],
             }
           );

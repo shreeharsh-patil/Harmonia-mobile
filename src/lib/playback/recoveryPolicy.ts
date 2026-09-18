@@ -1,7 +1,10 @@
 import { PlaybackErrorType, type PlaybackErrorTypeValue } from '@/src/lib/playback/playbackErrors';
 
 const NETWORK_BACKOFF_MS = Object.freeze([500, 1500, 3000]);
-export const MAX_AUTOMATIC_RECOVERY_ATTEMPTS = 3;
+// Allow one final attempt after the failing provider has been excluded. This
+// prevents a broken CDN/provider from consuming all retries before fallback
+// sources get a chance to play the track.
+export const MAX_AUTOMATIC_RECOVERY_ATTEMPTS = 4;
 
 export type PlaybackRecoveryAction =
   | 'ignore'
@@ -63,7 +66,7 @@ export function getPlaybackRecoveryPolicy(
       errorType === PlaybackErrorType.UNKNOWN) &&
     attempt < MAX_AUTOMATIC_RECOVERY_ATTEMPTS
   ) {
-    const fallbackBackoffMs = [0, 500, 1500] as const;
+    const fallbackBackoffMs = [0, 500, 1500, 3000] as const;
     return {
       action: 'refresh-stream' as const,
       delayMs: fallbackBackoffMs[Math.min(attempt, fallbackBackoffMs.length - 1)],
