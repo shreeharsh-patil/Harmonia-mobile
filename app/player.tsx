@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   LayoutChangeEvent,
@@ -19,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
-import { activeLyricIndex, activeLyricWordIndex, parseLrc } from '@/src/lib/lyrics';
+import { activeLyricIndex, activeLyricWordIndex, parseLrc, type LyricLine } from '@/src/lib/lyrics';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -81,6 +81,144 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
+// Measured lyric-line positions feed the auto-scroll anchor. Kept at module
+// scope so the memoized LyricLines leaf can record layouts without threading
+// a ref through props; cleared whenever the track (or lyrics) changes.
+const lyricLineLayouts: { current: Record<number, { y: number; height: number }> } = { current: {} };
+
+/**
+ * Playback position updates twice per second. This timeline is the only
+ * always-visible element that needs position, so it subscribes in a memoized
+ * leaf: the rest of the player tree (artwork, controls, queue) no longer
+ * re-renders on every audio status tick. The native-driver fill in
+ * PlaybackProgressFill animates smoothly between the coarse updates.
+ */
+const PlaybackTimeline = memo(function PlaybackTimeline({
+  progressWidth,
+  duration,
+  playing,
+  onProgressLayout,
+  seek,
+}: {
+  progressWidth: number;
+  duration: number;
+  playing: boolean;
+  onProgressLayout: (event: LayoutChangeEvent) => void;
+  seek: (seconds: number) => Promise<void>;
+}) {
+  const { position } = usePlaybackProgress();
+  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+  const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
+  const progressThumbLeft = progress * progressUsableWidth;
+
+  return (
+    <>
+      <Pressable
+        onLayout={onProgressLayout}
+        onPress={(event) => void seek((event.nativeEvent.locationX / progressWidth) * duration)}
+        style={styles.track}
+      >
+        <PlaybackProgressFill
+          progress={progress}
+          playing={playing}
+          color="#F4F4F4"
+          style={[styles.trackBase, { left: PROGRESS_THUMB_INSET, right: PROGRESS_THUMB_INSET }]}
+        />
+        <View style={[styles.thumb, { left: progressThumbLeft }]} />
+      </Pressable>
+      <View style={styles.times}>
+        <Text style={styles.time}>{durationLabel(position)}</Text>
+        <Text style={styles.time}>{durationLabel(duration)}</Text>
+      </View>
+    </>
+  );
+});
+
+/**
+ * Synced-lyrics line list. Position is consumed here (inside the lyrics
+ * overlay only) and the resolved active line is reported upward for the
+ * auto-scroll effect, so per-tick karaoke updates never re-render the
+ * player behind the overlay.
+ */
+const LyricLines = memo(function LyricLines({
+  lines,
+  onLinePress,
+  onActiveLineChange,
+}: {
+  lines: LyricLine[];
+  onLinePress: (time: number) => void;
+  onActiveLineChange: (index: number) => void;
+}) {
+  const { position } = usePlaybackProgress();
+  const activeLine = useMemo(() => activeLyricIndex(lines, position), [lines, position]);
+  const activeWord = useMemo(
+    () => activeLyricWordIndex(lines[activeLine], position),
+    [activeLine, position, lines]
+  );
+
+  useEffect(() => {
+    onActiveLineChange(activeLine);
+  }, [activeLine, onActiveLineChange]);
+
+  return (
+    <>
+      {lines.map((line, index) => {
+        const active = index === activeLine;
+        const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
+        const opacity = active
+          ? 1
+          : distance === 1
+            ? 0.55
+            : distance === 2
+              ? 0.35
+              : distance === 3
+                ? 0.24
+                : 0.14;
+        const scale = active ? 1 : distance === 1 ? 0.99 : 0.97;
+
+        return (
+          <Pressable
+            key={`${line.time}-${index}`}
+            onPress={() => onLinePress(line.time)}
+            onLayout={(event) => {
+              lyricLineLayouts.current[index] = {
+                y: event.nativeEvent.layout.y,
+                height: event.nativeEvent.layout.height,
+              };
+            }}
+            style={styles.lyricsOverlayLineTap}
+          >
+            <Text
+              style={[
+                styles.lyricsOverlayLine,
+                active && styles.lyricsOverlayLineActive,
+                {
+                  opacity,
+                  transform: [{ scale }],
+                },
+              ]}
+            >
+              {line.words?.length
+                ? line.words.map((word, wordIndex) => (
+                    <Text
+                      key={`${word.time}-${wordIndex}`}
+                      style={[
+                        active ? styles.lyricsOverlayWordPending : undefined,
+                        active && wordIndex <= activeWord ? styles.lyricsOverlayWordActive : undefined,
+                      ]}
+                    >
+                      {word.text}
+                    </Text>
+                  ))
+                : line.text}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </>
+  );
+});
 
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
@@ -155,11 +293,12 @@ export default function PlayerScreen() {
     setHasCanvas(false);
   }, [canvasTrackKey]);
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
-  const activeLine = useMemo(() => activeLyricIndex(syncedLines, position), [syncedLines, position]);
-  const activeWord = useMemo(
-    () => activeLyricWordIndex(syncedLines[activeLine], position),
-    [activeLine, position, syncedLines]
-  );
+  // Playback position updates twice per second. Computing the active lyric
+  // line at the top level re-rendered the whole player tree on every tick;
+  // only the lyrics overlay consumes these values, so the work moved there
+  // (see LyricLines) along with the position subscription.
+  const positionRef = useRef(0);
+  positionRef.current = position;
   const playingFromLabel = useMemo(() => {
     const value = Array.isArray(params.from) ? params.from[0] : params.from;
     return String(value || 'Music').trim() || 'Music';
@@ -189,6 +328,20 @@ export default function PlayerScreen() {
   useEffect(() => {
     lyricLineLayouts.current = {};
   }, [currentSong?.id, syncedLines.length]);
+
+  // Active line is resolved inside LyricLines (position lives there now);
+  // it reports changes upward so this effect can auto-scroll the viewport.
+  const [activeLine, setActiveLine] = useState(-1);
+  const onActiveLineChange = useCallback((index: number) => {
+    setActiveLine((current) => (current === index ? current : index));
+  }, []);
+
+  const onLyricLinePress = useCallback(
+    (time: number) => {
+      void seekRef.current(time);
+    },
+    []
+  );
 
   useEffect(() => {
     if (panel !== 'lyrics' || activeLine < 0 || !syncedLines.length) return;
@@ -246,9 +399,6 @@ export default function PlayerScreen() {
     );
   }
 
-  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
-  const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
-  const progressThumbLeft = progress * progressUsableWidth;
   const compactArtwork = panel === 'queue' || panel === 'tools';
   const showCanvasOnly = hasCanvas && panel === 'none';
   const playerContentWidth = Math.max(0, width - 32);
@@ -264,6 +414,11 @@ export default function PlayerScreen() {
     Haptics.selectionAsync().catch(() => {});
     setPanel((current) => current === value ? 'none' : value);
   };
+
+  const seekRef = useRef(seek);
+  seekRef.current = seek;
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
 
   const handleLike = () => {
     void toggleLike(currentSong);
@@ -390,23 +545,13 @@ export default function PlayerScreen() {
           </View>
 
           <View style={styles.timeline}>
-            <Pressable
-              onLayout={onProgressLayout}
-              onPress={(event) => void seek((event.nativeEvent.locationX / progressWidth) * duration)}
-              style={styles.track}
-            >
-              <PlaybackProgressFill
-                progress={progress}
-                playing={isPlaying}
-                color="#F4F4F4"
-                style={[styles.trackBase, { left: PROGRESS_THUMB_INSET, right: PROGRESS_THUMB_INSET }]}
-              />
-              <View style={[styles.thumb, { left: progressThumbLeft }]} />
-            </Pressable>
-            <View style={styles.times}>
-              <Text style={styles.time}>{durationLabel(position)}</Text>
-              <Text style={styles.time}>{durationLabel(duration)}</Text>
-            </View>
+            <PlaybackTimeline
+              progressWidth={progressWidth}
+              duration={duration}
+              playing={isPlaying}
+              onProgressLayout={onProgressLayout}
+              seek={seek}
+            />
           </View>
 
           {!!error && <Text style={styles.error}>{error}</Text>}
@@ -706,7 +851,7 @@ export default function PlayerScreen() {
                   />
                   <DiagnosticsRow label="Playback state" value={playbackState} />
                   <DiagnosticsRow label="Error type" value={playbackErrorType || 'None'} />
-                  <DiagnosticsRow label="Duration" value={durationLabel(duration)} />
+                  <DiagnosticsRow label="Duration" value={durationLabel(durationRef.current)} />
                   <DiagnosticsRow label="Playback rate" value={`${playbackRate}×`} />
                   <DiagnosticsRow
                     label="Queue position"
@@ -729,11 +874,11 @@ export default function PlayerScreen() {
 
           {panel !== 'none' && panel !== 'lyrics' && (
             <View style={styles.footer}>
-              <Pressable onPress={() => void seek(Math.max(0, position - 10))} style={styles.secondary}>
+              <Pressable onPress={() => void seek(Math.max(0, positionRef.current - 10))} style={styles.secondary}>
                 <Text style={styles.secondaryText}>−10</Text>
               </Pressable>
               <Text style={styles.device}>HARMONIA • THIS PHONE</Text>
-              <Pressable onPress={() => void seek(Math.min(duration, position + 10))} style={styles.secondary}>
+              <Pressable onPress={() => void seek(Math.min(duration, positionRef.current + 10))} style={styles.secondary}>
                 <Text style={styles.secondaryText}>+10</Text>
               </Pressable>
             </View>
