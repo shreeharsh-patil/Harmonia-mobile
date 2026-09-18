@@ -260,6 +260,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View pointerEvents="none" style={styles.ambientBackdrop}>
+        <View style={[styles.glowOrb, styles.glowSaffron]} />
+        <View style={[styles.glowOrb, styles.glowEmerald]} />
+      </View>
       <View style={styles.topBar}>
         <Text style={styles.topTitle}>Discover</Text>
       </View>
@@ -275,8 +279,6 @@ export default function HomeScreen() {
         }
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
       >
-        <View pointerEvents="none" style={styles.ambientGlow} />
-
             <View style={styles.quickGrid}>
               <Pressable
                 accessibilityRole="button"
@@ -288,7 +290,7 @@ export default function HomeScreen() {
                 style={({ pressed }) => [styles.quickCard, { width: quickCardWidth }, pressed && styles.pressed]}
               >
                 <View style={styles.likedArtwork}>
-                  <Ionicons name="heart" size={20} color="#FF3B4D" />
+                  <Ionicons name="heart" size={18} color="#FFF" />
                 </View>
                 <Text numberOfLines={2} style={styles.quickTitle}>Liked Songs</Text>
               </Pressable>
@@ -338,7 +340,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex === 0 && styles.chartArrowDisabled]}
                           accessibilityLabel="Previous top songs"
                         >
-                          <Ionicons name="chevron-back" size={18} color="#DADADA" />
+                          <Ionicons name="chevron-back" size={16} color={colors.text} />
                         </Pressable>
                         <Pressable
                           onPress={() => scrollTopSongs(1)}
@@ -346,7 +348,7 @@ export default function HomeScreen() {
                           style={[styles.chartArrow, topColumnIndex >= topColumns.length - 1 && styles.chartArrowDisabled]}
                           accessibilityLabel="Next top songs"
                         >
-                          <Ionicons name="chevron-forward" size={18} color="#DADADA" />
+                          <Ionicons name="chevron-forward" size={16} color={colors.text} />
                         </Pressable>
                       </View>
                     </View>
@@ -667,33 +669,46 @@ function HomeSkeleton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  ambientBackdrop: {
+    ...StyleSheet.absoluteFill,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    width: 420,
+    height: 420,
+    borderRadius: 210,
+  },
+  // Web layout's fixed saffron glow: top-left radial gradient
+  glowSaffron: {
+    top: -140,
+    left: -140,
+    backgroundColor: colors.glowSaffron,
+  },
+  // Web layout's emerald glow drifting from the lower right
+  glowEmerald: {
+    bottom: -120,
+    right: -140,
+    backgroundColor: colors.glowEmerald,
+  },
   topBar: {
     height: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(18,18,18,0.88)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(41,41,41,0.35)',
+    paddingHorizontal: 16,
     zIndex: 4,
   },
+  // Web section headers: text-xl/2xl font-bold tracking-tight text-foreground
   topTitle: {
     color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+    letterSpacing: -0.5,
   },
   content: {
     paddingHorizontal: 12,
-    paddingTop: 16,
-  },
-  ambientGlow: {
-    position: 'absolute',
-    top: 0,
-    left: -12,
-    right: -12,
-    height: 260,
-    backgroundColor: 'rgba(69,10,245,0.10)',
+    paddingTop: 4,
   },
   quickGrid: {
     flexDirection: 'row',
@@ -701,24 +716,27 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 24,
   },
+  // Web QuickAccessCards: h-14 rounded-2xl bg-card/40 p-1 pr-3 with
+  // hairline border-border/10 on the artwork
   quickCard: {
     minHeight: 56,
-    borderRadius: 12,
-    padding: 2,
-    paddingRight: 8,
+    borderRadius: 16,
+    padding: 4,
+    paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(23,23,23,0.84)',
+    backgroundColor: colors.cardTranslucent,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(41,41,41,0.56)',
+    borderColor: 'rgba(41,41,41,0.4)',
   },
+  // Liked Songs artwork stays a solid vivid tile like the web gradient cover
   likedArtwork: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#450AF5',
+    backgroundColor: colors.accentDark,
   },
   quickTitle: {
     flex: 1,
@@ -744,20 +762,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 20,
     lineHeight: 25,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.4,
   },
   sectionSubtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
   recentSongCard: { width: 140, marginRight: 16 },
-  recentSongTitle: { color: colors.text, fontSize: 13, lineHeight: 17, fontWeight: '600', marginTop: 8 },
-  recentSongTitleActive: { color: colors.accentBright },
+  recentSongTitle: { color: colors.text, fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },
+  recentSongTitleActive: { color: colors.accent },
   recentSongArtist: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 },
   albumCard: { width: 140, marginRight: 16 },
-  albumArtwork: { width: 140, height: 140, borderRadius: 12, backgroundColor: colors.surface },
+  // Web playlist cards: rounded-lg (8px) square artwork with shadow-md
+  albumArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: colors.surface },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
-  albumTitle: { color: colors.text, fontSize: 13, lineHeight: 17, fontWeight: '600', marginTop: 8 },
-  albumMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: '400', marginTop: 2 },
+  albumTitle: { color: colors.text, fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 10 },
+  albumMeta: { color: colors.muted, fontSize: 11, lineHeight: 15, fontWeight: '600', marginTop: 2 },
   topSongsHead: {
     minHeight: 42,
     flexDirection: 'row',
@@ -766,11 +785,12 @@ const styles = StyleSheet.create({
     marginBottom: 11,
   },
   chartActions: { flexDirection: 'row', gap: 6 },
+  // Web chart arrows: h-8 w-8 rounded-full bg-secondary/60 text-foreground
   chartArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(36,36,36,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -778,57 +798,60 @@ const styles = StyleSheet.create({
   chartRail: { gap: 10, paddingRight: 8 },
   chartColumn: { gap: 6 },
   chartArtworkWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(41,41,41,0.35)',
   },
   chartPlaybackOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.42)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
+  // Web TrendingSongs rows: p-2 rounded-2xl bg-card/40 border-border/20
   chartRow: {
-    minHeight: 64,
-    borderRadius: 12,
-    backgroundColor: 'rgba(23,23,23,0.84)',
-    padding: 6,
+    minHeight: 60,
+    borderRadius: 16,
+    backgroundColor: colors.cardTranslucent,
+    padding: 4,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(41,41,41,0.46)',
+    borderColor: 'rgba(41,41,41,0.3)',
   },
   chartNumber: {
-    width: 28,
-    textAlign: 'center',
+    width: 26,
+    textAlign: 'right',
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
   },
-  chartCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
-  chartTitle: { color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: '700' },
-  chartTitleActive: { color: colors.accentBright, fontWeight: '800' },
+  chartCopy: { flex: 1, minWidth: 0, paddingRight: 4, marginLeft: 10 },
+  chartTitle: { color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: '600' },
+  chartTitleActive: { color: colors.accent, fontWeight: '700' },
   chartArtist: { color: colors.muted, fontSize: 12, lineHeight: 16, marginTop: 2 },
   errorBox: {
-    borderRadius: 9,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(243,114,127,0.22)',
     backgroundColor: 'rgba(84,28,21,0.28)',
     padding: 14,
     marginBottom: 18,
   },
-  error: { color: '#FCA5A5', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   retry: { color: colors.muted, fontSize: 11, marginTop: 4 },
   empty: { minHeight: 200, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
   emptyBody: { color: colors.muted, fontSize: 11, marginTop: 5 },
   pressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
   skeletonWrap: { paddingTop: 2 },
   skeletonTitle: { width: 140, height: 20, borderRadius: 6, backgroundColor: colors.surface, marginBottom: 9 },
   skeletonRail: { flexDirection: 'row', gap: 12 },
   skeletonCard: { width: 140 },
-  skeletonArtwork: { width: 140, height: 140, borderRadius: 12, backgroundColor: colors.surface },
+  skeletonArtwork: { width: 140, height: 140, borderRadius: 8, backgroundColor: colors.surface },
   skeletonLine: { width: 90, height: 10, borderRadius: 4, backgroundColor: colors.surface, marginTop: 8 },
 });

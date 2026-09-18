@@ -234,12 +234,12 @@ export default function AlbumScreen() {
                   accessibilityLabel="Play album"
                 >
                   {playing ? (
-                    <ActivityIndicator color="#061108" />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Ionicons
                       name={isAlbumActive && isPlaying ? 'pause' : 'play'}
                       size={24}
-                      color="#061108"
+                      color="#FFFFFF"
                       style={isAlbumActive && isPlaying ? undefined : { marginLeft: 3 }}
                     />
                   )}
@@ -253,7 +253,7 @@ export default function AlbumScreen() {
                   <Ionicons
                     name="shuffle"
                     size={22}
-                    color={isShuffle ? colors.accentBright : colors.textMuted}
+                    color={isShuffle ? colors.accent : colors.textMuted}
                   />
                 </Pressable>
 
@@ -352,10 +352,10 @@ const styles = StyleSheet.create({
     elevation: 10,
     marginBottom: 18,
   },
-  cover: { width: 224, height: 224, borderRadius: 18, backgroundColor: colors.surface },
+  cover: { width: 224, height: 224, borderRadius: 12, backgroundColor: colors.surface },
   coverFallback: { alignItems: 'center', justifyContent: 'center' },
   heroCopy: { width: '100%', alignItems: 'center' },
-  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 4 },
+  kicker: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginBottom: 4 },
   title: {
     color: colors.textStrong,
     fontSize: 26,
@@ -377,10 +377,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accentBright,
+    shadowColor: colors.accent,
     shadowOpacity: 0.35,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -394,9 +394,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sectionTitle: {
-    color: colors.textStrong,
+    color: colors.text,
     fontSize: 19,
-    fontWeight: '800',
+    fontWeight: '700',
+    letterSpacing: -0.4,
     marginHorizontal: 16,
     marginBottom: 8,
     marginTop: 6,
@@ -408,12 +409,12 @@ const styles = StyleSheet.create({
     marginTop: 18,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  retryText: { color: '#061108', fontWeight: '800', fontSize: 14 },
+  retryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   inlineError: { color: colors.danger, fontSize: 12, marginHorizontal: 16, marginBottom: 12 },
   empty: { paddingVertical: 52, alignItems: 'center' },
   emptyTitle: { color: colors.textStrong, fontSize: 16, fontWeight: '800' },

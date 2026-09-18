@@ -18,6 +18,7 @@ import { SongRow } from '@/src/components/SongRow';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { fetchArtist, fetchArtistAlbums, fetchArtistSongs } from '@/src/lib/api';
 import { albumTitle, artistTitle, entityImageUrl } from '@/src/lib/entities';
+import { colors } from '@/src/theme';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -254,28 +255,28 @@ function BackButton() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#070707' },
+  safe: { flex: 1, backgroundColor: colors.background },
   list: { paddingHorizontal: 18, paddingBottom: 32 },
   top: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  back: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  back: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   headerActions: { flexDirection: 'row', gap: 8 },
-  headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: '#111', alignItems: 'center', justifyContent: 'center' },
+  headerAction: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   hero: { alignItems: 'center', paddingTop: 8, paddingBottom: 28 },
-  avatar: { width: 208, height: 208, borderRadius: 104, backgroundColor: '#111' },
+  avatar: { width: 208, height: 208, borderRadius: 104, backgroundColor: colors.surface },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
   kicker: { color: '#626262', fontSize: 9, fontWeight: '800', letterSpacing: 1.7, marginTop: 20 },
   title: { color: '#F4F4F4', fontSize: 31, lineHeight: 36, fontWeight: '800', textAlign: 'center', letterSpacing: -0.9, marginTop: 7 },
   meta: { color: '#777', fontSize: 12, marginTop: 7 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  primary: { minWidth: 116, height: 46, borderRadius: 23, backgroundColor: '#1ED760', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
-  primaryText: { color: '#061108', fontSize: 13, fontWeight: '800' },
+  primary: { minWidth: 116, height: 46, borderRadius: 23, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
+  primaryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   secondary: { minWidth: 116, height: 46, borderRadius: 23, backgroundColor: 'rgba(0,0,0,0.38)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.26)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 18 },
   secondaryText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-  sectionTitle: { color: '#EDEDED', fontSize: 18, fontWeight: '800', marginBottom: 10 },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.4, marginBottom: 10 },
   albumSection: { marginBottom: 28 },
   albumRail: { gap: 12, paddingRight: 10 },
   albumCard: { width: 132 },
-  albumCover: { width: 132, height: 132, borderRadius: 14, backgroundColor: '#111' },
+  albumCover: { width: 132, height: 132, borderRadius: 8, backgroundColor: colors.surface },
   albumFallback: { alignItems: 'center', justifyContent: 'center' },
   albumName: { color: '#E8E8E8', fontSize: 13, fontWeight: '700', marginTop: 8 },
   albumMeta: { color: '#666', fontSize: 11, marginTop: 3 },

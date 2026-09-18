@@ -368,7 +368,7 @@ export default function PlaylistScreen() {
                         style={styles.saveButton}
                       >
                         {saving ? (
-                          <ActivityIndicator color="#061108" size="small" />
+                          <ActivityIndicator color="#FFFFFF" size="small" />
                         ) : (
                           <Text style={styles.saveText}>Save changes</Text>
                         )}
@@ -413,12 +413,12 @@ export default function PlaylistScreen() {
                   accessibilityLabel="Play playlist"
                 >
                   {playing ? (
-                    <ActivityIndicator color="#061108" />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Ionicons
                       name={isPlaylistActive && isPlaying ? 'pause' : 'play'}
                       size={24}
-                      color="#061108"
+                      color="#FFFFFF"
                       style={isPlaylistActive && isPlaying ? undefined : { marginLeft: 3 }}
                     />
                   )}
@@ -432,7 +432,7 @@ export default function PlaylistScreen() {
                   <Ionicons
                     name="shuffle"
                     size={22}
-                    color={isShuffle ? colors.accentBright : colors.textMuted}
+                    color={isShuffle ? colors.accent : colors.textMuted}
                   />
                 </Pressable>
 
@@ -467,7 +467,7 @@ export default function PlaylistScreen() {
                   <Ionicons
                     name="search-outline"
                     size={20}
-                    color={isSearchVisible ? colors.accentBright : colors.textMuted}
+                    color={isSearchVisible ? colors.accent : colors.textMuted}
                   />
                 </Pressable>
               </View>
@@ -670,13 +670,13 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accentBright,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
     elevation: 6,
   },
   circleButton: {
@@ -722,11 +722,11 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveText: { color: '#061108', fontWeight: '800', fontSize: 13 },
+  saveText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
   deleteButton: {
     height: 44,
     borderRadius: 22,
@@ -739,9 +739,10 @@ const styles = StyleSheet.create({
   },
   deleteText: { color: colors.danger, fontWeight: '800', fontSize: 13 },
   sectionTitle: {
-    color: colors.textStrong,
+    color: colors.text,
     fontSize: 19,
-    fontWeight: '800',
+    fontWeight: '700',
+    letterSpacing: -0.4,
     marginHorizontal: 16,
     marginBottom: 8,
     marginTop: 6,
@@ -753,12 +754,12 @@ const styles = StyleSheet.create({
     marginTop: 18,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  retryText: { color: '#061108', fontWeight: '800', fontSize: 14 },
+  retryText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   errorBox: {
     backgroundColor: 'rgba(239,68,68,0.1)',
     borderWidth: StyleSheet.hairlineWidth,

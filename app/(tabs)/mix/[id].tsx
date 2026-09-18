@@ -176,9 +176,9 @@ export default function MixScreen() {
                   style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
                 >
                   {playing ? (
-                    <ActivityIndicator color="#061108" />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Ionicons name="play" size={20} color="#061108" />
+                    <Ionicons name="play" size={20} color="#FFFFFF" />
                   )}
                   <Text style={styles.primaryText}>Play</Text>
                 </Pressable>
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginTop: 20 },
+  kicker: { color: colors.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginTop: 20 },
   title: {
     color: colors.textStrong,
     fontSize: 28,
@@ -260,13 +260,13 @@ const styles = StyleSheet.create({
     minWidth: 124,
     height: 46,
     borderRadius: 23,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 7,
     paddingHorizontal: 22,
-    shadowColor: colors.accentBright,
+    shadowColor: colors.accent,
     shadowOpacity: 0.3,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -275,12 +275,12 @@ const styles = StyleSheet.create({
     marginTop: 18,
     height: 46,
     borderRadius: 23,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
   },
-  primaryText: { color: '#061108', fontSize: 14, fontWeight: '800' },
+  primaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   secondary: {
     minWidth: 124,
     height: 46,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
   },
   secondaryText: { color: colors.textStrong, fontSize: 14, fontWeight: '800' },
-  sectionTitle: { color: colors.textStrong, fontSize: 20, fontWeight: '800', letterSpacing: -0.4, marginBottom: 10 },
+  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '700', letterSpacing: -0.4, marginBottom: 10 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
   errorTitle: { color: colors.textStrong, fontSize: 20, fontWeight: '800' },
   errorBody: { color: colors.textMuted, textAlign: 'center', marginTop: 8, lineHeight: 20 },

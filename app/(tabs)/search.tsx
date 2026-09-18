@@ -224,7 +224,7 @@ export default function SearchScreen() {
           <Ionicons
             name={isTopItemActive && isPlaying ? 'pause' : 'play'}
             size={22}
-            color="#061108"
+            color="#FFFFFF"
             style={isTopItemActive && isPlaying ? undefined : { marginLeft: 2 }}
           />
         </Pressable>
@@ -603,36 +603,39 @@ const styles = StyleSheet.create({
   clear: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },
   tabsScroll: { marginTop: 10 },
   tabsRow: { gap: 8, paddingRight: 10 },
+  // Web search filters: rounded-full pills on secondary bg, active pill
+  // filled with the primary green
   tabChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 999,
+    backgroundColor: 'rgba(36,36,36,0.85)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.border,
   },
   tabChipActive: {
-    backgroundColor: colors.accentBright,
-    borderColor: colors.accentBright,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   tabChipText: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   tabChipTextActive: {
-    color: '#061108',
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   topResultSection: {
     marginBottom: 20,
   },
+  // Web "Top result" panel: bg-card/40 translucent with hairline border
   topResultCard: {
-    backgroundColor: '#181818',
+    backgroundColor: colors.cardTranslucentStrong,
     borderRadius: 16,
     padding: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#2A2A2A',
+    borderColor: 'rgba(41,41,41,0.5)',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -680,13 +683,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   typeBadge: {
-    backgroundColor: 'rgba(30,215,96,0.15)',
+    backgroundColor: 'rgba(16,185,129,0.16)',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
   typeBadgeText: {
-    color: colors.accentBright,
+    color: colors.accent,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.4,
@@ -701,6 +704,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  // Web quick-card play button: rounded-full bg-primary (emerald) with
+  // soft green shadow
   topResultPlayBtn: {
     position: 'absolute',
     right: 16,
@@ -708,12 +713,12 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accentBright,
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
@@ -766,9 +771,10 @@ const styles = StyleSheet.create({
   railSection: { marginBottom: 24, paddingTop: 6 },
   rail: { gap: 12, paddingRight: 10 },
   sectionTitle: {
-    color: colors.textStrong,
+    color: colors.text,
     fontSize: 19,
-    fontWeight: '800',
+    fontWeight: '700',
+    letterSpacing: -0.4,
     marginBottom: 12,
   },
   artistCard: { width: 118 },
@@ -789,6 +795,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.18,
     shadowRadius: 8,
@@ -816,7 +824,7 @@ const styles = StyleSheet.create({
   browseArtwork: { width: '100%', height: '100%' },
   errorTitle: { color: colors.text, fontSize: 18, fontWeight: '800' },
   error: { color: colors.muted, textAlign: 'center', marginTop: 7, lineHeight: 19 },
-  retry: { marginTop: 17, height: 42, borderRadius: 13, backgroundColor: colors.textStrong, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  retry: { marginTop: 17, height: 42, borderRadius: 999, backgroundColor: colors.textStrong, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: colors.background, fontWeight: '800', fontSize: 12 },
   empty: { color: colors.muted, textAlign: 'center', paddingVertical: 60 },
   nonBlockingError: { position: 'absolute', left: 20, right: 20, color: '#FCA5A5', fontSize: 11, backgroundColor: '#241414', borderRadius: 10, padding: 9 },

@@ -41,8 +41,10 @@ export default function TabsLayout() {
           lazy: true,
           freezeOnBlur: true,
           sceneStyle: { backgroundColor: colors.background },
+          // Web MobileBottomNav: active icons text-foreground, inactive
+          // text-muted-foreground (#808080), strokeWidth 2 vs 2.5.
           tabBarActiveTintColor: colors.textStrong,
-          tabBarInactiveTintColor: '#898989',
+          tabBarInactiveTintColor: '#808080',
           tabBarHideOnKeyboard: true,
           tabBarStyle: {
             position: 'absolute',
@@ -57,7 +59,7 @@ export default function TabsLayout() {
             borderRightWidth: 0,
             borderBottomWidth: 0,
             borderTopColor: 'rgba(41,41,41,0.92)',
-            backgroundColor: Platform.OS === 'android' ? '#121212' : 'rgba(18,18,18,0.98)',
+            backgroundColor: Platform.OS === 'android' ? colors.background : 'rgba(18,18,18,0.98)',
             elevation: 0,
           },
           tabBarLabelStyle: {

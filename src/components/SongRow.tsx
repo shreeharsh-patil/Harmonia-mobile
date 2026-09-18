@@ -61,7 +61,7 @@ export function SongRow({
       )}
 
       <View style={styles.artworkWrap}>
-        <TrackArtwork song={song} size={48} radius={8} />
+        <TrackArtwork song={song} size={48} radius={12} />
         {active && (
           <View style={styles.activeArtworkOverlay}>
             <Ionicons
@@ -118,10 +118,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 6,
-    borderRadius: 10,
+    borderRadius: 14,
   },
   activeRow: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.cardTranslucent,
   },
   indexCol: {
     width: 26,
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -155,17 +155,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    color: '#F3F4F6',
+    color: '#E2E8F0',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   activeTitle: {
-    color: colors.accentBright,
+    color: colors.accent,
     fontWeight: '700',
   },
   artist: {
-    color: '#9CA3AF',
+    color: '#A2A2A2',
     fontSize: 13,
     marginTop: 3,
   },
