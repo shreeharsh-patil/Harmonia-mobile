@@ -24,7 +24,6 @@ import {
   fetchTrendingHomeContent,
 } from '@/src/lib/api';
 import { albumTitle, entityImageUrl } from '@/src/lib/entities';
-import { latestHomePlaylists } from '@/src/lib/homeSections';
 import { getStaticHomeSections } from '@/src/lib/staticCatalog';
 import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
@@ -90,7 +89,6 @@ export default function HomeScreen() {
   const recentRefreshInFlightRef = useRef(false);
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
-  const latestPlaylists = useMemo(() => latestHomePlaylists(sections), [sections]);
   const quickCardWidth = Math.floor((width - 32) / 2);
 
   const load = useCallback(async (refresh = false) => {
@@ -361,14 +359,6 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
         ListHeaderComponent={
           <>
-            {!!latestPlaylists.length && (
-              <PlaylistRail
-                title="Latest Playlists"
-                data={latestPlaylists}
-                onPress={openPlaylist}
-              />
-            )}
-
             <View style={styles.quickGrid}>
               <Pressable
                 accessibilityRole="button"

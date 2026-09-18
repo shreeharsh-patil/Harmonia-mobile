@@ -329,7 +329,7 @@ export async function findDirectJioSaavnTrack(
       .sort((a: any, b: any) => b.score - a.score);
 
     const best = ranked[0];
-    if (!best || best.score < 50) return null;
+    if (!best || best.score < 35) return null;
 
     // Search responses often already contain the encrypted URL. Prefer that
     // zero-extra-request path, but refresh by id when the field is absent.
@@ -417,11 +417,22 @@ export type DirectSaavnArtistSearch = {
 };
 
 function payloadSongs(payload: any) {
+  if (Array.isArray(payload?.list)) return payload.list;
   if (Array.isArray(payload?.songs)) return payload.songs;
+  if (Array.isArray(payload?.tracks)) return payload.tracks;
   if (Array.isArray(payload)) return payload;
   if (payload && typeof payload === 'object') {
     return Object.values(payload).filter((value: any) => value && typeof value === 'object' && value.id);
   }
+  return [];
+}
+
+// Artist endpoints wrap collections in paginated envelopes
+// ({ topSongs: { songs: [...], total }, topAlbums: { albums: [...] } }) while
+// some API revisions return bare arrays. Accept both shapes.
+function collectionArray(value: any, key: string) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object' && Array.isArray(value[key])) return value[key];
   return [];
 }
 
@@ -645,8 +656,10 @@ export async function fetchDirectJioSaavnPlaylist(
       _format: 'json',
       _marker: '0',
       api_version: '4',
-      ctx: 'android',
+      ctx: 'web6dot0',
       listid: cleanId,
+      n: '100',
+      p: '1',
     }, { fetchImpl, signal, timeoutMs });
 
     if (!payload || typeof payload !== 'object') return null;
@@ -814,9 +827,9 @@ export async function fetchDirectJioSaavnArtist(
     }, { fetchImpl, signal, timeoutMs });
 
     if (!payload || typeof payload !== 'object') return null;
-    const rawTracks = Array.isArray(payload?.topSongs) ? payload.topSongs : [];
+    const rawTracks = collectionArray(payload?.topSongs, 'songs');
     const topTracks = await hydrateRawTracks(rawTracks, { fetchImpl, signal, timeoutMs });
-    const albums = (Array.isArray(payload?.topAlbums) ? payload.topAlbums : [])
+    const albums = collectionArray(payload?.topAlbums, 'albums')
       .map((album: any) => ({
         id: String(album?.id || album?.albumid || ''),
         title: decodeHtml(album?.title || album?.name || ''),
@@ -872,13 +885,11 @@ export async function fetchDirectJioSaavnArtistTracks(
       n: String(Math.max(1, Math.min(100, limit))),
     }, { fetchImpl, signal, timeoutMs });
 
-    const rawTracks = Array.isArray(payload?.songs)
-      ? payload.songs
-      : Array.isArray(payload?.topSongs)
-        ? payload.topSongs
-        : Array.isArray(payload?.results)
-          ? payload.results
-          : [];
+    const rawTracks = [
+      ...collectionArray(payload?.songs, 'songs'),
+      ...collectionArray(payload?.topSongs, 'songs'),
+      ...collectionArray(payload?.results, 'results'),
+    ];
     return hydrateRawTracks(rawTracks, { fetchImpl, signal, timeoutMs });
   } catch (error: any) {
     if (signal?.aborted || error?.name === 'AbortError') throw error;
@@ -915,13 +926,11 @@ export async function fetchDirectJioSaavnArtistAlbums(
       n: String(Math.max(1, Math.min(100, limit))),
     }, { fetchImpl, signal, timeoutMs });
 
-    const rawAlbums = Array.isArray(payload?.albums)
-      ? payload.albums
-      : Array.isArray(payload?.topAlbums)
-        ? payload.topAlbums
-        : Array.isArray(payload?.results)
-          ? payload.results
-          : [];
+    const rawAlbums = [
+      ...collectionArray(payload?.albums, 'albums'),
+      ...collectionArray(payload?.topAlbums, 'albums'),
+      ...collectionArray(payload?.results, 'results'),
+    ];
     return rawAlbums
       .map((album: any) => ({
         id: String(album?.id || album?.albumid || ''),
@@ -936,3 +945,70 @@ export async function fetchDirectJioSaavnArtistAlbums(
     return [];
   }
 }
+
+export type DirectSaavnPlaylistSummary = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  image: string | null;
+  songCount: number;
+  explicit: boolean;
+};
+
+export type DirectSaavnLaunchData = {
+  topPlaylists: DirectSaavnPlaylistSummary[];
+  charts: DirectSaavnPlaylistSummary[];
+};
+
+export async function fetchDirectJioSaavnLaunchData({
+  fetchImpl = fetch,
+  signal,
+  timeoutMs = 8000,
+}: {
+  fetchImpl?: FetchLike;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+} = {}): Promise<DirectSaavnLaunchData> {
+  try {
+    const payload = await requestJson({
+      __call: 'webapi.getLaunchData',
+      _format: 'json',
+      _marker: '0',
+      api_version: '4',
+      ctx: 'web6dot0',
+    }, { fetchImpl, signal, timeoutMs });
+
+    if (!payload || typeof payload !== 'object') {
+      return { topPlaylists: [], charts: [] };
+    }
+
+    const parsePlaylist = (raw: any): DirectSaavnPlaylistSummary | null => {
+      const id = String(raw?.id || raw?.listid || '').trim();
+      const title = decodeHtml(raw?.title || raw?.listname || '');
+      if (!id || !title) return null;
+      const count = Number(raw?.more_info?.song_count || raw?.list_count || raw?.song_count || 0);
+      return {
+        id,
+        title,
+        subtitle: raw?.subtitle ? decodeHtml(raw.subtitle) : (raw?.more_info?.firstname ? decodeHtml(raw.more_info.firstname) : null),
+        image: providerImage(raw?.image),
+        songCount: count > 0 ? count : 0,
+        explicit: String(raw?.explicit_content || '') === '1',
+      };
+    };
+
+    const topPlaylists = (Array.isArray(payload.top_playlists) ? payload.top_playlists : [])
+      .map(parsePlaylist)
+      .filter(Boolean) as DirectSaavnPlaylistSummary[];
+
+    const charts = (Array.isArray(payload.charts) ? payload.charts : [])
+      .map(parsePlaylist)
+      .filter(Boolean) as DirectSaavnPlaylistSummary[];
+
+    return { topPlaylists, charts };
+  } catch (error: any) {
+    if (signal?.aborted || error?.name === 'AbortError') throw error;
+    return { topPlaylists: [], charts: [] };
+  }
+}
+

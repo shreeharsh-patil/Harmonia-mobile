@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -9,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CatalogEntityCard } from '@/src/components/CatalogEntityCard';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
@@ -71,6 +72,22 @@ export default function BrowseCatalogScreen() {
       loadGenerationRef.current += 1;
     };
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void load(false);
+        }
+      });
+
+      return () => {
+        sub.remove();
+      };
+    }, [load])
+  );
 
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 

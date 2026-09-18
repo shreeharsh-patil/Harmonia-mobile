@@ -184,6 +184,7 @@ export default function AlbumScreen() {
         maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
         updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
         windowSize={SONG_LIST_WINDOW_SIZE}
+        removeClippedSubviews={true}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.list, { paddingBottom: contentBottomInset }]}
         ListHeaderComponent={

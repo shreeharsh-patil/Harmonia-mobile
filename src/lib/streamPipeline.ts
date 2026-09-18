@@ -52,11 +52,12 @@ export function fastStartQuality(target: StreamQuality): StreamQuality {
   switch (target) {
     case 'maximum':
     case 'high':
-      return 'normal';
-    case 'automatic':
-      return 'data-saver';
-    default:
+    case 'normal':
+    case 'data-saver':
       return target;
+    case 'automatic':
+    default:
+      return 'maximum';
   }
 }
 

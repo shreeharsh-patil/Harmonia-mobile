@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { AppState } from 'react-native';
 import {
   createContext,
   PropsWithChildren,
@@ -40,6 +41,7 @@ type LibraryContextValue = {
   toggleArtistLike: (artist: HarmoniaArtistEntity) => Promise<boolean | null>;
   createPlaylist: (name: string) => Promise<Playlist | null>;
   addToPlaylist: (playlistId: string, songId: string) => Promise<boolean>;
+  addSongsToPlaylist: (playlistId: string, songIds: string[]) => Promise<number>;
 };
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
@@ -103,7 +105,17 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     }
   }, [token]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && tokenRef.current) {
+        void load();
+      }
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [load]);
 
   const likedIds = useMemo(() => new Set(likedSongs.map((song) => song.id)), [likedSongs]);
 
@@ -319,6 +331,27 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     }
   }, [token]);
 
+  const addSongsToPlaylist = useCallback(async (playlistId: string, songIds: string[]) => {
+    if (!token || !songIds.length) return 0;
+    let added = 0;
+    for (const songId of songIds) {
+      try {
+        await addSongToPlaylist(token, playlistId, songId);
+        added++;
+      } catch {}
+    }
+    if (added > 0 && tokenRef.current === token) {
+      setPlaylists((current) => current.map((playlist) => {
+        const id = String(playlist._id || playlist.id || '');
+        if (id !== playlistId) return playlist;
+        const updated = [...new Set([...(playlist.songIds || []), ...songIds])];
+        return { ...playlist, songIds: updated, songCount: updated.length };
+      }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    return added;
+  }, [token]);
+
   const value = useMemo<LibraryContextValue>(() => ({
     playlists,
     likedSongs,
@@ -339,6 +372,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     toggleArtistLike,
     createPlaylist,
     addToPlaylist,
+    addSongsToPlaylist,
   }), [
     playlists,
     likedSongs,
@@ -359,6 +393,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     toggleArtistLike,
     createPlaylist,
     addToPlaylist,
+    addSongsToPlaylist,
   ]);
 
   return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;

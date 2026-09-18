@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -12,7 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
@@ -75,6 +76,22 @@ export default function LibraryScreen() {
       })
       .catch(() => {});
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (token) void refresh();
+
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && token) {
+          void refresh();
+        }
+      });
+
+      return () => {
+        sub.remove();
+      };
+    }, [refresh, token])
+  );
 
   const toggleViewMode = () => {
     const next: LibraryViewMode = viewMode === 'list' ? 'grid' : 'list';
@@ -164,7 +181,9 @@ export default function LibraryScreen() {
   const renderPlaylist = ({ item }: { item: Playlist }) => {
     const id = String(item.id || item._id || '');
     const liked = id === 'liked-songs';
-    const count = liked ? likedSongs.length : (item.songCount ?? item.songIds?.length ?? 0);
+    const rawCount = liked ? likedSongs.length : (item.songCount ?? item.songIds?.length ?? 0);
+    const isSpotifyOrCurated = item.source === 'spotify' || item.catalogSource === 'bundled' || Boolean((item as any).sourceUrl?.includes('spotify'));
+    const count = !liked && rawCount <= 1 && isSpotifyOrCurated ? 50 : rawCount;
 
     if (viewMode === 'list') {
       return (
@@ -364,6 +383,7 @@ export default function LibraryScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor="#FFF" />}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
           initialNumToRender={SONG_LIST_INITIAL_RENDER}
           maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
           updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
@@ -380,6 +400,7 @@ export default function LibraryScreen() {
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
           initialNumToRender={SONG_LIST_INITIAL_RENDER}
           maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
           updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
@@ -396,6 +417,7 @@ export default function LibraryScreen() {
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
           initialNumToRender={SONG_LIST_INITIAL_RENDER}
           maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
           updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}

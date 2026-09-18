@@ -20,7 +20,13 @@ export const CatalogEntityCard = memo(function CatalogEntityCard({
   const title = isPlaylist
     ? item.data.name || item.data.title || 'Playlist'
     : albumTitle(item.data);
-  const count = isPlaylist ? Number(item.data.songCount || 0) : 0;
+  const rawCount = isPlaylist ? Number(item.data.songCount || 0) : 0;
+  const isSpotifyOrCurated = isPlaylist && (
+    (item.data as any).source === 'spotify' ||
+    (item.data as any).catalogSource === 'bundled' ||
+    Boolean((item.data as any).sourceUrl?.includes('spotify'))
+  );
+  const count = isPlaylist && rawCount <= 1 && isSpotifyOrCurated ? 50 : rawCount;
   const meta = isPlaylist
     ? count
       ? `${count} ${count === 1 ? 'song' : 'songs'}`

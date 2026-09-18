@@ -830,19 +830,13 @@ export default function PlayerScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.lyricsPager}>
-              <View style={styles.lyricsPagerDotActive} />
-              <View style={styles.lyricsPagerDotActive} />
-              <View style={styles.lyricsPagerDot} />
-            </View>
-
             <View
               style={styles.lyricsViewport}
               onLayout={(event) => setLyricsViewportHeight(event.nativeEvent.layout.height)}
             >
               {lyricsLoading ? (
                 <View style={styles.lyricsOverlayLoading}>
-                  {[80, 60, 90, 50, 75, 65, 85].map((widthValue, index) => (
+                  {[70, 55, 85, 45, 80, 60, 90, 50, 75].map((widthValue, index) => (
                     <View
                       key={`${widthValue}-${index}`}
                       style={[
@@ -866,12 +860,12 @@ export default function PlayerScreen() {
                     const opacity = active
                       ? 1
                       : distance === 1
-                        ? 0.6
+                        ? 0.55
                         : distance === 2
-                          ? 0.36
+                          ? 0.35
                           : distance === 3
-                            ? 0.22
-                            : 0.12;
+                            ? 0.24
+                            : 0.14;
                     const scale = active ? 1 : distance === 1 ? 0.99 : 0.97;
 
                     return (
@@ -925,22 +919,16 @@ export default function PlayerScreen() {
                     .map((line) => line.trim())
                     .filter(Boolean)
                     .map((line, index) => (
-                      <Text
-                        key={`${index}-${line}`}
-                        style={[
-                          styles.lyricsPlainLine,
-                          { opacity: index === 0 ? 0.86 : 0.66 },
-                        ]}
-                      >
-                        {line}
-                      </Text>
+                      <View key={`${index}-${line}`} style={styles.lyricsPlainPill}>
+                        <Text style={styles.lyricsPlainPillText}>{line}</Text>
+                      </View>
                     ))}
                 </ScrollView>
               ) : (
                 <View style={styles.lyricsOverlayEmpty}>
-                  <Ionicons name="mic-outline" size={48} color="rgba(255,255,255,0.26)" />
-                  <Text style={styles.lyricsOverlayEmptyTitle}>No lyrics found</Text>
-                  <Text style={styles.lyricsOverlayEmptyBody}>Try another song or check again later.</Text>
+                  <Ionicons name="mic-outline" size={72} color="rgba(255,255,255,0.22)" />
+                  <Text style={styles.lyricsOverlayEmptyTitle}>No lyrics available</Text>
+                  <Text style={styles.lyricsOverlayEmptyBody}>Enjoy the music!</Text>
                 </View>
               )}
 
@@ -1049,25 +1037,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   lyricsPlayIcon: { marginLeft: 2 },
-  lyricsPager: {
-    height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  lyricsPagerDotActive: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFF',
-  },
-  lyricsPagerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
   lyricsViewport: { flex: 1, position: 'relative', overflow: 'hidden' },
   lyricsOverlayScroll: { flex: 1 },
   lyricsOverlayContent: {
@@ -1078,53 +1047,60 @@ const styles = StyleSheet.create({
   lyricsOverlayLineTap: {
     minHeight: 78,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 8,
   },
   lyricsOverlayLine: {
     width: '100%',
     color: '#FFF',
-    fontSize: 27,
-    lineHeight: 35,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '750' as any,
     fontFamily: PLAYER_FONT,
-    letterSpacing: -0.45,
-    textAlign: 'center',
+    letterSpacing: -0.5,
+    textAlign: 'left',
   },
   lyricsOverlayLineActive: {
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: 30,
+    lineHeight: 37,
     fontWeight: '850' as any,
-    letterSpacing: -0.65,
+    letterSpacing: -0.6,
   },
-  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.66)' },
+  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.55)' },
   lyricsOverlayWordActive: { color: '#FFF' },
   lyricsOverlayLoading: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 18,
-    paddingHorizontal: 34,
+    justifyContent: 'flex-start',
+    paddingTop: 32,
+    gap: 20,
+    paddingHorizontal: 24,
   },
   lyricsOverlaySkeleton: {
-    height: 18,
-    alignSelf: 'center',
-    borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   lyricsPlainContent: {
     paddingTop: 92,
     paddingBottom: 190,
     paddingHorizontal: 24,
-    gap: 24,
+    gap: 14,
   },
-  lyricsPlainLine: {
-    color: '#FFF',
-    fontSize: 26,
-    lineHeight: 35,
-    fontWeight: '720' as any,
+  lyricsPlainPill: {
+    alignSelf: 'flex-start',
+    maxWidth: '84%',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  lyricsPlainPillText: {
+    color: 'rgba(255,255,255,0.80)',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '600',
     fontFamily: PLAYER_FONT,
-    textAlign: 'center',
-    letterSpacing: -0.35,
+    letterSpacing: -0.2,
   },
   lyricsOverlayEmpty: {
     flex: 1,
@@ -1134,11 +1110,11 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   lyricsOverlayEmptyTitle: {
-    color: 'rgba(255,255,255,0.76)',
-    fontSize: 20,
-    fontWeight: '800',
+    color: 'rgba(255,255,255,0.60)',
+    fontSize: 24,
+    fontWeight: '700',
     fontFamily: PLAYER_FONT,
-    marginTop: 14,
+    marginTop: 16,
   },
   lyricsOverlayEmptyBody: {
     color: 'rgba(255,255,255,0.46)',

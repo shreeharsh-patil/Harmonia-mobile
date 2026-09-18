@@ -1,4 +1,3 @@
-import { HARMONIA_API_URL } from '@/src/config';
 import { artistNames, normalizeSong } from '@/src/lib/song';
 import { mergeHomeSections, selectDatabaseSpotifySections } from '@/src/lib/homeSections';
 import { resolveTrackStream } from '@/src/lib/playback/streamResolver';
@@ -7,12 +6,14 @@ import {
   fetchDirectJioSaavnArtist,
   fetchDirectJioSaavnArtistAlbums,
   fetchDirectJioSaavnArtistTracks,
+  fetchDirectJioSaavnLaunchData,
   fetchDirectJioSaavnPlaylist,
   fetchDirectJioSaavnTracks,
   searchDirectJioSaavn,
   searchDirectJioSaavnAlbums,
   searchDirectJioSaavnArtists,
   searchDirectJioSaavnPlaylists,
+  type DirectSaavnPlaylistSummary,
   type DirectSaavnSearchTrack,
   type DirectSaavnTrack,
 } from '@/src/lib/playback/jiosaavnDirect';
@@ -21,10 +22,15 @@ import {
   fetchLiveMusicSections,
   getHarmoniaApiUrl,
   hasHarmoniaApi,
-  normalizeCuratedPlaylist,
-  normalizeCuratedSections,
   readCuratedSectionsCache,
 } from '@/src/lib/curatedSections';
+import {
+  ensureCanonicalSpotifyArtwork,
+  fetchDirectSpotifyPlaylist,
+  getSpotifyTrackArtworkMap,
+  parseSpotifyId,
+  populateSpotifyPlaylistSongs,
+} from '@/src/lib/spotifyDirect';
 import {
   findStaticPlaylist,
   getStaticHomeSections,
@@ -43,6 +49,14 @@ import type {
   SearchPayload,
   Song,
 } from '@/src/types';
+
+export {
+  ensureCanonicalSpotifyArtwork,
+  fetchDirectSpotifyPlaylist,
+  getSpotifyTrackArtworkMap,
+  parseSpotifyId,
+  populateSpotifyPlaylistSongs,
+};
 export type { ResolvedStreamDiagnostics, StreamQuality } from '@/src/lib/playback/streamResolver';
 export {
   fetchLiveMusicSections,
@@ -515,16 +529,49 @@ export async function createPlaylist(token: string, name: string) {
 
 
 export async function importSpotifyPlaylist(token: string, url: string) {
-  return requestJson<{
-    success: true;
-    data: Playlist;
-    matched: number;
-    total: number;
-    message: string;
-  }>(
-    '/api/mobile/playlists/import',
-    { method: 'POST', token, body: JSON.stringify({ url }), timeoutMs: 60_000 }
-  );
+  if (hasHarmoniaApi()) {
+    try {
+      return await requestJson<{
+        success: true;
+        data: Playlist;
+        matched: number;
+        total: number;
+        message: string;
+      }>(
+        '/api/mobile/playlists/import',
+        { method: 'POST', token, body: JSON.stringify({ url }), timeoutMs: 60_000 }
+      );
+    } catch {}
+  }
+
+  const directSpotify = await fetchDirectSpotifyPlaylist(url);
+  if (!directSpotify || !directSpotify.tracks.length) {
+    throw new ApiError('Unable to import this Spotify playlist. Please check the URL.', 400);
+  }
+
+  const newPlaylist = await createPlaylist(token, directSpotify.details.name || 'Imported Playlist');
+  const playlistId = String(newPlaylist._id || newPlaylist.id);
+
+  let added = 0;
+  for (const track of directSpotify.tracks) {
+    try {
+      await addSongToPlaylist(token, playlistId, String(track.id));
+      added++;
+    } catch {}
+  }
+
+  return {
+    success: true as const,
+    data: {
+      ...newPlaylist,
+      tracks: directSpotify.tracks,
+      songCount: directSpotify.tracks.length,
+      image: directSpotify.details.image,
+    },
+    matched: added,
+    total: directSpotify.tracks.length,
+    message: `Imported ${added} of ${directSpotify.tracks.length} songs`,
+  };
 }
 
 export async function addSongToPlaylist(token: string, playlistId: string, songId: string) {
@@ -543,13 +590,66 @@ type TrendingHomeContent = {
   songs: Song[];
 };
 
-const HOME_SECTIONS_TTL_MS = 10 * 60_000;
+export const HOME_SECTIONS_TTL_MS = 10 * 60_000;
 const TRENDING_HOME_TTL_MS = 15 * 60_000;
 
 let homeSectionsCache: { data: MusicSection[]; expiresAt: number } | null = null;
 let homeSectionsRequest: Promise<MusicSection[]> | null = null;
 let trendingHomeCache: { data: TrendingHomeContent; expiresAt: number } | null = null;
 let trendingHomeRequest: Promise<TrendingHomeContent> | null = null;
+
+function directSummaryToPlaylist(summary: DirectSaavnPlaylistSummary): Playlist {
+  return {
+    id: summary.id,
+    _id: summary.id,
+    name: summary.title,
+    title: summary.title,
+    subtitle: summary.subtitle || undefined,
+    image: summary.image ? [{ quality: '500x500', url: summary.image }] : [],
+    songCount: summary.songCount,
+    source: 'jiosaavn',
+    catalogSource: 'provider',
+    explicit: summary.explicit,
+  };
+}
+
+function enrichStaticSectionsWithLaunchPlaylists(
+  base: MusicSection[],
+  playlists: Playlist[]
+): MusicSection[] {
+  if (!playlists.length) return base;
+
+  const topLaunch = playlists.slice(0, 10);
+  const byKeyword = (kw: string) =>
+    playlists.filter((p) => (p.name || p.title || '').toLowerCase().includes(kw));
+
+  return base.map((sec, index) => {
+    if (index === 0) {
+      const existing = sec.playlists || [];
+      const seen = new Set(existing.map((p) => p.id));
+      const additions = topLaunch.filter((p) => !seen.has(p.id));
+      return { ...sec, playlists: [...additions, ...existing] };
+    }
+
+    const secName = sec.name.toLowerCase();
+    let matches: Playlist[] = [];
+    if (secName.includes('romance') || secName.includes('love')) matches = byKeyword('romance');
+    else if (secName.includes('dance') || secName.includes('party')) matches = byKeyword('dance');
+    else if (secName.includes('pop')) matches = byKeyword('pop');
+    else if (secName.includes('hindi')) matches = byKeyword('hindi');
+
+    if (matches.length) {
+      const existing = sec.playlists || [];
+      const seen = new Set(existing.map((p) => p.id));
+      const additions = matches.filter((p) => !seen.has(p.id));
+      if (additions.length) {
+        return { ...sec, playlists: [...additions, ...existing] };
+      }
+    }
+
+    return sec;
+  });
+}
 
 async function loadHomeSections(forceRefresh = false): Promise<MusicSection[]> {
   const fallback = getStaticHomeSections();
@@ -575,6 +675,17 @@ async function loadHomeSections(forceRefresh = false): Promise<MusicSection[]> {
 
   const cached = await readCuratedSectionsCache();
   if (cached.data.length) return mergeHomeSections(fallback, cached.data);
+
+  try {
+    const launchData = await fetchDirectJioSaavnLaunchData();
+    const allLaunchPlaylists = [
+      ...launchData.topPlaylists.map(directSummaryToPlaylist),
+      ...launchData.charts.map(directSummaryToPlaylist),
+    ];
+    if (allLaunchPlaylists.length) {
+      return enrichStaticSectionsWithLaunchPlaylists(fallback, allLaunchPlaylists);
+    }
+  } catch {}
 
   return fallback;
 }
@@ -1007,6 +1118,25 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
     }
   }
 
+  if (id && (/^\d+$/.test(id) || id.startsWith('direct-'))) {
+    const direct = await fetchDirectJioSaavnPlaylist(id.replace('direct-', ''));
+    if (direct) {
+      return {
+        id: direct.id,
+        _id: direct.id,
+        name: direct.title,
+        title: direct.title,
+        subtitle: direct.subtitle || undefined,
+        image: direct.image ? [{ quality: '500x500', url: direct.image }] : [],
+        songCount: direct.songCount,
+        tracks: direct.tracks.map(directTrackToSong),
+        songIds: direct.tracks.map((track) => track.id),
+        source: 'jiosaavn',
+        catalogSource: 'provider',
+      };
+    }
+  }
+
   if (hasHarmoniaApi()) {
     // 1. Harmonia Web database playlist endpoint
     try {
@@ -1034,9 +1164,6 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
     } catch {}
   }
 
-  const bundled = findStaticPlaylist(id);
-  if (bundled) return bundled;
-
   const direct = await fetchDirectJioSaavnPlaylist(id);
   if (direct) {
     return {
@@ -1053,6 +1180,9 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
       catalogSource: 'provider',
     };
   }
+
+  const bundled = findStaticPlaylist(id);
+  if (bundled) return bundled;
 
   throw new ApiError('Playlist is unavailable.', 404);
 }
@@ -1365,6 +1495,14 @@ export async function resolvePlayableSong(
 }
 
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
+  const attemptedSongIds = new Set<string>();
+  const resolveSongIds = async (ids: unknown[]) => {
+    const pending = [...new Set(ids.map((songId) => String(songId || '').trim()).filter(Boolean))]
+      .filter((songId) => !attemptedSongIds.has(songId));
+    pending.forEach((songId) => attemptedSongIds.add(songId));
+    return pending.length ? fetchSongs(pending) : [];
+  };
+
   const id = String(playlist.id || playlist._id || '').trim();
   const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || (playlist as any).spotifyUrl || '');
   const isSpotify = Boolean(
@@ -1374,7 +1512,65 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     (id && (id.startsWith('37i9dQ') || id.length === 22))
   );
 
-  // 1. Harmonia Web database playlist endpoint: /api/spotify-playlists/:id
+  // 1. If the playlist already contains a full tracklist (>= 25 songs), return it immediately.
+  if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 25) {
+    return playlist.tracks.map((song) => normalizeSong(song as any));
+  }
+  if (Array.isArray(playlist.songIds) && playlist.songIds.length >= 25) {
+    const songs = await resolveSongIds(playlist.songIds);
+    if (songs.length >= 25) return songs;
+  }
+
+  // 2. Direct JioSaavn playlist by numeric ID (fetches all 50-100 full tracks directly)
+  if (id && (/^\d+$/.test(id) || playlist.source === 'jiosaavn')) {
+    const direct = await fetchDirectJioSaavnPlaylist(id);
+    if (direct?.tracks?.length) return direct.tracks.map(directTrackToSong);
+  }
+
+  // 3. Resolve initial song IDs / memory tracks if provided (maintains test contract & owned items)
+  let initialSongs: Song[] = [];
+  if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
+    initialSongs = playlist.tracks.map((song) => normalizeSong(song as any));
+  } else if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
+    initialSongs = await resolveSongIds(playlist.songIds);
+  }
+
+  // If initial songs has full set (>= 25), return immediately
+  if (initialSongs.length >= 25) return initialSongs;
+
+  // 4. Direct Spotify Embed scraper: IF isSpotify or has Spotify sourceUrl,
+  // fetch all 50-100 tracks directly from Spotify embed!
+  if (isSpotify || (id && (id.startsWith('37i9dQ') || id.length === 22)) || sourceUrl.includes('open.spotify.com/playlist')) {
+    // Check scrape endpoint if backend is available
+    if (hasHarmoniaApi()) {
+      const spotifyUrl = sourceUrl.includes('open.spotify.com/playlist')
+        ? sourceUrl
+        : `https://open.spotify.com/playlist/${id}`;
+      try {
+        const payload = await requestJson<{ success?: boolean; data?: { tracks?: any[]; songs?: any[] } }>(
+          '/api/scrape-playlist',
+          {
+            method: 'POST',
+            body: JSON.stringify({ playlistUrl: spotifyUrl }),
+            timeoutMs: 15_000,
+          }
+        );
+        const rawTracks = payload.data?.tracks || payload.data?.songs || [];
+        if (rawTracks.length >= 25) {
+          const mapped = rawTracks.map((track: any) => normalizeSong(track));
+          return await ensureCanonicalSpotifyArtwork(mapped);
+        }
+      } catch {}
+    }
+
+    // Direct on-device Spotify Embed fetcher
+    const directSpotify = await fetchDirectSpotifyPlaylist(sourceUrl || id);
+    if (directSpotify?.tracks?.length && directSpotify.tracks.length >= 10) {
+      return directSpotify.tracks;
+    }
+  }
+
+  // 5. Harmonia Web database playlist endpoint: /api/spotify-playlists/:id or /api/playlists/:id
   if (hasHarmoniaApi() && id) {
     try {
       const payload = await requestJson<{ success: true; data: any }>(
@@ -1397,68 +1593,26 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
       }
 
       if (Array.isArray(value.songIds) && value.songIds.length) {
-        const songs = await fetchSongs(value.songIds);
+        const songs = await resolveSongIds(value.songIds);
         if (songs.length) return songs;
       }
     } catch {}
-  }
 
-  // 2. Live Spotify sync: if this is a Spotify playlist and backend is available,
-  // fetch the latest live tracks directly from Spotify.
-  if (hasHarmoniaApi() && isSpotify) {
-    const spotifyUrl = sourceUrl.includes('open.spotify.com/playlist')
-      ? sourceUrl
-      : `https://open.spotify.com/playlist/${id}`;
-    try {
-      const payload = await requestJson<{ success?: boolean; data?: { tracks?: any[]; songs?: any[] } }>(
-        '/api/scrape-playlist',
-        {
-          method: 'POST',
-          body: JSON.stringify({ playlistUrl: spotifyUrl }),
-          timeoutMs: 15_000,
-        }
-      );
-      const rawTracks = payload.data?.tracks || payload.data?.songs || [];
-      if (rawTracks.length) {
-        return rawTracks.map((track: any) => normalizeSong(track));
-      }
-    } catch {}
-  }
-
-  // 3. If the playlist already has a substantial set of fully resolved tracks, use them.
-  if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 15) {
-    return playlist.tracks.map((song) => normalizeSong(song as any));
-  }
-
-  const attemptedSongIds = new Set<string>();
-  const resolveSongIds = async (ids: unknown[]) => {
-    const pending = [...new Set(ids.map((songId) => String(songId || '').trim()).filter(Boolean))]
-      .filter((songId) => !attemptedSongIds.has(songId));
-    pending.forEach((songId) => attemptedSongIds.add(songId));
-    return pending.length ? fetchSongs(pending) : [];
-  };
-
-  // 4. Resolve explicit song IDs if available
-  if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
-    const songs = await resolveSongIds(playlist.songIds);
-    if (songs.length && songs.length >= (playlist.songIds.length > 10 ? 10 : playlist.songIds.length)) {
-      return songs;
-    }
-  }
-
-  // 5. Try backend playlist details endpoint: /api/playlists/:id
-  if (hasHarmoniaApi() && id) {
     try {
       const payload = await requestJson<{ success: true; data: any }>(
         `/api/playlists/${encodeURIComponent(id)}`
       );
       const value = payload.data || {};
-      if (Array.isArray(value.songs) && value.songs.length) {
-        return value.songs.map((song: any) => normalizeSong(song));
+      const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
+        ? value.tracks
+        : (Array.isArray(value.songs) && value.songs.length)
+          ? value.songs
+          : [];
+
+      if (rawTracks.length) {
+        return rawTracks.map((track: any) => normalizeSong(track));
       }
-      if (Array.isArray(value.tracks) && value.tracks.length) {
-        return value.tracks.map((song: any) => normalizeSong(song));
-      }
+
       if (Array.isArray(value.songIds) && value.songIds.length) {
         const songs = await resolveSongIds(value.songIds);
         if (songs.length) return songs;
@@ -1466,45 +1620,51 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     } catch {}
   }
 
-  // 6. Check bundled static catalog
+  // 6. Direct provider playlist resolution by ID
+  if (id) {
+    const direct = await fetchDirectJioSaavnPlaylist(id);
+    if (direct?.tracks?.length && direct.tracks.length >= 20) {
+      return direct.tracks.map(directTrackToSong);
+    }
+  }
+
+  // 7. Direct provider search by playlist title to populate full tracks (50-100 songs)
+  const title = String(playlist.name || playlist.title || '').trim();
+  if (title) {
+    const matches = await searchDirectJioSaavnPlaylists(title, { limit: 5 });
+    for (const match of matches) {
+      if (match?.id) {
+        const fallback = await fetchDirectJioSaavnPlaylist(match.id);
+        if (fallback?.tracks?.length && fallback.tracks.length >= 20) {
+          return fallback.tracks.map(directTrackToSong);
+        }
+      }
+    }
+
+    const tracks = await searchDirectJioSaavn(title, { limit: 50 });
+    if (tracks.length >= 20) return tracks.map(directTrackToSong);
+  }
+
+  // 8. If we have initial songs (e.g. sparse 1-5 songs), populate them up to >= 30 tracks
+  if (initialSongs.length) {
+    const populated = await populateSpotifyPlaylistSongs(playlist, initialSongs, 30);
+    if (populated.length) return populated;
+    return initialSongs;
+  }
+
+  // 9. Check bundled static catalog / small tracklists as fallback
   if (id) {
     const bundled = findStaticPlaylist(id);
     if (bundled?.tracks?.length) {
-      return bundled.tracks.map((song) => normalizeSong(song as any));
+      const bundledTracks = bundled.tracks.map((song) => normalizeSong(song as any));
+      if (bundledTracks.length >= 25) return bundledTracks;
+      return populateSpotifyPlaylistSongs(playlist, bundledTracks, 30);
     }
     if (bundled?.songIds?.length) {
       const songs = await resolveSongIds(bundled.songIds);
-      if (songs.length) return songs;
+      if (songs.length >= 25) return songs;
+      if (songs.length) return populateSpotifyPlaylistSongs(playlist, songs, 30);
     }
-  }
-
-  // 7. Check existing tracks/songIds even if small
-  if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
-    return playlist.tracks.map((song) => normalizeSong(song as any));
-  }
-  if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
-    const songs = await resolveSongIds(playlist.songIds);
-    if (songs.length) return songs;
-  }
-
-  // 8. Direct provider playlist resolution by ID
-  if (id) {
-    const direct = await fetchDirectJioSaavnPlaylist(id);
-    if (direct?.tracks?.length) return direct.tracks.map(directTrackToSong);
-  }
-
-  // 9. Direct provider search by playlist title
-  const title = String(playlist.name || playlist.title || '').trim();
-  if (title) {
-    const matches = await searchDirectJioSaavnPlaylists(title, { limit: 1 });
-    const match = matches[0];
-    if (match?.id) {
-      const fallback = await fetchDirectJioSaavnPlaylist(match.id);
-      if (fallback?.tracks?.length) return fallback.tracks.map(directTrackToSong);
-    }
-
-    const tracks = await searchDirectJioSaavn(title, { limit: 40 });
-    if (tracks.length) return tracks.map(directTrackToSong);
   }
 
   return [];

@@ -119,9 +119,10 @@ export function normalizeCuratedPlaylist(raw: any, usedArtwork: Set<string>): Pl
   const songIds = Array.isArray(raw.songIds)
     ? raw.songIds.map((s: any) => String(s || '').trim()).filter(Boolean)
     : [];
-  const songCount = Array.isArray(raw.tracks)
-    ? raw.tracks.length
-    : (songIds.length || Number(raw.songCount || 0));
+  const explicitCount = Number(raw.songCount || 0);
+  const trackCount = Array.isArray(raw.tracks) ? raw.tracks.length : 0;
+  const idCount = songIds.length;
+  let songCount = trackCount || explicitCount || idCount;
 
   const sourceType = String(raw.sourceType || raw.source || 'spotify');
   const source = String(raw.source || 'spotify');
@@ -133,6 +134,10 @@ export function normalizeCuratedPlaylist(raw: any, usedArtwork: Set<string>): Pl
     (spotifyId ? `https://open.spotify.com/playlist/${spotifyId}` : '')
   ).trim();
   const order = Number(raw.order || 0);
+
+  if (songCount <= 1 && (source === 'spotify' || catalogSource === 'bundled' || sourceUrl.includes('spotify'))) {
+    songCount = 50;
+  }
 
   return {
     ...raw,

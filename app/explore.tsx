@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -7,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlaylistCard } from '@/src/components/PlaylistCard';
@@ -78,6 +79,29 @@ export default function ExploreScreen() {
       loadGenerationRef.current += 1;
     };
   }, [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void load(false);
+        }
+      });
+
+      const interval = setInterval(() => {
+        if (AppState.currentState === 'active') {
+          void load(true);
+        }
+      }, 10 * 60_000);
+
+      return () => {
+        sub.remove();
+        clearInterval(interval);
+      };
+    }, [load])
+  );
 
   const openPlaylist = (playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');

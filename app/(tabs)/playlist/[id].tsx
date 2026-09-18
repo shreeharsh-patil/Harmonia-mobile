@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  Animated,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { playlistArtworkUrl, PlaylistArtwork } from '@/src/components/PlaylistArtwork';
@@ -27,6 +30,7 @@ import {
   updatePlaylist,
 } from '@/src/lib/api';
 import { playlistTitle } from '@/src/lib/entities';
+import { extractArtworkPalette, type ArtworkPalette } from '@/src/lib/palette';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -46,6 +50,8 @@ function getId(playlist?: Playlist | null) {
   return String(playlist?._id || playlist?.id || '');
 }
 
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Song>);
+
 export default function PlaylistScreen() {
   const insets = useSafeAreaInsets();
   // Web detail pages skip color extraction in battery-saver mode.
@@ -64,6 +70,7 @@ export default function PlaylistScreen() {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionSong, setActionSong] = useState<Song | null>(null);
@@ -76,26 +83,40 @@ export default function PlaylistScreen() {
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const loadGenerationRef = useRef(0);
+  const playlistRef = useRef<Playlist | null>(null);
+
+  // Web playlist page: the hero column scales down, drifts up, and fades as
+  // the list scrolls, while a sticky title bar tints with the artwork color.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [headerPalette, setHeaderPalette] = useState<ArtworkPalette | null>(null);
+
+  useEffect(() => {
+    playlistRef.current = playlist;
+  }, [playlist]);
 
   const owned = useMemo(
     () => Boolean(id && ownedPlaylists.some((item) => getId(item) === id)),
     [id, ownedPlaylists]
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isManualRefresh = false) => {
     const generation = ++loadGenerationRef.current;
     if (!id) {
       setPlaylist(null);
       setSongs([]);
       setLoading(false);
+      setRefreshing(false);
       setError('This playlist link is incomplete.');
       return;
     }
 
-    setLoading(true);
+    if (isManualRefresh) {
+      setRefreshing(true);
+    } else if (!playlistRef.current) {
+      setLoading(true);
+    }
     setError(null);
-    setPlaylist(null);
-    setSongs([]);
+
     try {
       const detail = await fetchPlaylistDetails(id, token);
       const nextSongs = await fetchPlaylistSongs(detail);
@@ -124,7 +145,10 @@ export default function PlaylistScreen() {
         setError(cause?.message || 'Unable to load this playlist');
       }
     } finally {
-      if (generation === loadGenerationRef.current) setLoading(false);
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [id, token]);
 
@@ -141,6 +165,22 @@ export default function PlaylistScreen() {
     };
   }, [load]);
 
+  useFocusEffect(
+    useCallback(() => {
+      void load(false);
+
+      const sub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void load(false);
+        }
+      });
+
+      return () => {
+        sub.remove();
+      };
+    }, [load])
+  );
+
   // Web playlist page washes the header with the artwork's dominant color.
   // Resolution walks many fields and runs regexes; memoize it so 2 Hz progress
   // re-renders do not recompute, and so it exists before the early returns.
@@ -148,6 +188,22 @@ export default function PlaylistScreen() {
     () => (playlist ? playlistArtworkUrl(playlist, 64, songs) : ''),
     [playlist, songs]
   );
+
+  // Shares the palette cache with ArtworkColorHeader, so this only resolves
+  // once and the sticky bar tint stays in sync with the hero wash.
+  useEffect(() => {
+    let active = true;
+    if (batterySaver || !paletteCover) {
+      setHeaderPalette(null);
+      return;
+    }
+    void extractArtworkPalette(paletteCover).then((value) => {
+      if (active) setHeaderPalette(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, [batterySaver, paletteCover]);
 
   const filteredSongs = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -297,11 +353,72 @@ export default function PlaylistScreen() {
   const count = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0, songs.length);
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
+  // Web-style scroll choreography: the hero column drifts up and fades while
+  // the artwork shrinks, and the sticky title bar fades in past the artwork.
+  const heroTranslateY = scrollY.interpolate({
+    inputRange: [0, 340],
+    outputRange: [0, -56],
+    extrapolate: 'clamp',
+  });
+  const heroOpacity = scrollY.interpolate({
+    inputRange: [0, 300],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const artworkScale = scrollY.interpolate({
+    inputRange: [0, 340],
+    outputRange: [1, 0.78],
+    extrapolate: 'clamp',
+  });
+  const stickyTitleOpacity = scrollY.interpolate({
+    inputRange: [220, 290],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const stickyTitleTranslate = stickyTitleOpacity.interpolate({
+    inputRange: [0, 1],
+    outputRange: [8, 0],
+  });
+  const headerTint = headerPalette
+    ? `rgb(${headerPalette.dominantRgb[0]}, ${headerPalette.dominantRgb[1]}, ${headerPalette.dominantRgb[2]})`
+    : '#121212';
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
-      <FlatList
+
+      {/* Sticky title bar that tints with the artwork color (web playlist page). */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.stickyBar,
+          {
+            opacity: stickyTitleOpacity,
+            backgroundColor: headerTint,
+            paddingTop: insets.top + 6,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.stickyBarInner,
+            { opacity: stickyTitleOpacity, transform: [{ translateY: stickyTitleTranslate }] },
+          ]}
+        >
+          <Text numberOfLines={1} style={styles.stickyBarTitle}>
+            {playlistTitle(playlist)}
+          </Text>
+        </Animated.View>
+      </Animated.View>
+
+      <AnimatedFlatList
         data={filteredSongs}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+        removeClippedSubviews={true}
         keyExtractor={(item, index) => item.id || String(index)}
         initialNumToRender={SONG_LIST_INITIAL_RENDER}
         maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
@@ -309,6 +426,14 @@ export default function PlaylistScreen() {
         windowSize={SONG_LIST_WINDOW_SIZE}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.list, { paddingBottom: contentBottomInset }]}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void load(true)}
+            tintColor="#FFF"
+            colors={['#FFF']}
+          />
+        )}
         ListHeaderComponent={
           <View>
             <View style={styles.top}>
@@ -351,10 +476,12 @@ export default function PlaylistScreen() {
             </View>
 
             {/* Centered Hero Artwork & Meta (Mirrors Web App) */}
-            <View style={styles.heroSection}>
-              <View style={styles.artworkContainer}>
+            <Animated.View
+              style={[styles.heroSection, { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] }]}
+            >
+              <Animated.View style={[styles.artworkContainer, { transform: [{ scale: artworkScale }] }]}>
                 <PlaylistArtwork playlist={playlist} size={224} radius={18} tracks={songs} />
-              </View>
+              </Animated.View>
 
               <View style={styles.heroCopy}>
                 {editing ? (
@@ -393,7 +520,6 @@ export default function PlaylistScreen() {
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.kicker}>{owned ? 'YOUR PLAYLIST' : 'PLAYLIST'}</Text>
                     <Text style={styles.title}>{playlistTitle(playlist)}</Text>
                     {!!playlist.description && (
                       <Text style={styles.description} numberOfLines={2}>
@@ -414,7 +540,7 @@ export default function PlaylistScreen() {
                   </>
                 )}
               </View>
-            </View>
+            </Animated.View>
 
             {/* Action Controls Bar (Web Layout) */}
             {!editing && (
@@ -577,7 +703,24 @@ function BackButton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  list: { paddingBottom: 40 },
+  stickyBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    justifyContent: 'flex-end',
+    paddingBottom: 8,
+    paddingHorizontal: 52,
+  },
+  stickyBarInner: { width: '100%' },
+  stickyBarTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },  list: { paddingBottom: 40 },
   top: {
     height: 56,
     paddingHorizontal: 16,
@@ -605,50 +748,41 @@ const styles = StyleSheet.create({
   heroSection: {
     paddingHorizontal: 20,
     alignItems: 'center',
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingBottom: 10,
   },
   artworkContainer: {
-    marginTop: 10,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 12,
   },
-  heroCopy: { alignItems: 'center', width: '100%' },
-  kicker: {
-    color: colors.textFaint,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
+  heroCopy: { alignItems: 'flex-start', width: '100%' },
   title: {
     color: colors.textStrong,
-    fontSize: 22,
+    fontSize: 24,
+    lineHeight: 29,
     fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: -0.4,
-    marginBottom: 6,
+    letterSpacing: -0.5,
+    marginBottom: 4,
+    width: '100%',
   },
   description: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 10,
+    color: 'rgba(255,255,255,0.70)',
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 8,
+    width: '100%',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 6,
-    marginTop: 4,
+    marginTop: 2,
+    width: '100%',
   },
   sourceBadge: {
     paddingHorizontal: 7,
