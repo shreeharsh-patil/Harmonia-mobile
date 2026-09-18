@@ -733,7 +733,11 @@ test('sleep countdown no longer invalidates the core player context every second
   assert.doesNotMatch(coreType, /sleepRemaining/);
   assert.match(provider, /type PlaybackProgressValue = \{[\s\S]*?sleepRemaining: number/);
   assert.match(provider, /sleepRemaining,[\s\S]*?\[currentSong\?\.duration, sleepRemaining, status\.currentTime, status\.duration\]/);
-  assert.match(player, /const \{ position, duration, sleepRemaining \} = usePlaybackProgress\(\)/);
+  // Position is consumed in memoized leaves (PlaybackTimeline, LyricLines),
+  // not at the screen top level, so status ticks cannot re-render the tree.
+  const topLevel = player.match(/export default function PlayerScreen\(\)[\s\S]*?(?=\n  \[progressWidth)/)?.[0] || '';
+  assert.match(player, /usePlaybackProgress\(\)/);
+  assert.doesNotMatch(topLevel, /\{ position/);
 });
 
 test('high-frequency playback progress cannot recreate core player actions', async () => {

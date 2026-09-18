@@ -32,6 +32,7 @@ type LibraryContextValue = {
   refreshing: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshIfStale: (maxAgeMs: number) => void;
   isLiked: (songId: string) => boolean;
   toggleLike: (song: Song) => Promise<boolean | null>;
   isPlaylistLiked: (playlistId: string) => boolean;
@@ -47,6 +48,7 @@ type LibraryContextValue = {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 const GUEST_LIBRARY_KEY = 'harmonia.mobile.guest-library.v1';
+const LIBRARY_STALE_MS = 60_000;
 
 export function LibraryProvider({ children }: PropsWithChildren) {
   const { token } = useAuth();
@@ -61,6 +63,10 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const loadGenerationRef = useRef(0);
   const mutationKeysRef = useRef(new Set<string>());
   const tokenRef = useRef(token);
+  // Skipping redundant refetches: tab focus and app foreground fire constantly,
+  // and each one used to fetch the whole library again even when it was
+  // fetched seconds ago. Manual pull-to-refresh always bypasses the gate.
+  const lastLoadedAtRef = useRef(0);
   const guestLibraryHydratedRef = useRef(false);
 
   useEffect(() => {
@@ -99,6 +105,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
       const library = await fetchLibrary(token);
       if (generation !== loadGenerationRef.current) return;
 
+      lastLoadedAtRef.current = Date.now();
       setPlaylists(library.playlists || []);
       // Keep ephemeral embedded playback candidates in memory. They are stripped
       // only when data is persisted or sent to account storage.
@@ -118,17 +125,28 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     }
   }, [token]);
 
+  const loadIfStale = useCallback(
+    (maxAgeMs: number) => {
+      if (!tokenRef.current) return;
+      if (Date.now() - lastLoadedAtRef.current < maxAgeMs) return;
+      void load();
+    },
+    [load]
+  );
+
   useEffect(() => {
     void load();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active' && tokenRef.current) {
-        void load();
+        // Foreground returns refresh only when the cached library is old;
+        // quick app switches no longer re-fetch and re-render everything.
+        loadIfStale(LIBRARY_STALE_MS);
       }
     });
     return () => {
       sub.remove();
     };
-  }, [load]);
+  }, [load, loadIfStale]);
 
   useEffect(() => {
     if (token || !guestLibraryHydratedRef.current) return;
@@ -436,6 +454,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     refreshing,
     error,
     refresh: () => load(true),
+    refreshIfStale: loadIfStale,
     isLiked,
     toggleLike,
     isPlaylistLiked,
@@ -457,6 +476,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     refreshing,
     error,
     load,
+    loadIfStale,
     isLiked,
     toggleLike,
     isPlaylistLiked,

@@ -100,14 +100,18 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
   playing,
   onProgressLayout,
   seek,
+  positionRef,
 }: {
   progressWidth: number;
   duration: number;
   playing: boolean;
   onProgressLayout: (event: LayoutChangeEvent) => void;
   seek: (seconds: number) => Promise<void>;
+  positionRef: { current: number };
 }) {
   const { position } = usePlaybackProgress();
+  // Keep the parent's ref fresh without re-rendering it (ref writes are free).
+  positionRef.current = position;
   const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
   const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
   const progressThumbLeft = progress * progressUsableWidth;
@@ -273,7 +277,7 @@ export default function PlayerScreen() {
     toggleShuffle,
   } = usePlayer();
   const { history } = usePlaybackHistory();
-  const { position, duration, sleepRemaining } = usePlaybackProgress();
+  const { duration, sleepRemaining } = usePlaybackProgress();
 
   const [progressWidth, setProgressWidth] = useState(1);
   const [panel, setPanel] = useState<Panel>('none');
@@ -284,6 +288,12 @@ export default function PlayerScreen() {
   const lyricsScrollRef = useRef<ScrollView>(null);
   const lyricLineLayouts = useRef<Record<number, { y: number; height: number }>>({});
   const [lyricsViewportHeight, setLyricsViewportHeight] = useState(0);
+  // Refs for handlers below the early return; kept fresh on every render
+  // (including renders past the guard) without re-running hooks conditionally.
+  const seekRef = useRef(seek);
+  seekRef.current = seek;
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
 
   const cover = artworkUrl(currentSong, 360);
   const canvasTrackKey = String(currentSong?.id || currentSong?.songId || '');
@@ -295,10 +305,10 @@ export default function PlayerScreen() {
   const syncedLines = useMemo(() => parseLrc(lyrics?.syncedLyrics), [lyrics?.syncedLyrics]);
   // Playback position updates twice per second. Computing the active lyric
   // line at the top level re-rendered the whole player tree on every tick;
-  // only the lyrics overlay consumes these values, so the work moved there
-  // (see LyricLines) along with the position subscription.
+  // only leaf components consume these values now (see LyricLines and
+  // PlaybackTimeline). The parent keeps a ref mirror for the ±10s footer
+  // actions, kept fresh by the PlaybackTimeline leaf without re-rendering it.
   const positionRef = useRef(0);
-  positionRef.current = position;
   const playingFromLabel = useMemo(() => {
     const value = Array.isArray(params.from) ? params.from[0] : params.from;
     return String(value || 'Music').trim() || 'Music';
@@ -414,11 +424,6 @@ export default function PlayerScreen() {
     Haptics.selectionAsync().catch(() => {});
     setPanel((current) => current === value ? 'none' : value);
   };
-
-  const seekRef = useRef(seek);
-  seekRef.current = seek;
-  const durationRef = useRef(duration);
-  durationRef.current = duration;
 
   const handleLike = () => {
     void toggleLike(currentSong);
@@ -551,6 +556,7 @@ export default function PlayerScreen() {
               playing={isPlaying}
               onProgressLayout={onProgressLayout}
               seek={seek}
+              positionRef={positionRef}
             />
           </View>
 
@@ -973,59 +979,11 @@ export default function PlayerScreen() {
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                 >
-                  {syncedLines.map((line, index) => {
-                    const active = index === activeLine;
-                    const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
-                    const opacity = active
-                      ? 1
-                      : distance === 1
-                        ? 0.55
-                        : distance === 2
-                          ? 0.35
-                          : distance === 3
-                            ? 0.24
-                            : 0.14;
-                    const scale = active ? 1 : distance === 1 ? 0.99 : 0.97;
-
-                    return (
-                      <Pressable
-                        key={`${line.time}-${index}`}
-                        onPress={() => void seek(line.time)}
-                        onLayout={(event) => {
-                          lyricLineLayouts.current[index] = {
-                            y: event.nativeEvent.layout.y,
-                            height: event.nativeEvent.layout.height,
-                          };
-                        }}
-                        style={styles.lyricsOverlayLineTap}
-                      >
-                        <Text
-                          style={[
-                            styles.lyricsOverlayLine,
-                            active && styles.lyricsOverlayLineActive,
-                            {
-                              opacity,
-                              transform: [{ scale }],
-                            },
-                          ]}
-                        >
-                          {line.words?.length
-                            ? line.words.map((word, wordIndex) => (
-                                <Text
-                                  key={`${word.time}-${wordIndex}`}
-                                  style={[
-                                    active ? styles.lyricsOverlayWordPending : undefined,
-                                    active && wordIndex <= activeWord ? styles.lyricsOverlayWordActive : undefined,
-                                  ]}
-                                >
-                                  {word.text}
-                                </Text>
-                              ))
-                            : line.text}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  <LyricLines
+                    lines={syncedLines}
+                    onLinePress={onLyricLinePress}
+                    onActiveLineChange={onActiveLineChange}
+                  />
                 </ScrollView>
               ) : lyrics?.plainLyrics ? (
                 <ScrollView

@@ -35,13 +35,16 @@ import type { HarmoniaAlbum, HarmoniaArtistEntity, Playlist } from '@/src/types'
 
 type LibraryTab = 'playlists' | 'albums' | 'artists';
 type LibraryViewMode = 'list' | 'grid';
+// Screen-side freshness window for focus/foreground refreshes; the provider
+// gate (loadIfStale) compares against its own last-loaded timestamp.
+const LIBRARY_SCREEN_STALE_MS = 60_000;
 
 const LIBRARY_VIEW_KEY = 'harmonia.mobile.library-view.v1';
 
 export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const {
     playlists,
     likedSongs,
@@ -52,6 +55,7 @@ export default function LibraryScreen() {
     refreshing,
     error,
     refresh,
+    refreshIfStale,
     createPlaylist,
   } = useLibrary();
   const { currentSong, playSong } = usePlayer();
@@ -80,18 +84,20 @@ export default function LibraryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
+      // Tab focus refreshes only when the library is stale; the provider
+      // owns the freshness threshold so pull-to-refresh stays always-fresh.
+      refreshIfStale(LIBRARY_SCREEN_STALE_MS);
 
       const sub = AppState.addEventListener('change', (state) => {
         if (state === 'active') {
-          void refresh();
+          refreshIfStale(LIBRARY_SCREEN_STALE_MS);
         }
       });
 
       return () => {
         sub.remove();
       };
-    }, [refresh, token])
+    }, [refreshIfStale])
   );
 
   const toggleViewMode = () => {
