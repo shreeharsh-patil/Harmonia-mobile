@@ -452,24 +452,30 @@ export default function SearchScreen() {
           </Pressable>
         </View>
       ) : activeTab === 'artists' ? (
-        <ScrollView
+        <FlatList<HarmoniaArtistEntity>
+          data={artists}
+          numColumns={2}
+          key="artist-grid"
+          keyExtractor={(artist, index) => String(artist.id || `artist-${index}`)}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
+          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.artistsGrid}>
-            {artists.map((artist, index) => {
+          renderItem={({ item: artist }) => {
               const cover = entityImageUrl(artist, 140);
               const id = String(artist.id || '');
               const navigable = Boolean(id && !id.startsWith('search-'));
               return (
                 <Pressable
-                  key={id || `artist-${index}`}
                   disabled={!navigable}
                   onPress={() => openArtist(artist)}
                   style={styles.artistGridCard}
                 >
                   {cover ? (
-                    <Image source={{ uri: cover }} style={styles.artistGridImage} contentFit="cover" cachePolicy="memory-disk" />
+                    <Image source={{ uri: cover }} style={styles.artistGridImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={`search-artist-${id || cover}`} />
                   ) : (
                     <View style={[styles.artistGridImage, styles.imageFallback]}>
                       <Ionicons name="person-outline" size={36} color="#575757" />
@@ -479,28 +485,33 @@ export default function SearchScreen() {
                   <Text numberOfLines={1} style={styles.gridCardSubtitle}>Artist</Text>
                 </Pressable>
               );
-            })}
-          </View>
-        </ScrollView>
+            }}
+        />
       ) : activeTab === 'albums' ? (
-        <ScrollView
+        <FlatList<HarmoniaAlbum>
+          data={albums}
+          numColumns={2}
+          key="album-grid"
+          keyExtractor={(album, index) => String(album.id || `album-${index}`)}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
+          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.albumsGrid}>
-            {albums.map((album, index) => {
+          renderItem={({ item: album }) => {
               const cover = entityImageUrl(album, 160);
               const id = String(album.id || '');
               const navigable = Boolean(id && !id.startsWith('search-'));
               return (
                 <Pressable
-                  key={id || `album-${index}`}
                   disabled={!navigable}
                   onPress={() => openAlbum(album)}
                   style={styles.albumGridCard}
                 >
                   {cover ? (
-                    <Image source={{ uri: cover }} style={styles.albumGridImage} contentFit="cover" cachePolicy="memory-disk" />
+                    <Image source={{ uri: cover }} style={styles.albumGridImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={`search-album-${id || cover}`} />
                   ) : (
                     <View style={[styles.albumGridImage, styles.imageFallback]}>
                       <Ionicons name="disc-outline" size={36} color="#575757" />
@@ -512,25 +523,27 @@ export default function SearchScreen() {
                   </Text>
                 </Pressable>
               );
-            })}
-          </View>
-        </ScrollView>
+            }}
+        />
       ) : activeTab === 'playlists' ? (
-        <ScrollView
+        <FlatList<Playlist>
+          data={playlists}
+          numColumns={2}
+          key="playlist-grid"
+          keyExtractor={(playlist, index) => String(playlist.id || playlist._id || `playlist-${index}`)}
+          initialNumToRender={SONG_LIST_INITIAL_RENDER}
+          maxToRenderPerBatch={SONG_LIST_BATCH_SIZE}
+          updateCellsBatchingPeriod={SONG_LIST_BATCHING_PERIOD_MS}
+          windowSize={SONG_LIST_WINDOW_SIZE}
+          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={[styles.resultsGridContent, { paddingBottom: contentBottomInset }]}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.albumsGrid}>
-            {playlists.map((playlist, index) => (
-              <PlaylistCard
-                key={String(playlist.id || playlist._id || index)}
-                playlist={playlist}
-                size={160}
-                onPress={() => openPlaylist(playlist)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+          renderItem={({ item: playlist }) => (
+            <View style={styles.playlistGridCard}>
+              <PlaylistCard playlist={playlist} size={160} onPress={() => openPlaylist(playlist)} />
+            </View>
+          )}
+        />
       ) : (
         <FlatList<Song>
           data={displayedSongs}
@@ -753,15 +766,13 @@ const styles = StyleSheet.create({
   },
   results: { paddingHorizontal: 16, paddingTop: 14 },
   resultsGridContent: { paddingHorizontal: 16, paddingTop: 16 },
-  artistsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  gridRow: {
     justifyContent: 'space-between',
-    rowGap: 18,
   },
   artistGridCard: {
     width: '47%',
     alignItems: 'center',
+    marginBottom: 18,
   },
   artistGridImage: {
     width: 140,
@@ -769,15 +780,11 @@ const styles = StyleSheet.create({
     borderRadius: 70,
     backgroundColor: colors.surface,
   },
-  albumsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 18,
-  },
   albumGridCard: {
     width: '47%',
+    marginBottom: 18,
   },
+  playlistGridCard: { width: '47%', marginBottom: 18 },
   albumGridImage: {
     width: '100%',
     aspectRatio: 1,

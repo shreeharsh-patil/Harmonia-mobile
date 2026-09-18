@@ -51,12 +51,14 @@ export default function SettingsScreen() {
     cellularQuality,
     batterySaver,
     wifiOnlyDownloads,
+    musicVideosEnabled,
     networkType,
     setNetworkAwareQuality,
     setWifiQuality,
     setCellularQuality,
     setBatterySaver,
     setWifiOnlyDownloads,
+    setMusicVideosEnabled,
   } = usePreferences();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const { downloads, totalBytes, clearDownloads } = useOffline();
@@ -273,6 +275,15 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="PLAYER">
+          <ToggleRow
+            icon="videocam-outline"
+            iconBg="rgba(239,68,68,0.15)"
+            iconColor="#F87171"
+            title="Enable music videos"
+            detail="Watch matching YouTube videos in Now Playing"
+            enabled={musicVideosEnabled}
+            onPress={() => setMusicVideosEnabled(!musicVideosEnabled)}
+          />
           <SettingLabel title="Sleep timer" detail="Stops playback at selected duration or track completion." />
           <ChoiceRow>
             {TIMER_OPTIONS.map((item) => (

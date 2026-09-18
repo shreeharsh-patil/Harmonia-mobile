@@ -1,8 +1,14 @@
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo } from 'react';
 import { PlaylistArtwork } from '@/src/components/PlaylistArtwork';
 import type { Playlist } from '@/src/types';
 
-export function PlaylistCard({
+// Harmonia is portrait-only (see app.json), so querying this once avoids a
+// native dimension subscription for every card in each horizontally-scrolling
+// rail. The screen components still handle layout changes where needed.
+const PORTRAIT_SCREEN_WIDTH = Dimensions.get('window').width;
+
+export const PlaylistCard = memo(function PlaylistCard({
   playlist,
   onPress,
   size = 140,
@@ -11,7 +17,6 @@ export function PlaylistCard({
   onPress: () => void;
   size?: number;
 }) {
-  const { width } = useWindowDimensions();
   const name = playlist.name || playlist.title || 'Playlist';
   const rawCount = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0);
   const isSpotifyOrCurated = playlist.source === 'spotify' || playlist.catalogSource === 'bundled' || Boolean(playlist.sourceUrl?.includes('spotify'));
@@ -19,7 +24,7 @@ export function PlaylistCard({
 
   // Keep Home playlist rails dense like Harmonia Web on mobile: roughly three
   // complete covers remain visible at once, while still honoring smaller sizes.
-  const responsiveSize = Math.max(108, Math.floor((width - 54) / 3));
+  const responsiveSize = Math.max(108, Math.floor((PORTRAIT_SCREEN_WIDTH - 54) / 3));
   const cardSize = Math.min(size, responsiveSize);
 
   return (
@@ -46,7 +51,7 @@ export function PlaylistCard({
       )}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

@@ -1849,7 +1849,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
               excludeProviders:
                 policy.action !== 'next-candidate' &&
                 activeSourceRef.current !== 'embedded' &&
-                attempt >= 3 &&
+                // Give the current source one fresh URL attempt. If native
+                // playback rejects it again, move on immediately so a bad CDN
+                // cannot consume the complete recovery budget.
+                attempt >= 2 &&
                 (failedProviders.length ? failedProviders : failedProvider)
                   ? (failedProviders.length ? failedProviders : [failedProvider as string])
                   : [],

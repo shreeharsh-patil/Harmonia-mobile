@@ -417,6 +417,19 @@ test('embedded CDN failure does not blacklist the fresh provider fallback', asyn
   assert.match(source, /failedStreamUrlsRef/);
   assert.match(source, /failedProvidersRef/);
   assert.match(source, /failedProviders\.length/);
+  assert.match(source, /attempt >= 2/);
+});
+
+test('music videos use direct YouTube services without a Vercel proxy', async () => {
+  const player = await readFile('app/player.tsx', 'utf8');
+  const settings = await readFile('app/settings.tsx', 'utf8');
+
+  assert.match(settings, /title="Enable music videos"/);
+  assert.match(player, /findDirectYouTubeMusicTrack/);
+  assert.match(player, /YoutubePlayer/);
+  assert.match(player, /react-native-youtube-iframe/);
+  assert.match(player, /allowsInlineMediaPlayback/);
+  assert.doesNotMatch(player, /\/api\/yt-stream|vercel\.app|vercel\.com/);
 });
 
 

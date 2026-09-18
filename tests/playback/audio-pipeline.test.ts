@@ -738,12 +738,12 @@ test('31 forceFresh JioSaavn resolution requests a fresh direct stream', async (
   assert.match(second.url, /fresh-2_160/);
 });
 
-test('32 recovery retries alternate embedded candidates before provider fallback', async () => {
+test('32 recovery retries alternate embedded candidates before quickly failing over providers', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /hasNextCandidate/);
   assert.match(source, /embeddedCandidateIndex:/);
   assert.match(source, /skipEmbedded: policy\.action !== 'next-candidate'/);
-  assert.match(source, /attempt >= 3/);
+  assert.match(source, /attempt >= 2/);
 });
 
 test('33 recovery backoff is immediate, then 500 ms, then 1500 ms', () => {
@@ -1282,6 +1282,10 @@ test('provider source errors try each unfailed quality candidate', () => {
   assert.equal(
     classifyPlaybackError(new Error('Android player failed: Source error')).type,
     PlaybackErrorType.PROVIDER_ERROR
+  );
+  assert.equal(
+    getPlaybackRecoveryPolicy(PlaybackErrorType.RATE_LIMIT, 0).action,
+    'refresh-stream'
   );
 });
 

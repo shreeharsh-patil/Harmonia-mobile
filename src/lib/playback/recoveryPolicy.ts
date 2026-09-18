@@ -35,8 +35,14 @@ export function getPlaybackRecoveryPolicy(
   if (errorType === PlaybackErrorType.REQUEST_ABORTED) return { action: 'ignore' as const, delayMs: 0 };
   if (errorType === PlaybackErrorType.AUTOPLAY_BLOCKED) return { action: 'await-user' as const, delayMs: 0 };
   if (!online && errorType === PlaybackErrorType.NETWORK_ERROR) return { action: 'await-online' as const, delayMs: 0 };
-  if (errorType === PlaybackErrorType.AUTH_ERROR || errorType === PlaybackErrorType.RATE_LIMIT) {
+  if (errorType === PlaybackErrorType.AUTH_ERROR) {
     return { action: 'fail' as const, delayMs: 0 };
+  }
+
+  // A rate limit is normally specific to one stream provider. Do not stop
+  // playback while another direct source can still serve the same recording.
+  if (errorType === PlaybackErrorType.RATE_LIMIT && attempt < MAX_AUTOMATIC_RECOVERY_ATTEMPTS) {
+    return { action: 'refresh-stream' as const, delayMs: 750 };
   }
 
   if (

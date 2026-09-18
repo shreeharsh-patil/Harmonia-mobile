@@ -20,6 +20,7 @@ type PreferencesContextValue = {
   cellularQuality: StreamQuality;
   batterySaver: boolean;
   wifiOnlyDownloads: boolean;
+  musicVideosEnabled: boolean;
   networkType: Network.NetworkStateType | undefined;
   networkConnected: boolean;
   setNetworkAwareQuality: (enabled: boolean) => void;
@@ -27,6 +28,7 @@ type PreferencesContextValue = {
   setCellularQuality: (quality: StreamQuality) => void;
   setBatterySaver: (enabled: boolean) => void;
   setWifiOnlyDownloads: (enabled: boolean) => void;
+  setMusicVideosEnabled: (enabled: boolean) => void;
   qualityFor: (fallback: StreamQuality) => StreamQuality;
 };
 
@@ -38,6 +40,7 @@ type StoredPreferences = {
   cellularQuality: StreamQuality;
   batterySaver: boolean;
   wifiOnlyDownloads: boolean;
+  musicVideosEnabled: boolean;
 };
 
 const DEFAULTS: StoredPreferences = {
@@ -46,6 +49,7 @@ const DEFAULTS: StoredPreferences = {
   cellularQuality: 'high',
   batterySaver: false,
   wifiOnlyDownloads: false,
+  musicVideosEnabled: false,
 };
 
 export function PreferencesProvider({ children }: PropsWithChildren) {
@@ -55,6 +59,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
   const [cellularQuality, setCellularQualityState] = useState<StreamQuality>(DEFAULTS.cellularQuality);
   const [batterySaver, setBatterySaverState] = useState(DEFAULTS.batterySaver);
   const [wifiOnlyDownloads, setWifiOnlyDownloadsState] = useState(DEFAULTS.wifiOnlyDownloads);
+  const [musicVideosEnabled, setMusicVideosEnabledState] = useState(DEFAULTS.musicVideosEnabled);
   const prefsRef = useRef<StoredPreferences>({ ...DEFAULTS });
   const hydratedRef = useRef(false);
   const pendingChangesRef = useRef<Partial<StoredPreferences>>({});
@@ -67,6 +72,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     setCellularQualityState(snapshot.cellularQuality);
     setBatterySaverState(snapshot.batterySaver);
     setWifiOnlyDownloadsState(snapshot.wifiOnlyDownloads);
+    setMusicVideosEnabledState(snapshot.musicVideosEnabled);
   }, []);
 
   const writeSnapshot = useCallback((snapshot: StoredPreferences) => {
@@ -96,6 +102,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
               cellularQuality: qualities.includes(parsed?.cellularQuality) ? parsed.cellularQuality : DEFAULTS.cellularQuality,
               batterySaver: Boolean(parsed?.batterySaver),
               wifiOnlyDownloads: Boolean(parsed?.wifiOnlyDownloads),
+              musicVideosEnabled: Boolean(parsed?.musicVideosEnabled),
             };
           } catch {
             AsyncStorage.removeItem(PREFS_KEY).catch(() => {});
@@ -180,6 +187,11 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     persist({ wifiOnlyDownloads: enabled });
   }, [persist]);
 
+  const setMusicVideosEnabled = useCallback((enabled: boolean) => {
+    setMusicVideosEnabledState(enabled);
+    persist({ musicVideosEnabled: enabled });
+  }, [persist]);
+
   const qualityFor = useCallback((fallback: StreamQuality): StreamQuality => {
     if (batterySaver) return 'data-saver';
     if (!networkAwareQuality) return fallback;
@@ -201,6 +213,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     cellularQuality,
     batterySaver,
     wifiOnlyDownloads,
+    musicVideosEnabled,
     networkType: network.type,
     networkConnected: network.isConnected !== false && network.type !== Network.NetworkStateType.NONE,
     setNetworkAwareQuality,
@@ -208,6 +221,7 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     setCellularQuality,
     setBatterySaver,
     setWifiOnlyDownloads,
+    setMusicVideosEnabled,
     qualityFor,
   }), [
     batterySaver,
@@ -219,9 +233,11 @@ export function PreferencesProvider({ children }: PropsWithChildren) {
     setBatterySaver,
     setCellularQuality,
     setWifiOnlyDownloads,
+    setMusicVideosEnabled,
     setNetworkAwareQuality,
     setWifiQuality,
     wifiOnlyDownloads,
+    musicVideosEnabled,
     wifiQuality,
   ]);
 

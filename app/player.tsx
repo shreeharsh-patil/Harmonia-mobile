@@ -15,10 +15,12 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import YoutubePlayer from 'react-native-youtube-iframe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
+import { findDirectYouTubeMusicTrack } from '@/src/lib/playback/youtubeMusicDirect';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc, type LyricLine } from '@/src/lib/lyrics';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -230,7 +232,7 @@ const LyricLines = memo(function LyricLines({
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
   const { width, height } = useWindowDimensions();
-  const { batterySaver } = usePreferences();
+  const { batterySaver, musicVideosEnabled } = usePreferences();
   const { isLiked, toggleLike } = useLibrary();
   const {
     isDownloaded,
@@ -287,6 +289,9 @@ export default function PlayerScreen() {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const [hasCanvas, setHasCanvas] = useState(false);
+  const [musicVideoId, setMusicVideoId] = useState<string | null>(null);
+  const [musicVideoLoading, setMusicVideoLoading] = useState(false);
+  const [musicVideoError, setMusicVideoError] = useState<string | null>(null);
   const lyricsScrollRef = useRef<ScrollView>(null);
   const lyricLineLayouts = useRef<Record<number, { y: number; height: number }>>({});
   const [lyricsViewportHeight, setLyricsViewportHeight] = useState(0);
@@ -311,6 +316,7 @@ export default function PlayerScreen() {
   // PlaybackTimeline). The parent keeps a ref mirror for the ±10s footer
   // actions, kept fresh by the PlaybackTimeline leaf without re-rendering it.
   const positionRef = useRef(0);
+  const musicVideoPausedAudioRef = useRef(false);
   const playingFromLabel = useMemo(() => {
     const value = Array.isArray(params.from) ? params.from[0] : params.from;
     return String(value || 'Music').trim() || 'Music';
@@ -336,6 +342,15 @@ export default function PlayerScreen() {
       setPanel(requested);
     }
   }, [params.panel]);
+
+  useEffect(() => {
+    // A video belongs to a single track. Never carry a matching YouTube video
+    // into the next item in the queue.
+    setMusicVideoId(null);
+    setMusicVideoError(null);
+    setMusicVideoLoading(false);
+    musicVideoPausedAudioRef.current = false;
+  }, [canvasTrackKey]);
 
   useEffect(() => {
     lyricLineLayouts.current = {};
@@ -431,6 +446,44 @@ export default function PlayerScreen() {
     void toggleLike(currentSong);
   };
 
+  const toggleMusicVideo = async () => {
+    if (!musicVideosEnabled || musicVideoLoading) return;
+
+    if (musicVideoId) {
+      setMusicVideoId(null);
+      if (musicVideoPausedAudioRef.current) {
+        musicVideoPausedAudioRef.current = false;
+        await togglePlayback();
+      }
+      return;
+    }
+
+    setMusicVideoLoading(true);
+    setMusicVideoError(null);
+    try {
+      const explicitId = String(currentSong.videoId || currentSong.youtubeId || '').trim();
+      const match = /^[A-Za-z0-9_-]{11}$/.test(explicitId)
+        ? { id: explicitId }
+        : await findDirectYouTubeMusicTrack({
+          title: currentSong.name,
+          artist: artistNames(currentSong),
+          duration: currentSong.duration,
+        });
+      if (!match?.id) {
+        setMusicVideoError('No matching YouTube video found');
+        return;
+      }
+
+      musicVideoPausedAudioRef.current = isPlaying;
+      if (isPlaying) await togglePlayback();
+      setMusicVideoId(match.id);
+    } catch {
+      setMusicVideoError('Could not load a YouTube video');
+    } finally {
+      setMusicVideoLoading(false);
+    }
+  };
+
   const timerLabel = sleepTimer === 'off'
     ? 'Off'
     : sleepTimer === 'track'
@@ -523,19 +576,70 @@ export default function PlayerScreen() {
                 compactArtwork && styles.artworkWrapCompact,
               ]}
             >
-              <ArtworkRenderer
-                song={currentSong}
-                size={artworkSize}
-                radius={14}
-                enableMotion={panel === 'none'}
-                isPlaying={isPlaying}
-                hideArtworkWhenCanvas
-                renderMotion={false}
-                onCanvasAvailabilityChange={onCanvasAvailabilityChange}
-                style={styles.artwork}
-              />
+              {musicVideoId ? (
+                <View style={styles.musicVideoFrame}>
+                  <YoutubePlayer
+                    height={Math.max(200, Math.round(artworkSize * 9 / 16))}
+                    width={artworkSize}
+                    videoId={musicVideoId}
+                    play
+                    forceAndroidAutoplay
+                    // Loading the player HTML from an opaque `about:blank` origin
+                    // makes recent YouTube embeds reject WebViews with error 152-4.
+                    // Keep the player local to Harmonia, but give that document a
+                    // valid YouTube base URL so the iframe has an accepted origin.
+                    useLocalHTML
+                    baseUrlOverride="https://www.youtube.com"
+                    initialPlayerParams={{
+                      controls: true,
+                      start: Math.max(0, Math.floor(positionRef.current)),
+                      rel: false,
+                    }}
+                    onError={() => setMusicVideoError('This YouTube video cannot be played in the app')}
+                    webViewProps={{
+                      allowsFullscreenVideo: true,
+                      allowsInlineMediaPlayback: true,
+                      mediaPlaybackRequiresUserAction: false,
+                      javaScriptEnabled: true,
+                      domStorageEnabled: true,
+                      thirdPartyCookiesEnabled: true,
+                    }}
+                  />
+                </View>
+              ) : (
+                <ArtworkRenderer
+                  song={currentSong}
+                  size={artworkSize}
+                  radius={14}
+                  enableMotion={panel === 'none'}
+                  isPlaying={isPlaying}
+                  hideArtworkWhenCanvas
+                  renderMotion={false}
+                  onCanvasAvailabilityChange={onCanvasAvailabilityChange}
+                  style={styles.artwork}
+                />
+              )}
             </View>
           )}
+
+          {musicVideosEnabled && panel === 'none' && (
+            <Pressable
+              onPress={() => void toggleMusicVideo()}
+              disabled={musicVideoLoading}
+              style={({ pressed }) => [styles.musicVideoButton, pressed && styles.musicVideoButtonPressed, musicVideoLoading && styles.musicVideoButtonDisabled]}
+              accessibilityLabel={musicVideoId ? 'Switch to audio' : 'Switch to music video'}
+            >
+              {musicVideoLoading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons name={musicVideoId ? 'musical-notes-outline' : 'videocam-outline'} size={17} color="#FFF" />
+              )}
+              <Text style={styles.musicVideoButtonText}>
+                {musicVideoLoading ? 'Finding video…' : musicVideoId ? 'Switch to audio' : 'Switch to video'}
+              </Text>
+            </Pressable>
+          )}
+          {!!musicVideoError && <Text style={styles.musicVideoError}>{musicVideoError}</Text>}
 
           <View style={styles.meta}>
             <View style={styles.metaCopy}>
@@ -1210,6 +1314,36 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     elevation: 12,
   },
+  musicVideoFrame: {
+    width: '100%',
+    minHeight: 200,
+    overflow: 'hidden',
+    borderRadius: 14,
+    backgroundColor: '#000',
+    shadowColor: '#000',
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
+  },
+  musicVideoButton: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.22)',
+    marginTop: -10,
+    marginBottom: 6,
+  },
+  musicVideoButtonText: { color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: PLAYER_FONT },
+  musicVideoButtonPressed: { opacity: 0.76, transform: [{ scale: 0.97 }] },
+  musicVideoButtonDisabled: { opacity: 0.65 },
+  musicVideoError: { color: '#FCA5A5', fontSize: 12, textAlign: 'center', marginTop: -2, marginBottom: 6 },
   meta: { paddingTop: 12, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
   likeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
