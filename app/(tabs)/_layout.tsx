@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -45,9 +45,8 @@ export default function TabsLayout() {
           // screen and remains smooth because each long list is virtualized.
           freezeOnBlur: false,
           sceneStyle: { backgroundColor: colors.background },
-          // A low, uninterrupted black music-app dock: the larger selected
-          // icon and white label match the Home reference without stealing
-          // vertical room from the mini player.
+          // The reference uses a glass-like dock over the scrolling content.
+          // A light black wash preserves contrast without making a solid bar.
           tabBarActiveTintColor: colors.textStrong,
           tabBarInactiveTintColor: '#808080',
           tabBarHideOnKeyboard: true,
@@ -63,7 +62,7 @@ export default function TabsLayout() {
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            backgroundColor: Platform.OS === 'android' ? '#000000' : 'rgba(0,0,0,0.98)',
+            backgroundColor: 'rgba(0,0,0,0.38)',
             elevation: 0,
           },
           tabBarLabelStyle: {
