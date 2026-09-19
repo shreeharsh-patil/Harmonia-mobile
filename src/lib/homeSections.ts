@@ -3,7 +3,7 @@ import type { MusicSection, Playlist } from '@/src/types';
 const HOME_SHELF_SPECS = [
   { label: 'Popular Hindi Playlists', title: 'popular hindi playlists', genre: 'hindi' },
   { label: 'New & Trending', title: 'new trending', genre: 'hindi' },
-  { label: 'Bollywood Romance', title: 'bollywood romance' },
+  { label: 'Bollywood Romance', title: 'bollywood romance', sectionId: '6a04102c17b699631f90592a' },
   { label: '90s Love & Nostalgia', title: 'popular 90s playlists', genre: 'decades' },
   { label: 'Chill & Sad', title: 'chill sad' },
   { label: 'Popular Punjabi Playlists', title: 'popular punjabi playlists', genre: 'punjabi' },
@@ -23,6 +23,28 @@ function shelfKey(value: unknown) {
     .trim();
 }
 
+const BOLLYWOOD_ROMANCE_PLAYLIST_ORDER = [
+  'bollywood mush',
+  '00 s love hits',
+  '90s love hits',
+  'winter of love',
+  'tanhayee',
+  'bollywood acoustic',
+  'latest love tunes',
+  '80s love hits',
+  '70s love hits',
+  '60 s love hits',
+  'trending valentine s hits',
+];
+
+function orderedBollywoodRomancePlaylists(playlists: Playlist[]) {
+  const rank = new Map(BOLLYWOOD_ROMANCE_PLAYLIST_ORDER.map((name, index) => [name, index]));
+  return playlists
+    .map((playlist, index) => ({ playlist, index, rank: rank.get(shelfKey(playlist.name || playlist.title)) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ playlist }) => playlist);
+}
+
 /**
  * Home intentionally shows a concise, music-first collection instead of all
  * bundled catalog sections. These shelves mirror the curated Hindi, English,
@@ -33,21 +55,29 @@ export function selectHomeShelves(sections: MusicSection[] = []) {
 
   return HOME_SHELF_SPECS.flatMap((spec) => {
     const desiredGenre = 'genre' in spec ? spec.genre : '';
+    const desiredSectionId = 'sectionId' in spec ? spec.sectionId : '';
     const candidates = sections
       .filter((section) => !used.has(section) && shelfKey(section.name) === spec.title)
       .sort((a, b) => {
+        const aSection = desiredSectionId !== '' && String(a.id || a._id || '') === desiredSectionId ? 1 : 0;
+        const bSection = desiredSectionId !== '' && String(b.id || b._id || '') === desiredSectionId ? 1 : 0;
         const aGenre = desiredGenre !== '' && shelfKey((a as any).genreName) === desiredGenre ? 1 : 0;
         const bGenre = desiredGenre !== '' && shelfKey((b as any).genreName) === desiredGenre ? 1 : 0;
-        return bGenre - aGenre || (b.playlists?.length || 0) - (a.playlists?.length || 0);
+        return bSection - aSection || bGenre - aGenre || (b.playlists?.length || 0) - (a.playlists?.length || 0);
       });
     const chosen = candidates[0];
     if (!chosen) return [];
     used.add(chosen);
     const reversePopularPlaylists = spec.label.toLowerCase().startsWith('popular ');
+    const orderedPlaylists = spec.label === 'Bollywood Romance'
+      ? orderedBollywoodRomancePlaylists(chosen.playlists || [])
+      : reversePopularPlaylists
+        ? [...(chosen.playlists || [])].reverse()
+        : chosen.playlists;
     return [{
       ...chosen,
       name: spec.label,
-      playlists: reversePopularPlaylists ? [...(chosen.playlists || [])].reverse() : chosen.playlists,
+      playlists: orderedPlaylists,
     }];
   });
 }

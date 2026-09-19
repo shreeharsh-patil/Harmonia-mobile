@@ -54,6 +54,27 @@ test('Home shows the last catalog item first in Popular playlist shelves', async
   assert.deepEqual(shelf.playlists.map((playlist) => playlist.id), ['last', 'first']);
 });
 
+test('Bollywood Romance uses the reference Spotify playlists and artwork order', async () => {
+  const { selectHomeShelves } = await import('../../src/lib/homeSections');
+  const [shelf] = selectHomeShelves([
+    {
+      id: 'older-romance', name: 'Bollywood Romance', genreName: 'Hindi',
+      playlists: [{ id: 'generic', name: 'Generic romance' }],
+    },
+    {
+      id: '6a04102c17b699631f90592a', name: 'Bollywood Romance', genreName: 'Hindi',
+      playlists: [
+        { id: 'latest', name: 'Latest Love Tunes' },
+        { id: 'mush', name: 'Bollywood Mush' },
+        { id: 'winter', name: 'Winter of Love' },
+        { id: '2000s', name: "00's Love Hits" },
+      ],
+    },
+  ] as any);
+
+  assert.deepEqual(shelf.playlists.map((playlist) => playlist.id), ['mush', '2000s', 'winter', 'latest']);
+});
+
 test('home sections prefer every Spotify playlist returned by the database', async () => {
   const { selectDatabaseSpotifySections } = await import('../../src/lib/homeSections');
   const sections = selectDatabaseSpotifySections([
