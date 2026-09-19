@@ -292,6 +292,9 @@ export default function AlbumScreen() {
           <View style={styles.songRowWrap}>
             <SongRow
               song={item}
+              index={index}
+              showIndex={true}
+              isPlaying={isPlaying && currentSong?.id === item.id}
               active={currentSong?.id === item.id}
               onPress={() => void playFrom(index)}
               onMorePress={() => setActionSong(item)}

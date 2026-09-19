@@ -39,7 +39,7 @@ export default function ArtistScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { isArtistLiked, toggleArtistLike } = useLibrary();
-  const { currentSong, playSong } = usePlayer();
+  const { currentSong, isPlaying, playSong } = usePlayer();
   const [artist, setArtist] = useState<HarmoniaArtistEntity | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
   const [albums, setAlbums] = useState<HarmoniaAlbum[]>([]);
@@ -238,6 +238,9 @@ export default function ArtistScreen() {
         renderItem={({ item, index }) => (
           <SongRow
             song={item}
+            index={index}
+            showIndex={true}
+            isPlaying={isPlaying && currentSong?.id === item.id}
             active={currentSong?.id === item.id}
             onPress={() => void playFrom(index)}
             onMorePress={() => setActionSong(item)}

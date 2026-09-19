@@ -36,7 +36,7 @@ export default function MixScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const { token } = useAuth();
-  const { currentSong, playSong } = usePlayer();
+  const { currentSong, isPlaying, playSong } = usePlayer();
   const [mix, setMix] = useState<RecommendedMix | null>(null);
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,6 +217,9 @@ export default function MixScreen() {
         renderItem={({ item, index }) => (
           <SongRow
             song={item}
+            index={index}
+            showIndex={true}
+            isPlaying={isPlaying && currentSong?.id === item.id}
             active={currentSong?.id === item.id}
             onPress={() => void playFrom(index)}
             onMorePress={() => setActionSong(item)}

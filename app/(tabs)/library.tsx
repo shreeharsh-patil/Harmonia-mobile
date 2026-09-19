@@ -265,7 +265,7 @@ export default function LibraryScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/preferences')} accessibilityLabel="Open settings">
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/profile')} accessibilityLabel="Open profile">
           {user?.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
           ) : (

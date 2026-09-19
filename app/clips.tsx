@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -46,7 +46,7 @@ function ClipVideo({ url, active }: { url: string; active: boolean }) {
   return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
 }
 
-function ClipCard({ song, active, shouldPrefetch, height }: {
+const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }: {
   song: Song;
   active: boolean;
   shouldPrefetch: boolean;
@@ -115,7 +115,7 @@ function ClipCard({ song, active, shouldPrefetch, height }: {
       </SafeAreaView>
     </View>
   );
-}
+});
 
 export default function ClipsScreen() {
   const { height } = useWindowDimensions();

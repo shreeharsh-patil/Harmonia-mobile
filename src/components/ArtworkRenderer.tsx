@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, AppState, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
@@ -73,7 +73,7 @@ function MotionCanvas({ url, active }: { url: string; active: boolean }) {
   );
 }
 
-export function ArtworkRenderer({
+export const ArtworkRenderer = memo(function ArtworkRenderer({
   song,
   size,
   radius = 20,
@@ -176,7 +176,7 @@ export function ArtworkRenderer({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   shell: { overflow: 'hidden', backgroundColor: '#101010' },

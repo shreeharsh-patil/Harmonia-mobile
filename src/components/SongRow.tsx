@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
@@ -14,7 +15,7 @@ function formatDuration(seconds?: number | string | null): string {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-export function SongRow({
+export const SongRow = memo(function SongRow({
   song,
   onPress,
   active = false,
@@ -109,7 +110,7 @@ export function SongRow({
       ) : null}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

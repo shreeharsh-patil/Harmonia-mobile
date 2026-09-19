@@ -110,10 +110,11 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
   seek: (seconds: number) => Promise<void>;
   positionRef: { current: number };
 }) {
-  const { position } = usePlaybackProgress();
+  const { position, duration: progressDuration } = usePlaybackProgress();
+  const effectiveDuration = progressDuration || duration;
   // Keep the parent's ref fresh without re-rendering it (ref writes are free).
   positionRef.current = position;
-  const progress = duration > 0 ? Math.max(0, Math.min(1, position / duration)) : 0;
+  const progress = effectiveDuration > 0 ? Math.max(0, Math.min(1, position / effectiveDuration)) : 0;
   const progressUsableWidth = Math.max(0, progressWidth - PROGRESS_THUMB_SIZE);
   const progressThumbLeft = progress * progressUsableWidth;
 
@@ -124,7 +125,7 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
         onPress={(event) => {
           const width = Math.max(1, progressWidth);
           const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / width));
-          void seek(ratio * duration);
+          void seek(ratio * effectiveDuration);
         }}
         style={styles.track}
       >
@@ -138,7 +139,7 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
       </Pressable>
       <View style={styles.times}>
         <Text style={styles.time}>{durationLabel(position)}</Text>
-        <Text style={styles.time}>{durationLabel(duration)}</Text>
+        <Text style={styles.time}>{durationLabel(effectiveDuration)}</Text>
       </View>
     </>
   );
@@ -229,6 +230,19 @@ const LyricLines = memo(function LyricLines({
   );
 });
 
+const SleepTimerState = memo(function SleepTimerState({ sleepTimer }: { sleepTimer: SleepTimerMode }) {
+  const { sleepRemaining } = usePlaybackProgress();
+  const timerLabel = sleepTimer === 'off'
+    ? 'Off'
+    : sleepTimer === 'track'
+      ? 'After track'
+      : sleepRemaining > 0
+        ? `${Math.floor(sleepRemaining / 60)}:${String(sleepRemaining % 60).padStart(2, '0')}`
+        : `${sleepTimer}m`;
+
+  return <Text style={styles.timerState}>{timerLabel}</Text>;
+});
+
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ panel?: string; from?: string }>();
   const { width, height } = useWindowDimensions();
@@ -281,7 +295,7 @@ export default function PlayerScreen() {
     toggleShuffle,
   } = usePlayer();
   const { history } = usePlaybackHistory();
-  const { duration, sleepRemaining } = usePlaybackProgress();
+  const duration = currentSong?.duration || 0;
 
   const [progressWidth, setProgressWidth] = useState(1);
   const [panel, setPanel] = useState<Panel>('none');
@@ -520,14 +534,6 @@ export default function PlayerScreen() {
       if (request === musicVideoRequestRef.current) setMusicVideoLoading(false);
     }
   };
-
-  const timerLabel = sleepTimer === 'off'
-    ? 'Off'
-    : sleepTimer === 'track'
-      ? 'After track'
-      : sleepRemaining > 0
-        ? `${Math.floor(sleepRemaining / 60)}:${String(sleepRemaining % 60).padStart(2, '0')}`
-        : `${sleepTimer}m`;
 
   const shareDiagnostics = async () => {
     const lines = [
@@ -941,7 +947,7 @@ export default function PlayerScreen() {
 
               <View style={styles.toolLabelRow}>
                 <Text style={styles.toolLabel}>SLEEP TIMER</Text>
-                <Text style={styles.timerState}>{timerLabel}</Text>
+                <SleepTimerState sleepTimer={sleepTimer} />
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.optionRow}>
                 {TIMER_OPTIONS.map((item) => (

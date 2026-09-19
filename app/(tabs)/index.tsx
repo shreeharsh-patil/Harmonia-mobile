@@ -74,7 +74,7 @@ function uniqueRecentSongs(history: PlaybackHistoryEntry[], limit = 12) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { likedSongs } = useLibrary();
   const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
   const { batterySaver } = usePreferences();
@@ -332,12 +332,16 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Open Harmonia settings"
-          onPress={() => router.push('/(tabs)/preferences')}
+          accessibilityLabel="Open your profile"
+          onPress={() => router.push('/(tabs)/profile')}
           hitSlop={8}
           style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
         >
-          <Text style={styles.profileInitial}>H</Text>
+          {user?.image ? (
+            <Image source={{ uri: user.image }} style={styles.profileAvatar} contentFit="cover" cachePolicy="memory-disk" />
+          ) : (
+            <Text style={styles.profileInitial}>{user?.name ? user.name.slice(0, 1).toUpperCase() : 'H'}</Text>
+          )}
         </Pressable>
         <HomeFilterBar />
       </View>
@@ -786,6 +790,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F06AA7',
+    overflow: 'hidden',
+  },
+  profileAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   profileInitial: {
     color: '#151515',

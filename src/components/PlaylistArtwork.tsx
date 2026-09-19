@@ -91,7 +91,7 @@ export const PlaylistArtwork = memo(function PlaylistArtwork({
   tracks?: Song[];
 }) {
   const raw = playlist as any;
-  const singleUrl = playlistArtworkUrl(playlist, size, tracks);
+  const singleUrl = useMemo(() => playlistArtworkUrl(playlist, size, tracks), [playlist, size, tracks]);
   const collageTiles = useMemo(() => getPlaylistCollageUrls(playlist, tracks), [playlist, tracks]);
   // Spotify changes the CDN URL when a playlist cover is updated. Keep those
   // covers out of the long-lived disk cache, so the next Home refresh paints

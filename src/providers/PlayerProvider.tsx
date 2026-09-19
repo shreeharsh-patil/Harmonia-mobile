@@ -565,6 +565,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     persistSettings({ adaptivePipelineEnabled: nextEnabled });
   }, [persistSettings]);
 
+  const clearError = useCallback(() => {
+    setError(null);
+    setPlaybackErrorType(null);
+  }, []);
+
   const setSleepTimer = useCallback((mode: SleepTimerMode) => {
     sleepTimerRef.current = mode;
     setSleepTimerState(mode);
@@ -1991,10 +1996,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleShuffle,
     toggleRadio,
     toggleAdaptivePipeline,
-    clearError: () => {
-      setError(null);
-      setPlaybackErrorType(null);
-    },
+    clearError,
   }), [
     currentSong,
     queue,
@@ -2037,6 +2039,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     toggleShuffle,
     toggleRadio,
     toggleAdaptivePipeline,
+    clearError,
   ]);
 
   const historyValue = useMemo<PlaybackHistoryValue>(() => ({
