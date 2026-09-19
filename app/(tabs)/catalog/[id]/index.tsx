@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import {
   AppState,
   FlatList,
@@ -66,15 +66,10 @@ export default function BrowseCatalogScreen() {
     }
   }, [catalog]);
 
-  useEffect(() => {
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [load]);
-
   useFocusEffect(
     useCallback(() => {
+      // Focus is the single initial-load path. A separate mount effect used to
+      // issue the same catalog request twice whenever this screen opened.
       void load(false);
 
       const sub = AppState.addEventListener('change', (state) => {
@@ -84,6 +79,7 @@ export default function BrowseCatalogScreen() {
       });
 
       return () => {
+        loadGenerationRef.current += 1;
         sub.remove();
       };
     }, [load])
