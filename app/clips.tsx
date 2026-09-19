@@ -127,8 +127,11 @@ const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }
   return (
     <View style={[styles.clip, { height, backgroundColor: palette.secondary }]}>
       <LinearGradient
-        colors={[palette.dominant, palette.secondary, '#060606']}
-        locations={[0, 0.48, 1]}
+        // Start with the brighter artwork accent, then settle into its
+        // extracted dark tone and pure black — the same clear hero gradient
+        // treatment used by Spotify-style collection screens.
+        colors={[palette.accent, palette.dominant, palette.secondary, '#050505']}
+        locations={[0, 0.24, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
       {!canvasUrl && !!cover && (
