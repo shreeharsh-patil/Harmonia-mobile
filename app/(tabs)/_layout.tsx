@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MiniPlayer,
@@ -50,6 +51,18 @@ export default function TabsLayout() {
           tabBarActiveTintColor: colors.textStrong,
           tabBarInactiveTintColor: '#808080',
           tabBarHideOnKeyboard: true,
+          tabBarBackground: () => (
+            <LinearGradient
+              pointerEvents="none"
+              colors={[
+                'rgba(88,88,88,0.14)',
+                'rgba(44,44,44,0.60)',
+                'rgba(8,8,8,0.94)',
+              ]}
+              locations={[0, 0.42, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+          ),
           tabBarStyle: {
             position: 'absolute',
             left: 0,
@@ -62,7 +75,7 @@ export default function TabsLayout() {
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            backgroundColor: 'rgba(0,0,0,0.38)',
+            backgroundColor: 'transparent',
             elevation: 0,
           },
           tabBarLabelStyle: {
