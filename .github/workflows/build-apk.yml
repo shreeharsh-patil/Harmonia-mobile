@@ -59,6 +59,9 @@ jobs:
             --inline-modules-list-directory "$GITHUB_WORKSPACE/node_modules/expo/android/build/inline/modules" \
             --watched-directories-serialized '[]'
 
+      - name: Avoid redundant Expo inline-module discovery
+        run: node scripts/patch-expo-inline-autolinking.mjs
+
       - name: Tune Gradle memory for the release build
         run: |
           # Keep compilation in one bounded JVM. Separate Gradle and Kotlin
