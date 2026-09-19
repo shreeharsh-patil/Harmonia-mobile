@@ -159,7 +159,6 @@ export default function PlaylistScreen() {
     setEditing(false);
     setSearchQuery('');
     setIsSearchVisible(false);
-    void load();
     return () => {
       loadGenerationRef.current += 1;
     };
