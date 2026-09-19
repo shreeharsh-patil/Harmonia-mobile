@@ -505,34 +505,60 @@ const StartListeningList = memo(function StartListeningList({
   playing: boolean;
   onPress: (song: Song) => void;
 }) {
-  const visibleSongs = songs.slice(0, 5);
-  if (!visibleSongs.length) return null;
+  const { width } = useWindowDimensions();
+  const columns = useMemo(() => {
+    const result: Song[][] = [];
+    const visibleSongs = songs.slice(0, 9);
+    for (let index = 0; index < visibleSongs.length; index += 3) {
+      result.push(visibleSongs.slice(index, index + 3));
+    }
+    return result;
+  }, [songs]);
+  const columnWidth = Math.max(280, width - 56);
+  if (!columns.length) return null;
 
   return (
     <View style={styles.startSection}>
       <Text style={styles.startKicker}>Jump into a session based on your tastes</Text>
       <SectionHeader title="Start listening" />
-      {visibleSongs.map((song, index) => {
-        const active = String(currentSongId || '') === String(song.id || '');
-        return (
-          <Pressable
-            key={String(song.id || `start-${index}`)}
-            accessibilityRole="button"
-            accessibilityLabel={`${active && playing ? 'Pause' : 'Play'} ${song.name || song.title || 'song'}`}
-            onPress={() => onPress(song)}
-            style={({ pressed }) => [styles.startRow, pressed && styles.pressed]}
-          >
-            <TrackArtwork song={song} size={58} radius={4} />
-            <View style={styles.startCopy}>
-              <Text numberOfLines={1} style={[styles.startTitle, active && styles.startTitleActive]}>
-                {song.name || song.title || 'Untitled Track'}
-              </Text>
-              <Text numberOfLines={1} style={styles.startArtist}>{artistNames(song)}</Text>
-            </View>
-            <Ionicons name={active && playing ? 'pause' : 'ellipsis-vertical'} size={21} color={active ? colors.accentBright : colors.muted} />
-          </Pressable>
-        );
-      })}
+      <FlatList
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        data={columns}
+        keyExtractor={(_, index) => `start-column-${index}`}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        windowSize={3}
+        decelerationRate="fast"
+        snapToInterval={columnWidth + 14}
+        getItemLayout={(_, index) => ({ length: columnWidth + 14, offset: (columnWidth + 14) * index, index })}
+        contentContainerStyle={styles.startRail}
+        renderItem={({ item: column, index: columnIndex }) => (
+          <View style={[styles.startColumn, { width: columnWidth }]}>
+            {column.map((song, songIndex) => {
+              const active = String(currentSongId || '') === String(song.id || '');
+              return (
+                <Pressable
+                  key={String(song.id || `start-${columnIndex}-${songIndex}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${active && playing ? 'Pause' : 'Play'} ${song.name || song.title || 'song'}`}
+                  onPress={() => onPress(song)}
+                  style={({ pressed }) => [styles.startRow, pressed && styles.pressed]}
+                >
+                  <TrackArtwork song={song} size={58} radius={4} />
+                  <View style={styles.startCopy}>
+                    <Text numberOfLines={1} style={[styles.startTitle, active && styles.startTitleActive]}>
+                      {song.name || song.title || 'Untitled Track'}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.startArtist}>{artistNames(song)}</Text>
+                  </View>
+                  <Ionicons name={active && playing ? 'pause' : 'ellipsis-vertical'} size={21} color={active ? colors.accentBright : colors.muted} />
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      />
     </View>
   );
 });
@@ -844,6 +870,8 @@ const styles = StyleSheet.create({
   sectionSubtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
   startSection: { marginBottom: 30 },
   startKicker: { color: colors.muted, fontSize: 13, lineHeight: 18, marginBottom: 2 },
+  startRail: { paddingRight: 14 },
+  startColumn: { gap: 2, marginRight: 14 },
   startRow: {
     minHeight: 68,
     flexDirection: 'row',
