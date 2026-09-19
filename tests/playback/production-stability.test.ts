@@ -434,6 +434,24 @@ test('the app has no song-sharing implementation or share route', async () => {
   assert.doesNotMatch(replay, /Share Replay|Share\.share/);
 });
 
+test('mini player observes native audio output routes with a safe phone fallback', async () => {
+  const [bridge, miniPlayer, android, ios] = await Promise.all([
+    readFile('src/lib/audioRoute.ts', 'utf8'),
+    readFile('src/components/MiniPlayer.tsx', 'utf8'),
+    readFile('app/AudioRouteModule.kt', 'utf8'),
+    readFile('app/AudioRouteModule.swift', 'utf8'),
+  ]);
+
+  assert.match(bridge, /requireOptionalNativeModule/);
+  assert.match(bridge, /onAudioRouteChanged/);
+  assert.match(bridge, /Phone speaker/);
+  assert.match(miniPlayer, /useAudioOutputRoute/);
+  assert.match(android, /AudioDeviceCallback/);
+  assert.match(android, /TYPE_BLUETOOTH_A2DP/);
+  assert.match(ios, /AVAudioSession\.routeChangeNotification/);
+  assert.match(ios, /bluetoothA2DP/);
+});
+
 test('music videos use direct YouTube services without a Vercel proxy', async () => {
   const player = await readFile('app/player.tsx', 'utf8');
   const settings = await readFile('app/settings.tsx', 'utf8');

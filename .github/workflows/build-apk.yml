@@ -6,6 +6,10 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/build-apk.yml"
+      - "app.json"
+      - "app/**/*.kt"
+      - "app/**/*.swift"
+      - "src/lib/audioRoute.ts"
 
 permissions:
   contents: write
@@ -52,12 +56,13 @@ jobs:
         working-directory: android
         run: |
           # Run Expo's inline-module mirror before Gradle loads its JVMs. This
-          # surfaces the real CLI error and prepares the generated empty list.
+          # surfaces the real CLI error and mirrors our AudioRouteModule before
+          # Gradle loads its JVMs.
           node --no-warnings --eval "require('expo/bin/autolinking')" \
             expo-modules-autolinking mirror-kotlin-inline-modules \
             --kotlin-files-mirror-directory "$GITHUB_WORKSPACE/node_modules/expo/android/src/main/java/inline/modules" \
             --inline-modules-list-directory "$GITHUB_WORKSPACE/node_modules/expo/android/build/inline/modules" \
-            --watched-directories-serialized '[]'
+            --watched-directories-serialized '["app"]'
 
       - name: Avoid redundant Expo inline-module discovery
         run: node scripts/patch-expo-inline-autolinking.mjs

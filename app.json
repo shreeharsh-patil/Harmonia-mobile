@@ -81,7 +81,12 @@
       }
     },
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "inlineModules": {
+        "watchedDirectories": [
+          "app"
+        ]
+      }
     },
     "icon": "./assets/harmonia-icon.png",
     "extra": {
