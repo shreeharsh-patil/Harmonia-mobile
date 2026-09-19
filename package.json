@@ -18,7 +18,9 @@
     "test": "node --import tsx --test tests/playback/**/*.test.ts",
     "sync:catalog": "node scripts/sync-static-catalog.mjs",
     "eas-build-post-install": "npm run sync:catalog:required",
-    "sync:catalog:required": "node scripts/sync-static-catalog.mjs --required"
+    "sync:catalog:required": "node scripts/sync-static-catalog.mjs --required",
+    "update:production": "eas update --channel production",
+    "update:preview": "eas update --channel preview"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
@@ -41,6 +43,7 @@
     "expo-router": "~57.0.20",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.23",
     "expo-video": "~57.0.4",
     "expo-web-browser": "~57.0.2",
     "jpeg-js": "^0.4.4",
