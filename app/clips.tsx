@@ -113,6 +113,7 @@ export default function ClipsScreen() {
   const { currentSong, queue, playSong } = usePlayer();
   const currentSongRef = useRef(currentSong);
   const playlistFeedIdRef = useRef<string | null>(null);
+  const userSwipeRef = useRef(false);
   const [songs, setSongs] = useState<Song[]>(() => currentSong ? [currentSong] : []);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -158,13 +159,21 @@ export default function ClipsScreen() {
         <FlatList
           data={clips}
           pagingEnabled
+          disableIntervalMomentum
           showsVerticalScrollIndicator={false}
           initialNumToRender={1}
           maxToRenderPerBatch={1}
           windowSize={3}
           keyExtractor={(song) => String(song.id || song.songId)}
           getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+          onScrollBeginDrag={() => {
+            userSwipeRef.current = true;
+          }}
           onMomentumScrollEnd={(event) => {
+            // Layout/data updates can emit a momentum-end event on Android.
+            // Only a real touch gesture is allowed to advance clips/playback.
+            if (!userSwipeRef.current) return;
+            userSwipeRef.current = false;
             const nextIndex = Math.round(event.nativeEvent.contentOffset.y / Math.max(1, height));
             setActiveIndex((current) => current === nextIndex ? current : nextIndex);
           }}

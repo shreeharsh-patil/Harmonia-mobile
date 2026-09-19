@@ -118,11 +118,12 @@ export default function PlaylistScreen() {
         : Array.isArray((detail as any).songs)
           ? (detail as any).songs
           : [];
+      const isCurated = detail.source === 'spotify' || detail.catalogSource === 'bundled' || Boolean(detail.sourceUrl?.includes('spotify')) || Boolean(detail.spotifyId);
       const initialDetail: Playlist = {
         ...detail,
         tracks: initialTracks,
         songs: initialTracks,
-        songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, initialTracks.length),
+        songCount: isCurated ? Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, initialTracks.length, 50) : Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, initialTracks.length),
       };
       setPlaylist(initialDetail);
       setDraftName(playlistTitle(initialDetail));
@@ -143,7 +144,7 @@ export default function PlaylistScreen() {
           ...detail,
           tracks: nextSongs.length ? nextSongs : initialTracks,
           songs: nextSongs.length ? nextSongs : initialTracks,
-          songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, nextSongs.length, initialTracks.length),
+          songCount: nextSongs.length || initialTracks.length || detail.songCount || (isCurated ? 50 : 0),
         };
         setPlaylist(enrichedDetail);
         setSongs(nextSongs.length ? nextSongs : initialTracks);
@@ -475,12 +476,11 @@ export default function PlaylistScreen() {
               <View style={styles.controlsBar}>
                 <Pressable
                   onPress={() => {
-                    void (async () => {
-                      // Clips begins with the selected playlist's first song,
-                      // then continues into the short-form Canvas feed.
-                      if (songs[0]) await playSong(songs[0], songs);
-                      router.push({ pathname: '/clips', params: { playlistId: id } });
-                    })();
+                    // playSong synchronously installs the playlist queue before
+                    // resolving audio. Do not await its network work here:
+                    // Clips can render the first cover immediately.
+                    if (songs[0]) void playSong(songs[0], songs);
+                    router.push({ pathname: '/clips', params: { playlistId: id } });
                   }}
                   style={({ pressed }) => [styles.controlArtwork, pressed && styles.pressed]}
                   accessibilityLabel="Open Music Clips"
