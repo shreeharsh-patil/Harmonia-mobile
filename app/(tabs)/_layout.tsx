@@ -23,7 +23,7 @@ function TabIcon({
   return (
     <Ionicons
       name={focused ? active : inactive}
-      size={24}
+      size={focused ? 27 : 25}
       color={color}
     />
   );
@@ -45,8 +45,9 @@ export default function TabsLayout() {
           // screen and remains smooth because each long list is virtualized.
           freezeOnBlur: false,
           sceneStyle: { backgroundColor: colors.background },
-          // Compact music-app navigation: black surface, white active state,
-          // and quieter labels so artwork remains the visual priority.
+          // A low, uninterrupted black music-app dock: the larger selected
+          // icon and white label match the Home reference without stealing
+          // vertical room from the mini player.
           tabBarActiveTintColor: colors.textStrong,
           tabBarInactiveTintColor: '#808080',
           tabBarHideOnKeyboard: true,
@@ -56,23 +57,26 @@ export default function TabsLayout() {
             right: 0,
             bottom: 0,
             height: TAB_BAR_HEIGHT + safeBottom,
-            paddingTop: 5,
-            paddingBottom: Math.max(4, safeBottom),
-            borderTopWidth: StyleSheet.hairlineWidth,
+            paddingTop: 7,
+            paddingBottom: Math.max(5, safeBottom),
+            borderTopWidth: 0,
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            borderTopColor: 'rgba(255,255,255,0.08)',
             backgroundColor: Platform.OS === 'android' ? '#000000' : 'rgba(0,0,0,0.98)',
             elevation: 0,
           },
           tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '600',
-            letterSpacing: 0,
+            fontSize: 11,
+            lineHeight: 14,
+            fontWeight: '700',
+            letterSpacing: -0.1,
           },
           tabBarItemStyle: {
-            paddingVertical: 2,
+            paddingVertical: 0,
+          },
+          tabBarIconStyle: {
+            marginBottom: 1,
           },
         }}
       >
