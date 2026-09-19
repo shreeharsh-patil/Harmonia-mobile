@@ -470,9 +470,62 @@ export default function PlaylistScreen() {
               </View>
             </View>
 
-            {/* Action Controls Bar (Web Layout) */}
+            {/* Spotify-style controls: playlist artwork/actions stay left; play stays right. */}
             {!editing && (
               <View style={styles.controlsBar}>
+                <Pressable
+                  onPress={() => setActionSong(songs[0] || null)}
+                  style={({ pressed }) => [styles.controlArtwork, pressed && styles.pressed]}
+                  accessibilityLabel="Playlist actions"
+                >
+                  <PlaylistArtwork playlist={playlist} size={48} radius={5} tracks={songs} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    if (owned) setEditing(true);
+                    else void togglePlaylistLike(playlist);
+                  }}
+                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+                  accessibilityLabel={owned ? 'Edit playlist' : isPlaylistLiked(id) ? 'Remove from library' : 'Save playlist'}
+                >
+                  <Ionicons
+                    name={owned || isPlaylistLiked(id) ? 'checkmark' : 'add'}
+                    size={27}
+                    color={isPlaylistLiked(id) ? colors.accent : colors.textMuted}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setActionSong(songs[0] || null)}
+                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+                  accessibilityLabel="Download playlist tracks"
+                >
+                  <Ionicons name="arrow-down-circle-outline" size={26} color={colors.textMuted} />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setIsSearchVisible((value) => !value)}
+                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+                  accessibilityLabel="More playlist actions"
+                >
+                  <Ionicons name="ellipsis-vertical" size={22} color={colors.textMuted} />
+                </Pressable>
+
+                <View style={styles.controlsSpacer} />
+
+                <Pressable
+                  onPress={() => setIsShuffle((val) => !val)}
+                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
+                  accessibilityLabel="Shuffle"
+                >
+                  <Ionicons
+                    name="shuffle"
+                    size={25}
+                    color={isShuffle ? colors.accent : colors.textMuted}
+                  />
+                </Pressable>
+
                 <Pressable
                   disabled={!songs.length || playing}
                   onPress={() => void handlePlayToggle()}
@@ -484,54 +537,11 @@ export default function PlaylistScreen() {
                   ) : (
                     <Ionicons
                       name={isPlaylistActive && isPlaying ? 'pause' : 'play'}
-                      size={24}
+                      size={27}
                       color="#FFFFFF"
                       style={isPlaylistActive && isPlaying ? undefined : { marginLeft: 3 }}
                     />
                   )}
-                </Pressable>
-
-                <Pressable
-                  onPress={() => setIsShuffle((val) => !val)}
-                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
-                  accessibilityLabel="Shuffle"
-                >
-                  <Ionicons
-                    name="shuffle"
-                    size={22}
-                    color={isShuffle ? colors.accent : colors.textMuted}
-                  />
-                </Pressable>
-
-                {!owned && (
-                  <Pressable
-                    onPress={() => {
-                      void togglePlaylistLike(playlist);
-                    }}
-                    style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
-                    accessibilityLabel="Like playlist"
-                  >
-                    <Ionicons
-                      name={isPlaylistLiked(id) ? 'heart' : 'heart-outline'}
-                      size={22}
-                      color={isPlaylistLiked(id) ? colors.danger : colors.textMuted}
-                    />
-                  </Pressable>
-                )}
-
-                <View style={styles.controlsSpacer} />
-
-                {/* Search filter */}
-                <Pressable
-                  onPress={() => setIsSearchVisible((v) => !v)}
-                  style={({ pressed }) => [styles.circleButton, pressed && styles.pressed]}
-                  accessibilityLabel="Search playlist"
-                >
-                  <Ionicons
-                    name="search-outline"
-                    size={20}
-                    color={isSearchVisible ? colors.accent : colors.textMuted}
-                  />
                 </Pressable>
               </View>
             )}
@@ -703,7 +713,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 20,
     width: '100%',
-    gap: 16,
+    gap: 10,
+  },
+  controlArtwork: {
+    width: 48,
+    height: 48,
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginRight: 2,
   },
   playButtonCircle: {
     width: 52,
