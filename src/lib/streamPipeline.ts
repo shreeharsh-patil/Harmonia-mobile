@@ -51,13 +51,18 @@ function bitrate(value: number | null, quality: string | null) {
 export function fastStartQuality(target: StreamQuality): StreamQuality {
   switch (target) {
     case 'maximum':
+      // Start a large lossless/highest-quality request at a stream that is
+      // quick to open. The pipeline promotes it after audio is already
+      // playing, avoiding a long first-buffer pause on slower devices.
+      return 'high';
     case 'high':
+      return 'normal';
     case 'normal':
     case 'data-saver':
       return target;
     case 'automatic':
     default:
-      return 'maximum';
+      return 'normal';
   }
 }
 

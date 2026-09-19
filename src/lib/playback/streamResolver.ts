@@ -676,8 +676,10 @@ export function createHarmoniaProviders({
       id: 'backend-search',
       canResolve(track) {
         const title = String(track.name || track.title || '').trim();
-        const artists = artistNames(track).trim();
-        return Boolean(streamApiBase && title && artists && artists !== 'Unknown artist');
+        // Catalog items can legitimately be missing an artist. The streaming
+        // endpoint supports title-only lookup, so do not discard the final
+        // recovery path for those tracks.
+        return Boolean(streamApiBase && title && title !== 'Unknown track');
       },
       async resolve(track, options) {
         const title = String(track.name || track.title || '').trim();

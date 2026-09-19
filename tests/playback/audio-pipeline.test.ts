@@ -24,6 +24,7 @@ import {
   PlaybackErrorType,
   classifyPlaybackError,
 } from '../../src/lib/playback/playbackErrors';
+import { fastStartQuality } from '../../src/lib/streamPipeline';
 import { maskStreamUrl } from '../../src/lib/playback/streamDiagnostics';
 import {
   artistNames,
@@ -264,6 +265,48 @@ test('6 metadata-only Spotify tracks try direct JioSaavn before backend fallback
   assert.equal(result.source, 'backend-search');
   assert.equal(saavnSearchCalls, 1);
   assert.equal(streamCalls, 1);
+});
+
+test('title-only tracks retain the backend recovery path when direct lookup fails', async () => {
+  const calls: string[] = [];
+  const providers = createHarmoniaProviders({
+    streamApiBase: 'https://stream.test',
+    fetchImpl: async (input, init) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes('jiosaavn.com/api.php')) return json({ results: [] });
+      assert.match(url, /api\/stream-track/);
+      assert.match(String(init?.body || ''), /Radhimaa/);
+      return json({
+        streamUrl: 'https://media.test/radhimaa.m4a',
+        mimeType: 'audio/mp4',
+      });
+    },
+  });
+  const resolver = new StreamResolver(providers, {
+    healthManager: new ProviderHealthManager(),
+  });
+
+  const result = await resolver.resolve(song({
+    id: 'radhimaa-title-only',
+    name: 'Radhimaa',
+    title: 'Radhimaa',
+    artist: undefined,
+    artists: undefined,
+    primaryArtists: undefined,
+    source: 'harmonia',
+  }));
+
+  assert.equal(result.source, 'backend-search');
+  assert.ok(calls.some((value) => value.includes('/api/stream-track')));
+});
+
+test('adaptive playback starts at a lighter quality before promotion', () => {
+  assert.equal(fastStartQuality('data-saver'), 'data-saver');
+  assert.equal(fastStartQuality('normal'), 'normal');
+  assert.equal(fastStartQuality('automatic'), 'normal');
+  assert.equal(fastStartQuality('high'), 'normal');
+  assert.equal(fastStartQuality('maximum'), 'high');
 });
 
 test('Spotify tracks with a title but no artist still resolve by recording title', async () => {
