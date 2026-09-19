@@ -93,6 +93,12 @@ export const PlaylistArtwork = memo(function PlaylistArtwork({
   const raw = playlist as any;
   const singleUrl = playlistArtworkUrl(playlist, size, tracks);
   const collageTiles = useMemo(() => getPlaylistCollageUrls(playlist, tracks), [playlist, tracks]);
+  // Spotify changes the CDN URL when a playlist cover is updated. Keep those
+  // covers out of the long-lived disk cache, so the next Home refresh paints
+  // the provider's newest thumbnail instead of an earlier catalog image.
+  const isSpotifyPlaylist = String(raw.source || raw.sourceType || '').toLowerCase().includes('spotify') ||
+    String(raw.sourceUrl || '').includes('open.spotify.com/playlist/');
+  const artworkCachePolicy = isSpotifyPlaylist ? 'memory' : 'memory-disk';
 
   // If a collage of 4 unique images is available and there is no dedicated high-res cover
   const showCollage = !singleUrl && collageTiles.length >= 4;
@@ -156,8 +162,8 @@ export const PlaylistArtwork = memo(function PlaylistArtwork({
       style={{ width: size, height: size, borderRadius: radius, backgroundColor: '#151515' }}
       contentFit="cover"
       transition={140}
-      cachePolicy="memory-disk"
-      recyclingKey={String(raw?._id || playlist.id || singleUrl)}
+      cachePolicy={artworkCachePolicy}
+      recyclingKey={singleUrl}
     />
   );
 });
