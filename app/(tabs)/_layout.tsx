@@ -29,6 +29,18 @@ function TabIcon({
   );
 }
 
+function LibraryIcon({ color, focused }: { color: string; focused: boolean }) {
+  const iconColor = color;
+  const barHeight = focused ? 25 : 23;
+  return (
+    <View style={styles.libraryIcon} accessibilityElementsHidden>
+      <View style={[styles.libraryBar, { height: barHeight, backgroundColor: iconColor }]} />
+      <View style={[styles.libraryBar, { height: barHeight, backgroundColor: iconColor }]} />
+      <View style={[styles.libraryBlock, { height: barHeight, backgroundColor: iconColor }]} />
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const safeBottom = Math.max(insets.bottom, 0);
@@ -102,7 +114,7 @@ export default function TabsLayout() {
           options={{
             title: 'Library',
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon active="library" inactive="library-outline" color={String(color)} focused={focused} />
+              <LibraryIcon color={String(color)} focused={focused} />
             ),
           }}
         />
@@ -139,4 +151,7 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   miniWrap: { position: 'absolute', left: 8, right: 8 },
+  libraryIcon: { width: 28, height: 27, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  libraryBar: { width: 4, borderRadius: 2 },
+  libraryBlock: { width: 10, borderRadius: 2, borderTopRightRadius: 8 },
 });
