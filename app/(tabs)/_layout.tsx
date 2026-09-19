@@ -96,7 +96,7 @@ export default function TabsLayout() {
           options={{
             title: 'Home',
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon active="home" inactive="home-outline" color={String(color)} focused={focused} />
+              <TabIcon active="home-outline" inactive="home-outline" color={String(color)} focused={focused} />
             ),
           }}
         />
