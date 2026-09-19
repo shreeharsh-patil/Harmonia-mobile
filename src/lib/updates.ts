@@ -1,4 +1,5 @@
 import { APP_VERSION } from '@/src/config';
+import * as Updates from 'expo-updates';
 
 const RELEASES_URL = 'https://api.github.com/repos/shreeharsh-patil/Harmonia-mobile/releases/latest';
 
@@ -65,4 +66,27 @@ export async function checkForAppUpdate() {
     updateAvailable: latestVersion ? isNewerVersion(latestVersion) : false,
     releaseUrl: String(release?.html_url || 'https://github.com/shreeharsh-patil/Harmonia-mobile/releases'),
   };
+}
+
+export type OtaUpdateResult =
+  | { status: 'applied' }
+  | { status: 'up-to-date' }
+  | { status: 'unavailable' };
+
+/**
+ * Downloads a compatible EAS Update and immediately restarts into it.
+ *
+ * This deliberately has no effect in Expo Go, development builds, or legacy
+ * APKs without an EAS Updates URL. Those installs continue through the
+ * GitHub-release fallback in Settings.
+ */
+export async function checkAndApplyOtaUpdate(): Promise<OtaUpdateResult> {
+  if (!Updates.isEnabled) return { status: 'unavailable' };
+
+  const update = await Updates.checkForUpdateAsync();
+  if (!update.isAvailable) return { status: 'up-to-date' };
+
+  await Updates.fetchUpdateAsync();
+  await Updates.reloadAsync();
+  return { status: 'applied' };
 }

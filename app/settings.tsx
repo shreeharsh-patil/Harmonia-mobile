@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { APP_VERSION } from '@/src/config';
 import type { StreamQuality } from '@/src/lib/api';
-import { checkForAppUpdate } from '@/src/lib/updates';
+import { checkAndApplyOtaUpdate, checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
@@ -148,6 +148,20 @@ export default function SettingsScreen() {
     if (checkingUpdate) return;
     setCheckingUpdate(true);
     try {
+      const ota = await checkAndApplyOtaUpdate();
+      // reloadAsync() normally never returns because it reloads the app. This
+      // message is a safe fallback for platforms which defer the reload.
+      if (ota.status === 'applied') {
+        Alert.alert('Update installed', 'Harmonia will restart with the latest update.');
+        return;
+      }
+      if (ota.status === 'up-to-date') {
+        Alert.alert('Harmonia is up to date', 'The latest app update is already installed.');
+        return;
+      }
+
+      // Older APKs cannot receive OTA updates. Keep a full-APK path available
+      // rather than showing a misleading success message.
       const result = await checkForAppUpdate();
       if (result.updateAvailable && result.latestVersion) {
         Alert.alert(
@@ -164,7 +178,7 @@ export default function SettingsScreen() {
         Alert.alert('Up to date', 'No new release is available.');
       }
     } catch {
-      Alert.alert('Update check failed', 'Check your connection and try again.');
+      Alert.alert('Update check failed', 'Check your connection and try again. If this APK is older, install the latest release.');
     } finally {
       setCheckingUpdate(false);
     }

@@ -17,7 +17,7 @@ import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { ProfileSkeleton } from '@/src/components/ProfileSkeleton';
 import { APP_VERSION } from '@/src/config';
 import type { StreamQuality } from '@/src/lib/api';
-import { checkForAppUpdate } from '@/src/lib/updates';
+import { checkAndApplyOtaUpdate, checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
@@ -162,6 +162,16 @@ export default function ProfileScreen() {
     if (checkingUpdate) return;
     setCheckingUpdate(true);
     try {
+      const ota = await checkAndApplyOtaUpdate();
+      if (ota.status === 'applied') {
+        Alert.alert('Update installed', 'Harmonia will restart with the latest update.');
+        return;
+      }
+      if (ota.status === 'up-to-date') {
+        Alert.alert('Harmonia is up to date', 'The latest app update is already installed.');
+        return;
+      }
+
       const result = await checkForAppUpdate();
       if (result.updateAvailable && result.latestVersion) {
         Alert.alert(
@@ -178,7 +188,7 @@ export default function ProfileScreen() {
         Alert.alert('Up to date', 'No new release is available.');
       }
     } catch {
-      Alert.alert('Update check failed', 'Check your connection and try again.');
+      Alert.alert('Update check failed', 'Check your connection and try again. If this APK is older, install the latest release.');
     } finally {
       setCheckingUpdate(false);
     }
