@@ -25,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Validate Expo dependencies
+        run: npx expo install --check
+
       - name: Validate catalog sync script
         run: |
           npm run sync:catalog
