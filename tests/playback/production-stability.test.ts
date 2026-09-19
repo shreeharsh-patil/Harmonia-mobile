@@ -680,6 +680,17 @@ test('Spotify Canvas resolves title-only search tracks through the cached Harmon
   assert.match(canvas, /\?trackId=/);
 });
 
+test('Music Clips keeps a single paged Canvas video active for smooth playback', async () => {
+  const clips = await readFile('app/clips.tsx', 'utf8');
+  const player = await readFile('app/player.tsx', 'utf8');
+  assert.match(clips, /pagingEnabled/);
+  assert.match(clips, /initialNumToRender=\{1\}/);
+  assert.match(clips, /maxToRenderPerBatch=\{1\}/);
+  assert.match(clips, /active=\{index === activeIndex\}/);
+  assert.match(clips, /if \(active\) player\.play\(\);[\s\S]*?else player\.pause\(\)/);
+  assert.match(player, /router\.push\('\/clips'\)/);
+});
+
 
 test('player persistence batches background-safe storage work instead of writing every few seconds', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');

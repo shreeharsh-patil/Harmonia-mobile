@@ -838,6 +838,17 @@ export default function PlayerScreen() {
 
           {panel === 'tools' && (
             <View style={styles.panel}>
+              <Pressable
+                onPress={() => router.push('/clips')}
+                style={styles.clipsShortcut}
+                accessibilityLabel="Open Music Clips"
+              >
+                <View>
+                  <Text style={styles.toolLabel}>MUSIC CLIPS</Text>
+                  <Text style={styles.clipsShortcutTitle}>Short visual stories matched to your music</Text>
+                </View>
+                <Ionicons name="play-circle" size={32} color="#1ED760" />
+              </Pressable>
               <View style={styles.downloadRow}>
                 <View style={styles.downloadCopy}>
                   <Text style={styles.toolLabel}>OFFLINE</Text>
@@ -1362,6 +1373,8 @@ const styles = StyleSheet.create({
   musicVideoButtonText: { color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: PLAYER_FONT },
   musicVideoButtonPressed: { opacity: 0.76, transform: [{ scale: 0.97 }] },
   musicVideoButtonDisabled: { opacity: 0.65 },
+  clipsShortcut: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, padding: 14, marginBottom: 16, backgroundColor: 'rgba(30,215,96,0.12)', borderWidth: 1, borderColor: 'rgba(30,215,96,0.26)' },
+  clipsShortcutTitle: { color: '#FFF', fontSize: 14, fontWeight: '700', maxWidth: 230 },
   musicVideoError: { color: '#FCA5A5', fontSize: 12, textAlign: 'center', marginTop: -2, marginBottom: 6 },
   meta: { paddingTop: 12, flexDirection: 'row', alignItems: 'center' },
   metaCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
