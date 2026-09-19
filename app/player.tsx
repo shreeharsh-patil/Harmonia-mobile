@@ -429,7 +429,10 @@ export default function PlayerScreen() {
   }
 
   const compactArtwork = panel === 'queue' || panel === 'tools';
-  const showCanvasOnly = hasCanvas && panel === 'none';
+  // Canvas normally owns the full artwork surface. Once a music video has
+  // been resolved, it must yield that surface to the YouTube player; otherwise
+  // the video state changes successfully but its component never mounts.
+  const showCanvasOnly = hasCanvas && panel === 'none' && !musicVideoId;
   const playerContentWidth = Math.max(0, width - 32);
   const artworkSize = compactArtwork ? Math.min(244, playerContentWidth) : playerContentWidth;
   const controlsFixedWidth = 40 + 50 + 64 + 50 + 40;
