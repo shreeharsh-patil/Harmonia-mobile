@@ -110,7 +110,7 @@ export default function ClipsScreen() {
   const params = useLocalSearchParams<{ playlistId?: string }>();
   const playlistId = Array.isArray(params.playlistId) ? params.playlistId[0] : params.playlistId;
   const playlistMode = Boolean(playlistId);
-  const { currentSong, queue, playSong } = usePlayer();
+  const { currentSong, queue, playSong, pausePlayback } = usePlayer();
   const currentSongRef = useRef(currentSong);
   const playlistFeedIdRef = useRef<string | null>(null);
   const userSwipeRef = useRef(false);
@@ -125,6 +125,12 @@ export default function ClipsScreen() {
   useEffect(() => {
     currentSongRef.current = currentSong;
   }, [currentSong]);
+
+  useEffect(() => {
+    // Clips owns its autoplay session. Leaving it must also cancel a pending
+    // stream resolve, otherwise audio can start after navigation has finished.
+    return () => pausePlayback();
+  }, [pausePlayback]);
 
   useEffect(() => {
     if (playlistMode) {

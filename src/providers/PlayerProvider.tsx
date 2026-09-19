@@ -221,6 +221,7 @@ type PlayerContextValue = {
   moveQueueItem: (from: number, to: number) => void;
   clearUpcoming: () => void;
   togglePlayback: () => Promise<void>;
+  pausePlayback: () => void;
   next: () => Promise<void>;
   previous: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
@@ -1134,6 +1135,18 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     }
   }, [loadIndex, player, status.error, status.isLoaded, status.playing]);
 
+  const pausePlayback = useCallback(() => {
+    // Stop both a playing source and an in-flight resolution. This is used by
+    // full-screen transient experiences (such as Music Clips) when they close,
+    // so a late stream resolution cannot begin playing behind the new screen.
+    playbackIntentRef.current = false;
+    loadGenerationRef.current += 1;
+    activeResolutionAbortRef.current?.abort();
+    player.pause();
+    setIsLoadingTrack(false);
+    setPlaybackState('PAUSED');
+  }, [player]);
+
   const seek = useCallback(async (seconds: number) => {
     const max = status.duration || currentSong?.duration || seconds;
     const target = Math.max(0, Math.min(seconds, max));
@@ -1933,6 +1946,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     moveQueueItem,
     clearUpcoming,
     togglePlayback,
+    pausePlayback,
     next,
     previous,
     seek,
@@ -1978,6 +1992,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     moveQueueItem,
     clearUpcoming,
     togglePlayback,
+    pausePlayback,
     next,
     previous,
     seek,
