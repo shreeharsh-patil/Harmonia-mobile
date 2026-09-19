@@ -1,87 +1,121 @@
 import { useState } from 'react';
+import { Image } from 'expo-image';
 import {
   Alert,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  ANDROID_BUILD_VERSION,
-  APP_VERSION,
-} from '@/src/config';
+import { APP_VERSION } from '@/src/config';
 import type { StreamQuality } from '@/src/lib/api';
 import { checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
-import { useLocalMusic } from '@/src/providers/LocalMusicProvider';
+import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
-import { usePlaybackHistory, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { useListeningStats, usePlaybackHistory, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
 
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
   { value: 'automatic', label: 'Auto' },
-  { value: 'data-saver', label: 'Data Saver' },
+  { value: 'data-saver', label: 'Saver' },
   { value: 'normal', label: 'Normal' },
   { value: 'high', label: 'High' },
   { value: 'maximum', label: 'Max' },
 ];
 
-const RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const RATE_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
 const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 15, label: '15m' },
   { value: 30, label: '30m' },
   { value: 45, label: '45m' },
   { value: 60, label: '60m' },
-  { value: 'track', label: 'End of track' },
+  { value: 'track', label: 'Track' },
 ];
 
+function localDayKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes || bytes <= 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${Math.round(mb)} MB`;
+}
+
 export default function SettingsScreen() {
-  const { user, token } = useAuth();
+  const { user, token, signOut, refreshUser } = useAuth();
+  const { playlists, likedSongs, refreshing, refresh } = useLibrary();
   const {
-    networkAwareQuality,
-    wifiQuality,
-    cellularQuality,
+    playbackRate,
+    streamQuality,
+    sleepTimer,
+    setPlaybackRate,
+    setStreamQuality,
+    setSleepTimer,
+  } = usePlayer();
+  const { listeningStats } = useListeningStats();
+  const { history, clearHistory } = usePlaybackHistory();
+  const { downloads, totalBytes, clearDownloads } = useOffline();
+  const {
     batterySaver,
     wifiOnlyDownloads,
     musicVideosEnabled,
-    networkType,
-    setNetworkAwareQuality,
-    setWifiQuality,
-    setCellularQuality,
     setBatterySaver,
     setWifiOnlyDownloads,
     setMusicVideosEnabled,
   } = usePreferences();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const { downloads, totalBytes, clearDownloads } = useOffline();
-  const { songs: localSongs, loading: localLoading, scan: scanLocalMusic } = useLocalMusic();
-  const {
-    currentSong,
-    playbackRate,
-    streamQuality,
-    sleepTimer,
-    adaptivePipelineEnabled,
-    adaptivePipelineStatus,
-    setPlaybackRate,
-    setStreamQuality,
-    setSleepTimer,
-    toggleAdaptivePipeline,
-  } = usePlayer();
-  const { history, clearHistory } = usePlaybackHistory();
+
+  const dailyEntries = Object.entries(listeningStats.dailySeconds || {});
+  const today = localDayKey();
+  const weekKeys = new Set(Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return localDayKey(date);
+  }));
+  const todayMinutes = Math.round((listeningStats.dailySeconds?.[today] || 0) / 60);
+  const weekMinutes = Math.round(
+    dailyEntries.reduce((sum, [key, seconds]) => sum + (weekKeys.has(key) ? Number(seconds || 0) : 0), 0) / 60
+  );
+
+  const doRefresh = async () => {
+    await Promise.all([refreshUser().catch(() => {}), refresh()]);
+  };
+
+  const doSignOut = async () => {
+    Alert.alert('Sign out?', 'Are you sure you want to sign out of Harmonia?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace('/(tabs)');
+          } catch {
+            Alert.alert('Sign out incomplete', 'Could not remove saved session. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
 
   const confirmClearDownloads = () => {
     if (!downloads.length) return;
     Alert.alert(
       'Remove all downloads?',
-      'Downloaded audio will be deleted from this phone. Your Harmonia library will not be changed.',
+      'Downloaded audio files will be removed from this phone. Your playlists and library will remain intact.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Remove all', style: 'destructive', onPress: () => void clearDownloads() },
@@ -93,7 +127,7 @@ export default function SettingsScreen() {
     if (!history.length) return;
     Alert.alert(
       'Clear listening history?',
-      'This clears local listening history on this phone.',
+      'This clears your local listening history on this phone.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Clear', style: 'destructive', onPress: () => void clearHistory() },
@@ -103,13 +137,10 @@ export default function SettingsScreen() {
 
   const clearArtworkCache = async () => {
     try {
-      await Promise.all([
-        Image.clearMemoryCache(),
-        Image.clearDiskCache(),
-      ]);
-      Alert.alert('Artwork cache cleared', 'Cached artwork was removed. Images will reload as needed.');
+      await Promise.all([Image.clearMemoryCache(), Image.clearDiskCache()]);
+      Alert.alert('Cache cleared', 'Artwork cache has been cleared. Images will reload as needed.');
     } catch {
-      Alert.alert('Could not clear cache', 'Harmonia could not clear the image cache on this device.');
+      Alert.alert('Cache clear failed', 'Could not clear cached images.');
     }
   };
 
@@ -130,7 +161,7 @@ export default function SettingsScreen() {
       } else if (result.latestVersion) {
         Alert.alert('Harmonia is up to date', `Version ${result.currentVersion} is the latest release.`);
       } else {
-        Alert.alert('No published release yet', 'No GitHub release is available to compare with this build.');
+        Alert.alert('Up to date', 'No new release is available.');
       }
     } catch {
       Alert.alert('Update check failed', 'Check your connection and try again.');
@@ -140,6 +171,7 @@ export default function SettingsScreen() {
   };
 
   const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
+
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)');
@@ -151,46 +183,95 @@ export default function SettingsScreen() {
         <Pressable onPress={goBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="chevron-back" size={23} color={colors.textStrong} />
         </Pressable>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Profile & Settings</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void doRefresh()} tintColor="#FFF" />}
+        showsVerticalScrollIndicator={false}
+      >
         {token && user ? (
-          <Pressable
-            onPress={() => router.push('/(tabs)/profile')}
-            style={({ pressed }) => [styles.profileHero, pressed && styles.pressed]}
-          >
+          <View style={styles.identity}>
             {user.image ? (
-              <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" />
+              <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
             ) : (
               <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.initialText}>{initial}</Text>
+                <Text style={styles.initial}>{initial}</Text>
               </View>
             )}
-            <View style={styles.profileHeroCopy}>
-              <Text numberOfLines={1} style={styles.userName}>{user.name || 'Harmonia User'}</Text>
-              <Text numberOfLines={1} style={styles.userEmail}>{user.email}</Text>
+            <View style={styles.identityCopy}>
+              <Text numberOfLines={1} style={styles.name}>{user.name || 'Harmonia User'}</Text>
+              <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
               <View style={styles.badgeRow}>
-                <View style={styles.profileBadge}>
-                  <Text style={styles.profileBadgeText}>Harmonia Account</Text>
+                <View style={styles.badge}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                  <Text style={styles.badgeText}>Harmonia Account</Text>
                 </View>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={19} color={colors.textFaint} />
-          </Pressable>
+            <Pressable
+              onPress={() => router.push('/edit-profile')}
+              style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
+              accessibilityLabel="Edit profile"
+            >
+              <Ionicons name="pencil" size={16} color={colors.textStrong} />
+            </Pressable>
+          </View>
         ) : (
-          <View style={styles.profileHero}>
+          <View style={styles.guestCard}>
             <Image source={require('../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
-            <View style={styles.profileHeroCopy}>
-              <Text style={styles.userName}>Listen Harmonia</Text>
-              <Text style={styles.userEmail}>Library and playlists are stored locally</Text>
+            <View style={styles.guestCopy}>
+              <Text style={styles.guestTitle}>Harmonia Guest</Text>
+              <Text style={styles.guestSubtitle}>Sign in to sync your playlists & liked songs</Text>
             </View>
+            <Pressable
+              onPress={() => router.push('/login')}
+              style={({ pressed }) => [styles.signInButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            </Pressable>
           </View>
         )}
 
-        <Section title="PLAYBACK & QUALITY">
-          <SettingLabel title="Audio quality" detail="Used when Harmonia resolves the next playable stream." />
+        {/* Stats Section */}
+        <View style={styles.stats}>
+          <Pressable onPress={() => router.push('/(tabs)/library')} style={styles.stat}>
+            <Text style={styles.statValue}>{likedSongs.length}</Text>
+            <Text style={styles.statLabel}>Liked songs</Text>
+          </Pressable>
+          <View style={styles.rule} />
+          <Pressable onPress={() => router.push('/(tabs)/library')} style={styles.stat}>
+            <Text style={styles.statValue}>{playlists.length}</Text>
+            <Text style={styles.statLabel}>Playlists</Text>
+          </Pressable>
+          <View style={styles.rule} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{todayMinutes}</Text>
+            <Text style={styles.statLabel}>Min today</Text>
+          </View>
+        </View>
+
+        {/* Listening Overview */}
+        <View style={styles.listeningSummary}>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{weekMinutes}</Text>
+            <Text style={styles.listeningLabel}>Min this week</Text>
+          </View>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
+            <Text style={styles.listeningLabel}>Total minutes</Text>
+          </View>
+          <View style={styles.listeningMetric}>
+            <Text style={styles.listeningValue}>{listeningStats.playCount}</Text>
+            <Text style={styles.listeningLabel}>Tracks played</Text>
+          </View>
+        </View>
+
+        {/* Preferences & Settings */}
+        <Section title="AUDIO & PLAYBACK">
+          <SettingLabel title="Audio Quality" detail="Streaming resolution for playback" />
           <ChoiceRow>
             {QUALITY_OPTIONS.map((item) => (
               <Choice
@@ -202,89 +283,29 @@ export default function SettingsScreen() {
             ))}
           </ChoiceRow>
 
-          <SettingLabel title="Playback speed" detail="Applies immediately to native player playback." />
+          <SettingLabel title="Playback Speed" detail="Audio playback rate" />
           <ChoiceRow>
             {RATE_OPTIONS.map((rate) => (
-              <Choice key={rate} label={`${rate}×`} active={playbackRate === rate} onPress={() => setPlaybackRate(rate)} />
-            ))}
-          </ChoiceRow>
-
-          <ToggleRow
-            icon="flash-outline"
-            iconBg="rgba(245,158,11,0.15)"
-            iconColor="#FBBF24"
-            title="Instant stream upgrade"
-            detail={adaptivePipelineEnabled
-              ? `Fast start → background quality promotion · ${adaptivePipelineStatus}`
-              : 'Resolve only the final selected quality'}
-            enabled={adaptivePipelineEnabled}
-            onPress={toggleAdaptivePipeline}
-          />
-        </Section>
-
-        <Section title="NETWORK & POWER">
-          <ToggleRow
-            icon="wifi-outline"
-            iconBg="rgba(59,130,246,0.15)"
-            iconColor="#60A5FA"
-            title="Network-aware quality"
-            detail={`Use separate quality profiles · current: ${String(networkType || 'unknown').toLowerCase()}`}
-            enabled={networkAwareQuality}
-            onPress={() => setNetworkAwareQuality(!networkAwareQuality)}
-          />
-          <SettingLabel title="Wi-Fi quality" detail="Used on Wi-Fi and Ethernet connections." />
-          <ChoiceRow>
-            {QUALITY_OPTIONS.map((item) => (
               <Choice
-                key={`wifi-${item.value}`}
-                label={item.label}
-                active={wifiQuality === item.value}
-                onPress={() => setWifiQuality(item.value)}
+                key={rate}
+                label={`${rate}×`}
+                active={playbackRate === rate}
+                onPress={() => setPlaybackRate(rate)}
               />
             ))}
           </ChoiceRow>
-          <SettingLabel title="Mobile data quality" detail="Keeps cellular streaming under control." />
-          <ChoiceRow>
-            {QUALITY_OPTIONS.map((item) => (
-              <Choice
-                key={`cell-${item.value}`}
-                label={item.label}
-                active={cellularQuality === item.value}
-                onPress={() => setCellularQuality(item.value)}
-              />
-            ))}
-          </ChoiceRow>
-          <ToggleRow
-            icon="download-outline"
-            iconBg="rgba(168,85,247,0.15)"
-            iconColor="#C084FC"
-            title="Wi-Fi-only downloads"
-            detail="Block offline downloads on cellular data"
-            enabled={wifiOnlyDownloads}
-            onPress={() => setWifiOnlyDownloads(!wifiOnlyDownloads)}
-          />
-          <ToggleRow
-            icon="leaf-outline"
-            iconBg="rgba(16,185,129,0.15)"
-            iconColor="#34D399"
-            title="Battery saver"
-            detail="Caps streams to Data Saver, disables Canvas and skips next-track preloading"
-            enabled={batterySaver}
-            onPress={() => setBatterySaver(!batterySaver)}
-          />
-        </Section>
 
-        <Section title="PLAYER">
           <ToggleRow
             icon="videocam-outline"
             iconBg="rgba(239,68,68,0.15)"
             iconColor="#F87171"
             title="Enable music videos"
-            detail="Watch matching YouTube videos in Now Playing"
+            detail="Watch matching music videos in player"
             enabled={musicVideosEnabled}
             onPress={() => setMusicVideosEnabled(!musicVideosEnabled)}
           />
-          <SettingLabel title="Sleep timer" detail="Stops playback at selected duration or track completion." />
+
+          <SettingLabel title="Sleep Timer" detail="Auto stop playback" />
           <ChoiceRow>
             {TIMER_OPTIONS.map((item) => (
               <Choice
@@ -295,105 +316,90 @@ export default function SettingsScreen() {
               />
             ))}
           </ChoiceRow>
-          {currentSong && (
-            <ActionRow
-              icon="analytics-outline"
-              iconBg="rgba(99,102,241,0.15)"
-              iconColor="#818CF8"
-              title="Playback diagnostics"
-              detail="Open Now Playing → Tools → Advanced"
-              onPress={() => router.push({ pathname: '/player', params: { panel: 'tools' } })}
-            />
-          )}
         </Section>
 
-        <Section title="DOWNLOADS">
-          <StaticRow
+        <Section title="DATA & BATTERY">
+          <ToggleRow
+            icon="download-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
+            title="Wi-Fi-only downloads"
+            detail="Block downloads on cellular data"
+            enabled={wifiOnlyDownloads}
+            onPress={() => setWifiOnlyDownloads(!wifiOnlyDownloads)}
+          />
+          <ToggleRow
+            icon="leaf-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Battery saver"
+            detail="Reduces data & background motion"
+            enabled={batterySaver}
+            onPress={() => setBatterySaver(!batterySaver)}
+          />
+        </Section>
+
+        <Section title="STORAGE & CACHE">
+          <ActionRow
             icon="cloud-download-outline"
             iconBg="rgba(16,185,129,0.15)"
             iconColor="#34D399"
-            title="Downloaded music"
-            detail={`${downloads.length} track${downloads.length === 1 ? '' : 's'} · ${formatBytes(totalBytes)}`}
-          />
-          <ActionRow
-            icon="trash-outline"
-            iconBg="rgba(239,68,68,0.15)"
-            iconColor="#F87171"
-            title="Remove all downloads"
-            detail={downloads.length ? 'Delete offline audio stored by Harmonia' : 'No downloaded tracks'}
-            destructive
+            title="Offline Downloads"
+            detail={`${downloads.length} tracks · ${formatBytes(totalBytes)}`}
+            destructive={downloads.length > 0}
             disabled={!downloads.length}
             onPress={confirmClearDownloads}
-          />
-        </Section>
-
-        <Section title="LOCAL MUSIC">
-          <StaticRow
-            icon="folder-outline"
-            iconBg="rgba(245,158,11,0.15)"
-            iconColor="#FBBF24"
-            title="On-device library"
-            detail={`${localSongs.length} track${localSongs.length === 1 ? '' : 's'} loaded`}
-          />
-          <ActionRow
-            icon="scan-outline"
-            iconBg="rgba(59,130,246,0.15)"
-            iconColor="#60A5FA"
-            title={localSongs.length ? 'Rescan music library' : 'Scan music library'}
-            detail="Permission is requested only when you use this feature"
-            disabled={localLoading}
-            onPress={() => void scanLocalMusic()}
-          />
-        </Section>
-
-        <Section title="DATA & STORAGE">
-          <ActionRow
-            icon="time-outline"
-            iconBg="rgba(168,85,247,0.15)"
-            iconColor="#C084FC"
-            title="Clear listening history"
-            detail={history.length ? `${history.length} local history entries` : 'No local listening history'}
-            disabled={!history.length}
-            onPress={confirmClearHistory}
           />
           <ActionRow
             icon="images-outline"
             iconBg="rgba(236,72,153,0.15)"
             iconColor="#F472B6"
-            title="Clear artwork cache"
-            detail="Free cached image storage without touching downloads"
+            title="Clear Artwork Cache"
+            detail="Free image storage space"
             onPress={() => void clearArtworkCache()}
+          />
+          <ActionRow
+            icon="time-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
+            title="Clear Listening History"
+            detail={history.length ? `${history.length} history items` : 'No history yet'}
+            disabled={!history.length}
+            onPress={confirmClearHistory}
           />
         </Section>
 
-        <Section title="ABOUT HARMONIA">
-          <StaticRow
-            icon="information-circle-outline"
-            iconBg="rgba(16,185,129,0.15)"
-            iconColor="#34D399"
-            title="Harmonia Mobile"
-            detail={`Version ${APP_VERSION} · Android build ${ANDROID_BUILD_VERSION}`}
-          />
+        <Section title="APP & UPDATES">
           <ActionRow
-            icon="cloud-download-outline"
+            icon="sync-outline"
             iconBg="rgba(59,130,246,0.15)"
             iconColor="#60A5FA"
-            title="Check for updates"
-            detail={checkingUpdate ? 'Checking for updates…' : 'Compare this build with latest published release'}
+            title="Sync Library"
+            detail="Refresh playlists & account data"
+            onPress={() => void doRefresh()}
+          />
+          <ActionRow
+            icon="cloud-upload-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Check for Updates"
+            detail={checkingUpdate ? 'Checking…' : `Harmonia Mobile v${APP_VERSION}`}
             disabled={checkingUpdate}
             onPress={() => void checkUpdates()}
           />
-          <ActionRow
-            icon="logo-github"
-            iconBg="rgba(255,255,255,0.08)"
-            iconColor="#E4E4E7"
-            title="GitHub Repository"
-            detail="Open the Harmonia Mobile source repository"
-            onPress={() => void Linking.openURL('https://github.com/shreeharsh-patil/Harmonia-mobile')}
-          />
         </Section>
 
-        <Text style={styles.footer}>HARMONIA MOBILE • UNINTERRUPTED LISTENING</Text>
+        {token && user && (
+          <Pressable
+            onPress={() => void doSignOut()}
+            style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
+          >
+            <Ionicons name="log-out-outline" size={17} color={colors.danger} />
+            <Text style={styles.logoutText}>Sign out</Text>
+          </Pressable>
+        )}
+
+        <Text style={styles.version}>HARMONIA MOBILE • v{APP_VERSION}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -469,222 +475,254 @@ function ToggleRow({
   );
 }
 
-function StaticRow({
-  icon,
-  iconBg,
-  iconColor,
-  title,
-  detail,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconBg?: string;
-  iconColor?: string;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
-        <Ionicons name={icon} size={18} color={iconColor || colors.textMuted} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowDetail}>{detail}</Text>
-      </View>
-    </View>
-  );
-}
-
 function ActionRow({
   icon,
   iconBg,
   iconColor,
   title,
   detail,
-  onPress,
   destructive = false,
   disabled = false,
+  onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   iconBg?: string;
   iconColor?: string;
   title: string;
   detail: string;
-  onPress: () => void;
   destructive?: boolean;
   disabled?: boolean;
+  onPress: () => void;
 }) {
   return (
     <Pressable
-      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        pressed && styles.pressed,
-        disabled && styles.disabled,
-      ]}
+      disabled={disabled}
+      style={({ pressed }) => [styles.row, disabled && styles.disabled, pressed && styles.pressed]}
     >
       <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
-        <Ionicons name={icon} size={18} color={destructive ? colors.danger : (iconColor || colors.textMuted)} />
+        <Ionicons name={icon} size={18} color={destructive ? colors.danger : iconColor || colors.accentBright} />
       </View>
       <View style={styles.rowCopy}>
-        <Text style={[styles.rowTitle, destructive && styles.destructive]}>{title}</Text>
+        <Text style={[styles.rowTitle, destructive && styles.rowTitleDestructive]}>{title}</Text>
         <Text style={styles.rowDetail}>{detail}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
+      <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
     </Pressable>
   );
-}
-
-function formatBytes(bytes: number) {
-  if (!bytes) return '0 MB';
-  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 ? 0 : 1)} MB`;
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
-    height: 60,
-    paddingHorizontal: 16,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   back: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { color: colors.textStrong, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  headerSpacer: { width: 42 },
-  content: { paddingHorizontal: 16, paddingBottom: 128 },
-  profileHero: {
+  title: { color: colors.textStrong, fontSize: 18, fontWeight: '800' },
+  headerSpacer: { width: 38 },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+  identity: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 18,
+    padding: 16,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: 16,
-    marginTop: 16,
-    marginBottom: 8,
   },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#18181B' },
+  avatar: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.surfaceHover },
   avatarFallback: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16,185,129,0.16)',
+    backgroundColor: 'rgba(16,185,129,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(16,185,129,0.3)',
   },
-  initialText: { color: colors.accentBright, fontSize: 22, fontWeight: '900' },
-  profileHeroCopy: { flex: 1, minWidth: 0, marginLeft: 14 },
-  userName: { color: colors.textStrong, fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  userEmail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  initial: { color: colors.accentBright, fontSize: 26, fontWeight: '900' },
+  identityCopy: { flex: 1, minWidth: 0, marginLeft: 14 },
+  name: { color: colors.textStrong, fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
+  email: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
   badgeRow: { flexDirection: 'row', marginTop: 6 },
-  profileBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: { color: colors.accentBright, fontSize: 11, fontWeight: '700' },
+  editButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  guestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(16,185,129,0.25)',
+    borderColor: colors.border,
+    gap: 14,
   },
-  profileBadgeText: { color: colors.accentBright, fontSize: 10, fontWeight: '700' },
-  signInPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+  guestCopy: { flex: 1, minWidth: 0 },
+  guestTitle: { color: colors.textStrong, fontSize: 17, fontWeight: '800' },
+  guestSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  signInButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  signInButtonText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  stats: {
+    height: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    marginTop: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statValue: { color: colors.textStrong, fontSize: 20, fontWeight: '800' },
+  statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 3 },
+  rule: { height: 34, width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  listeningSummary: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  listeningMetric: {
+    flex: 1,
+    minHeight: 60,
     borderRadius: 14,
-    backgroundColor: colors.accentBright,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
-  signInPillText: { color: '#061108', fontSize: 12, fontWeight: '800' },
-  section: { marginTop: 24 },
+  listeningValue: { color: colors.textStrong, fontSize: 16, fontWeight: '800' },
+  listeningLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 3 },
+  section: { marginTop: 22 },
   sectionTitle: {
-    color: colors.textFaint,
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
     marginBottom: 8,
-    paddingHorizontal: 4,
+    marginLeft: 4,
   },
   group: {
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   row: {
-    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
+    paddingVertical: 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   icon: {
-    width: 36,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rowCopy: { flex: 1, minWidth: 0 },
+  rowTitle: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
+  rowTitleDestructive: { color: colors.danger },
+  rowDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  settingLabel: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  choice: {
+    flex: 1,
     height: 36,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowCopy: { flex: 1, minWidth: 0, marginLeft: 12 },
-  rowTitle: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
-  rowDetail: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 2 },
-  destructive: { color: colors.danger },
+  choiceActive: {
+    backgroundColor: colors.accent,
+  },
+  choiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  choiceTextActive: { color: '#FFF' },
   toggleTrack: {
     width: 44,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    padding: 3,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    padding: 2,
     justifyContent: 'center',
   },
-  toggleTrackOn: { backgroundColor: colors.accentBright },
-  toggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#888' },
-  toggleThumbOn: { backgroundColor: '#061108', alignSelf: 'flex-end' },
-  pressed: { opacity: 0.65 },
-  disabled: { opacity: 0.38 },
-  settingLabel: { paddingHorizontal: 14, paddingTop: 14 },
-  choiceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+  toggleTrackOn: { backgroundColor: colors.accent },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFF',
   },
-  choice: {
-    height: 34,
-    borderRadius: 17,
+  toggleThumbOn: { alignSelf: 'flex-end' },
+  disabled: { opacity: 0.4 },
+  logout: {
+    height: 48,
+    borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    paddingHorizontal: 13,
+    borderColor: 'rgba(239,68,68,0.25)',
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 22,
   },
-  choiceActive: {
-    backgroundColor: colors.accentBright,
-    borderColor: colors.accentBright,
-  },
-  choiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  choiceTextActive: { color: '#061108', fontWeight: '800' },
-  footer: {
+  logoutText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
+  version: {
     color: colors.textFaint,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    lineHeight: 15,
     textAlign: 'center',
     letterSpacing: 1.2,
-    marginTop: 32,
+    marginTop: 20,
   },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
 });

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Image } from 'expo-image';
 import {
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,40 +10,85 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Redirect, router } from 'expo-router';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import { ProfileSkeleton } from '@/src/components/ProfileSkeleton';
 import { APP_VERSION } from '@/src/config';
+import type { StreamQuality } from '@/src/lib/api';
+import { checkForAppUpdate } from '@/src/lib/updates';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
-import { useListeningStats, usePlayer } from '@/src/providers/PlayerProvider';
+import { useOffline } from '@/src/providers/OfflineProvider';
+import { useListeningStats, usePlaybackHistory, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
+import { usePreferences } from '@/src/providers/PreferencesProvider';
 import { colors } from '@/src/theme';
+
+const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
+  { value: 'automatic', label: 'Auto' },
+  { value: 'data-saver', label: 'Saver' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'high', label: 'High' },
+  { value: 'maximum', label: 'Max' },
+];
+
+const RATE_OPTIONS = [0.75, 1, 1.25, 1.5, 2];
+const TIMER_OPTIONS: { value: SleepTimerMode; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 15, label: '15m' },
+  { value: 30, label: '30m' },
+  { value: 45, label: '45m' },
+  { value: 60, label: '60m' },
+  { value: 'track', label: 'Track' },
+];
 
 function localDayKey(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 }
 
+function formatBytes(bytes: number) {
+  if (!bytes || bytes <= 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${Math.round(mb)} MB`;
+}
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, token, loading, signOut, refreshUser } = useAuth();
   const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
-  const { currentSong } = usePlayer();
+  const {
+    currentSong,
+    playbackRate,
+    streamQuality,
+    sleepTimer,
+    setPlaybackRate,
+    setStreamQuality,
+    setSleepTimer,
+  } = usePlayer();
   const { listeningStats } = useListeningStats();
+  const { history, clearHistory } = usePlaybackHistory();
+  const { downloads, totalBytes, clearDownloads } = useOffline();
+  const {
+    batterySaver,
+    wifiOnlyDownloads,
+    musicVideosEnabled,
+    setBatterySaver,
+    setWifiOnlyDownloads,
+    setMusicVideosEnabled,
+  } = usePreferences();
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <ProfileSkeleton />
       </SafeAreaView>
     );
-  }
-
-  if (!token || !user) {
-    return <Redirect href="/(tabs)/preferences" />;
   }
 
   const dailyEntries = Object.entries(listeningStats.dailySeconds || {});
@@ -61,64 +108,149 @@ export default function ProfileScreen() {
   };
 
   const doSignOut = async () => {
+    Alert.alert('Sign out?', 'Are you sure you want to sign out of Harmonia?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+            router.replace('/(tabs)');
+          } catch {
+            Alert.alert('Sign out incomplete', 'Could not remove saved session. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const confirmClearDownloads = () => {
+    if (!downloads.length) return;
+    Alert.alert(
+      'Remove all downloads?',
+      'Downloaded audio files will be removed from this phone. Your playlists and library will remain intact.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove all', style: 'destructive', onPress: () => void clearDownloads() },
+      ]
+    );
+  };
+
+  const confirmClearHistory = () => {
+    if (!history.length) return;
+    Alert.alert(
+      'Clear listening history?',
+      'This clears your local listening history on this phone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: () => void clearHistory() },
+      ]
+    );
+  };
+
+  const clearArtworkCache = async () => {
     try {
-      await signOut();
-      router.replace('/(tabs)');
+      await Promise.all([Image.clearMemoryCache(), Image.clearDiskCache()]);
+      Alert.alert('Cache cleared', 'Artwork cache has been cleared. Images will reload as needed.');
     } catch {
-      Alert.alert(
-        'Sign out incomplete',
-        'Harmonia could not remove the saved session from this phone. Please try again.'
-      );
+      Alert.alert('Cache clear failed', 'Could not clear cached images.');
     }
   };
+
+  const checkUpdates = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    try {
+      const result = await checkForAppUpdate();
+      if (result.updateAvailable && result.latestVersion) {
+        Alert.alert(
+          'Update available',
+          `Harmonia ${result.latestVersion} is available. You are using ${result.currentVersion}.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Open release', onPress: () => void Linking.openURL(result.releaseUrl) },
+          ]
+        );
+      } else if (result.latestVersion) {
+        Alert.alert('Harmonia is up to date', `Version ${result.currentVersion} is the latest release.`);
+      } else {
+        Alert.alert('Up to date', 'No new release is available.');
+      }
+    } catch {
+      Alert.alert('Update check failed', 'Check your connection and try again.');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const initial = (user?.name || user?.email || 'H').trim().charAt(0).toUpperCase();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset }]}
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomInset + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void doRefresh()} tintColor="#FFF" />}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.pageHeader}>
           <Text style={styles.pageTitle}>Profile</Text>
-          <Pressable
-            onPress={() => router.push('/(tabs)/preferences')}
-            style={styles.settingsButton}
-            accessibilityLabel="Settings"
-          >
-            <Ionicons name="settings-outline" size={21} color={colors.textStrong} />
-          </Pressable>
         </View>
 
-        <View style={styles.identity}>
-          {user.image ? (
-            <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
-          ) : (
-            <Image source={require('../../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
-          )}
-          <View style={styles.identityCopy}>
-            <Text numberOfLines={1} style={styles.name}>{user.name}</Text>
-            <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
+        {token && user ? (
+          <View style={styles.identity}>
+            {user.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                <Text style={styles.initial}>{initial}</Text>
+              </View>
+            )}
+            <View style={styles.identityCopy}>
+              <Text numberOfLines={1} style={styles.name}>{user.name || 'Harmonia User'}</Text>
+              <Text numberOfLines={1} style={styles.email}>{user.email}</Text>
+              <View style={styles.badgeRow}>
+                <View style={styles.badge}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.accent} />
+                  <Text style={styles.badgeText}>Harmonia Account</Text>
+                </View>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => router.push('/edit-profile')}
+              style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
+              accessibilityLabel="Edit profile"
+            >
+              <Ionicons name="pencil" size={16} color={colors.textStrong} />
+            </Pressable>
           </View>
-          <Pressable
-            onPress={() => router.push('/edit-profile')}
-            style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
-            accessibilityLabel="Edit profile"
-          >
-            <Ionicons name="pencil-outline" size={17} color={colors.textStrong} />
-          </Pressable>
-        </View>
+        ) : (
+          <View style={styles.guestCard}>
+            <Image source={require('../../assets/harmonia-icon.png')} style={[styles.avatar, styles.avatarFallback]} contentFit="contain" />
+            <View style={styles.guestCopy}>
+              <Text style={styles.guestTitle}>Harmonia Guest</Text>
+              <Text style={styles.guestSubtitle}>Sign in to sync your playlists & liked songs</Text>
+            </View>
+            <Pressable
+              onPress={() => router.push('/login')}
+              style={({ pressed }) => [styles.signInButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.signInButtonText}>Sign In</Text>
+            </Pressable>
+          </View>
+        )}
 
+        {/* Stats Section */}
         <View style={styles.stats}>
-          <View style={styles.stat}>
+          <Pressable onPress={() => router.push('/(tabs)/library')} style={styles.stat}>
             <Text style={styles.statValue}>{likedSongs.length}</Text>
             <Text style={styles.statLabel}>Liked songs</Text>
-          </View>
+          </Pressable>
           <View style={styles.rule} />
-          <View style={styles.stat}>
+          <Pressable onPress={() => router.push('/(tabs)/library')} style={styles.stat}>
             <Text style={styles.statValue}>{playlists.length}</Text>
             <Text style={styles.statLabel}>Playlists</Text>
-          </View>
+          </Pressable>
           <View style={styles.rule} />
           <View style={styles.stat}>
             <Text style={styles.statValue}>{todayMinutes}</Text>
@@ -126,10 +258,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Listening Overview */}
         <View style={styles.listeningSummary}>
           <View style={styles.listeningMetric}>
             <Text style={styles.listeningValue}>{weekMinutes}</Text>
-            <Text style={styles.listeningLabel}>Minutes this week</Text>
+            <Text style={styles.listeningLabel}>Min this week</Text>
           </View>
           <View style={styles.listeningMetric}>
             <Text style={styles.listeningValue}>{Math.round(listeningStats.totalSeconds / 60)}</Text>
@@ -137,40 +270,250 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.listeningMetric}>
             <Text style={styles.listeningValue}>{listeningStats.playCount}</Text>
-            <Text style={styles.listeningLabel}>Tracks started</Text>
+            <Text style={styles.listeningLabel}>Tracks played</Text>
           </View>
         </View>
 
-        <View style={styles.librarySummary}>
-          <Text style={styles.librarySummaryText}>{likedAlbums.length} saved albums</Text>
-          <View style={styles.dot} />
-          <Text style={styles.librarySummaryText}>{likedArtists.length} followed artists</Text>
-        </View>
+        {/* Preferences & Settings */}
+        <Section title="AUDIO & PLAYBACK">
+          <SettingLabel title="Audio Quality" detail="Streaming resolution for playback" />
+          <ChoiceRow>
+            {QUALITY_OPTIONS.map((item) => (
+              <Choice
+                key={item.value}
+                label={item.label}
+                active={streamQuality === item.value}
+                onPress={() => setStreamQuality(item.value)}
+              />
+            ))}
+          </ChoiceRow>
 
-        <View style={styles.card}>
-          <Text style={styles.cardKicker}>SYNC</Text>
-          <Text style={styles.cardTitle}>Connected to Harmonia</Text>
-          <Text style={styles.cardBody}>Your liked songs, albums, artists and playlists are safely synced across your Harmonia devices.</Text>
-          <Pressable
+          <SettingLabel title="Playback Speed" detail="Audio playback rate" />
+          <ChoiceRow>
+            {RATE_OPTIONS.map((rate) => (
+              <Choice
+                key={rate}
+                label={`${rate}×`}
+                active={playbackRate === rate}
+                onPress={() => setPlaybackRate(rate)}
+              />
+            ))}
+          </ChoiceRow>
+
+          <ToggleRow
+            icon="videocam-outline"
+            iconBg="rgba(239,68,68,0.15)"
+            iconColor="#F87171"
+            title="Enable music videos"
+            detail="Watch matching music videos in player"
+            enabled={musicVideosEnabled}
+            onPress={() => setMusicVideosEnabled(!musicVideosEnabled)}
+          />
+
+          <SettingLabel title="Sleep Timer" detail="Auto stop playback" />
+          <ChoiceRow>
+            {TIMER_OPTIONS.map((item) => (
+              <Choice
+                key={String(item.value)}
+                label={item.label}
+                active={sleepTimer === item.value}
+                onPress={() => setSleepTimer(item.value)}
+              />
+            ))}
+          </ChoiceRow>
+        </Section>
+
+        <Section title="DATA & BATTERY">
+          <ToggleRow
+            icon="download-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
+            title="Wi-Fi-only downloads"
+            detail="Block downloads on cellular data"
+            enabled={wifiOnlyDownloads}
+            onPress={() => setWifiOnlyDownloads(!wifiOnlyDownloads)}
+          />
+          <ToggleRow
+            icon="leaf-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Battery saver"
+            detail="Reduces data & background motion"
+            enabled={batterySaver}
+            onPress={() => setBatterySaver(!batterySaver)}
+          />
+        </Section>
+
+        <Section title="STORAGE & CACHE">
+          <ActionRow
+            icon="cloud-download-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Offline Downloads"
+            detail={`${downloads.length} tracks · ${formatBytes(totalBytes)}`}
+            destructive={downloads.length > 0}
+            disabled={!downloads.length}
+            onPress={confirmClearDownloads}
+          />
+          <ActionRow
+            icon="images-outline"
+            iconBg="rgba(236,72,153,0.15)"
+            iconColor="#F472B6"
+            title="Clear Artwork Cache"
+            detail="Free image storage space"
+            onPress={() => void clearArtworkCache()}
+          />
+          <ActionRow
+            icon="time-outline"
+            iconBg="rgba(168,85,247,0.15)"
+            iconColor="#C084FC"
+            title="Clear Listening History"
+            detail={history.length ? `${history.length} history items` : 'No history yet'}
+            disabled={!history.length}
+            onPress={confirmClearHistory}
+          />
+        </Section>
+
+        <Section title="APP & UPDATES">
+          <ActionRow
+            icon="sync-outline"
+            iconBg="rgba(59,130,246,0.15)"
+            iconColor="#60A5FA"
+            title="Sync Library"
+            detail="Refresh playlists & account data"
             onPress={() => void doRefresh()}
-            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+          />
+          <ActionRow
+            icon="cloud-upload-outline"
+            iconBg="rgba(16,185,129,0.15)"
+            iconColor="#34D399"
+            title="Check for Updates"
+            detail={checkingUpdate ? 'Checking…' : `Harmonia Mobile v${APP_VERSION}`}
+            disabled={checkingUpdate}
+            onPress={() => void checkUpdates()}
+          />
+        </Section>
+
+        {token && user && (
+          <Pressable
+            onPress={() => void doSignOut()}
+            style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
           >
-            <Ionicons name="sync-outline" size={15} color={colors.textStrong} />
-            <Text style={styles.secondaryText}>Sync now</Text>
+            <Ionicons name="log-out-outline" size={17} color={colors.danger} />
+            <Text style={styles.logoutText}>Sign out</Text>
           </Pressable>
-        </View>
+        )}
 
-        <Pressable
-          onPress={() => void doSignOut()}
-          style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
-        >
-          <Ionicons name="log-out-outline" size={17} color={colors.danger} />
-          <Text style={styles.logoutText}>Sign out</Text>
-        </Pressable>
-
-        <Text style={styles.version}>HARMONIA MOBILE • {APP_VERSION}</Text>
+        <Text style={styles.version}>HARMONIA MOBILE • v{APP_VERSION}</Text>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.group}>{children}</View>
+    </View>
+  );
+}
+
+function SettingLabel({ title, detail }: { title: string; detail: string }) {
+  return (
+    <View style={styles.settingLabel}>
+      <Text style={styles.rowTitle}>{title}</Text>
+      <Text style={styles.rowDetail}>{detail}</Text>
+    </View>
+  );
+}
+
+function ChoiceRow({ children }: { children: React.ReactNode }) {
+  return <View style={styles.choiceRow}>{children}</View>;
+}
+
+function Choice({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.choice,
+        active && styles.choiceActive,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ToggleRow({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  detail,
+  enabled,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg?: string;
+  iconColor?: string;
+  title: string;
+  detail: string;
+  enabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
+        <Ionicons name={icon} size={18} color={iconColor || colors.accentBright} />
+      </View>
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={styles.rowDetail}>{detail}</Text>
+      </View>
+      <View style={[styles.toggleTrack, enabled && styles.toggleTrackOn]}>
+        <View style={[styles.toggleThumb, enabled && styles.toggleThumbOn]} />
+      </View>
+    </Pressable>
+  );
+}
+
+function ActionRow({
+  icon,
+  iconBg,
+  iconColor,
+  title,
+  detail,
+  destructive = false,
+  disabled = false,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconBg?: string;
+  iconColor?: string;
+  title: string;
+  detail: string;
+  destructive?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [styles.row, disabled && styles.disabled, pressed && styles.pressed]}
+    >
+      <View style={[styles.icon, iconBg ? { backgroundColor: iconBg } : null]}>
+        <Ionicons name={icon} size={18} color={destructive ? colors.danger : iconColor || colors.accentBright} />
+      </View>
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowTitle, destructive && styles.rowTitleDestructive]}>{title}</Text>
+        <Text style={styles.rowDetail}>{detail}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+    </Pressable>
   );
 }
 
@@ -178,28 +521,23 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: 16, paddingTop: 0 },
   pageHeader: {
-    height: 60,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: -16,
-    marginBottom: 20,
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: 'rgba(7,7,7,0.96)',
+    marginBottom: 16,
   },
   pageTitle: { color: colors.textStrong, fontSize: 28, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  identity: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
-  identity: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.surface },
+  avatar: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.surfaceHover },
   avatarFallback: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -207,37 +545,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16,185,129,0.3)',
   },
-  initial: { color: colors.accentBright, fontSize: 30, fontWeight: '900' },
-  identityCopy: { flex: 1, minWidth: 0, marginLeft: 16 },
+  initial: { color: colors.accentBright, fontSize: 26, fontWeight: '900' },
+  identityCopy: { flex: 1, minWidth: 0, marginLeft: 14 },
+  name: { color: colors.textStrong, fontSize: 19, fontWeight: '800', letterSpacing: -0.4 },
+  email: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
+  badgeRow: { flexDirection: 'row', marginTop: 6 },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  badgeText: { color: colors.accentBright, fontSize: 11, fontWeight: '700' },
   editButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
   },
-  name: { color: colors.textStrong, fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
-  email: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  guestCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    gap: 14,
+  },
+  guestCopy: { flex: 1, minWidth: 0 },
+  guestTitle: { color: colors.textStrong, fontSize: 17, fontWeight: '800' },
+  guestSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  signInButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  signInButtonText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
   stats: {
-    height: 88,
+    height: 80,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: 16,
-    marginTop: 24,
+    marginTop: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statValue: { color: colors.textStrong, fontSize: 22, fontWeight: '800' },
-  statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 4 },
-  rule: { height: 38, width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
-  listeningSummary: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  statValue: { color: colors.textStrong, fontSize: 20, fontWeight: '800' },
+  statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 3 },
+  rule: { height: 34, width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  listeningSummary: { flexDirection: 'row', gap: 8, marginTop: 8 },
   listeningMetric: {
     flex: 1,
-    minHeight: 66,
+    minHeight: 60,
     borderRadius: 14,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
@@ -246,38 +615,90 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  listeningValue: { color: colors.textStrong, fontSize: 17, fontWeight: '800' },
-  listeningLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 4 },
-  librarySummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14 },
-  librarySummaryText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textFaint },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    padding: 18,
-    marginTop: 16,
+  listeningValue: { color: colors.textStrong, fontSize: 16, fontWeight: '800' },
+  listeningLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 3 },
+  section: { marginTop: 22 },
+  sectionTitle: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  cardKicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
-  cardTitle: { color: colors.textStrong, fontSize: 18, fontWeight: '800', marginTop: 6 },
-  cardBody: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 6 },
-  secondary: {
-    alignSelf: 'flex-start',
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    paddingHorizontal: 16,
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  secondaryText: { color: colors.textStrong, fontSize: 12, fontWeight: '700' },
+  icon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rowCopy: { flex: 1, minWidth: 0 },
+  rowTitle: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
+  rowTitleDestructive: { color: colors.danger },
+  rowDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  settingLabel: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  choice: {
+    flex: 1,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choiceActive: {
+    backgroundColor: colors.accent,
+  },
+  choiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  choiceTextActive: { color: '#FFF' },
+  toggleTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleTrackOn: { backgroundColor: colors.accent },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFF',
+  },
+  toggleThumbOn: { alignSelf: 'flex-end' },
+  disabled: { opacity: 0.4 },
   logout: {
-    height: 50,
+    height: 48,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(239,68,68,0.25)',
@@ -286,22 +707,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 20,
+    marginTop: 22,
   },
   logoutText: { color: colors.danger, fontSize: 14, fontWeight: '800' },
-  version: { color: colors.textFaint, fontSize: 10, fontWeight: '700', textAlign: 'center', letterSpacing: 1.2, marginTop: 24 },
-  guest: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  kicker: { color: colors.accentBright, fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
-  guestTitle: { color: colors.textStrong, fontSize: 30, lineHeight: 35, fontWeight: '900', letterSpacing: -0.9, marginTop: 8 },
-  body: { color: colors.textMuted, fontSize: 15, lineHeight: 22, marginTop: 10 },
-  primary: {
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.accentBright,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
+  version: {
+    color: colors.textFaint,
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 1.2,
+    marginTop: 20,
   },
-  primaryText: { color: '#061108', fontSize: 15, fontWeight: '800' },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
 });
