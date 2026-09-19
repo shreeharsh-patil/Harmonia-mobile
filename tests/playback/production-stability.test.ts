@@ -420,13 +420,18 @@ test('embedded CDN failure does not blacklist the fresh provider fallback', asyn
   assert.match(source, /attempt >= 2/);
 });
 
-test('native sharing never includes the configured Harmonia backend URL', async () => {
-  const source = await readFile('src/lib/share.ts', 'utf8');
+test('the app has no song-sharing implementation or share route', async () => {
+  await assert.rejects(readFile('src/lib/share.ts', 'utf8'), { code: 'ENOENT' });
+  await assert.rejects(readFile('app/share/song/[id].tsx', 'utf8'), { code: 'ENOENT' });
 
-  assert.doesNotMatch(source, /HARMONIA_API_URL|HAS_HARMONIA_API/);
-  assert.doesNotMatch(source, /\/music\/(?:search|playlists)/);
-  assert.match(source, /https:\/\/open\.spotify\.com/);
-  assert.match(source, /publicSpotifyUrl\('playlist', playlist\)/);
+  const [player, actions, replay] = await Promise.all([
+    readFile('app/player.tsx', 'utf8'),
+    readFile('src/components/SongActionsSheet.tsx', 'utf8'),
+    readFile('app/replay.tsx', 'utf8'),
+  ]);
+  assert.doesNotMatch(player, /Share\.share|Share song|Share lyrics|Share diagnostics/);
+  assert.doesNotMatch(actions, /Send this track with the native share sheet/);
+  assert.doesNotMatch(replay, /Share Replay|Share\.share/);
 });
 
 test('music videos use direct YouTube services without a Vercel proxy', async () => {
