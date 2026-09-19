@@ -48,6 +48,15 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Tune Gradle memory for the release build
+        run: |
+          # Expo's native modules run several Kotlin/lint workers. The default
+          # 512 MB metaspace is insufficient on GitHub-hosted runners.
+          cat >> android/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m
+          org.gradle.workers.max=2
+          EOF
+
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -66,6 +75,8 @@ jobs:
           # native compilation substantially and keeps the release APK focused
           # on actual Android devices.
           ./gradlew assembleRelease --no-daemon --build-cache \
+            --max-workers=2 \
+            -x lintVitalRelease \
             -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Prepare APK
