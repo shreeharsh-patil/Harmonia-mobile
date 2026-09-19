@@ -10,6 +10,13 @@
     ],
     "userInterfaceStyle": "dark",
     "backgroundColor": "#070707",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    },
     "plugins": [
       "expo-router",
       [
