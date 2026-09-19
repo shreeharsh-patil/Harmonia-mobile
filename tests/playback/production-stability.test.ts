@@ -434,7 +434,7 @@ test('music videos use direct YouTube services without a Vercel proxy', async ()
   const settings = await readFile('app/settings.tsx', 'utf8');
 
   assert.match(settings, /title="Enable music videos"/);
-  assert.match(player, /findDirectYouTubeMusicTrack/);
+  assert.match(player, /findDirectYouTubeMusicCandidates/);
   assert.match(player, /YoutubePlayer/);
   assert.match(player, /react-native-youtube-iframe/);
   assert.match(player, /allowsInlineMediaPlayback/);

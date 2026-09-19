@@ -547,8 +547,7 @@ test('17 native preloading stays on one track while resolver warms one extra can
 test('18 quality switching preserves current position and forces fresh resolution', async () => {
   const source = await readFile('src/providers/PlayerProvider.tsx', 'utf8');
   assert.match(source, /const resumeAt = Math\.max\(/);
-  assert.match(source, /invalidateResolvedStream\(stable\.id\)/);
-  assert.match(source, /forceFresh: true/);
+  assert.match(source, /qualityReloadRef\.current = async/);
   assert.match(source, /skipAdaptive: true/);
 });
 

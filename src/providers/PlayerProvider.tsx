@@ -905,18 +905,52 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       const offlineUri = getOfflineUri(stable.id);
       if (getImmediateLocalSource(stable, offlineUri)) return;
 
-      const resumeAt = Math.max(
-        0,
-        Number(currentTimeRef.current || lastKnownPositionRef.current || 0)
-      );
-      const shouldResume = Boolean(nativePlayingRef.current || playbackIntentRef.current);
+      const currentGen = loadGenerationRef.current;
+      const targetQuality = effectiveQualityRef.current;
 
-      invalidateResolvedStream(stable.id);
-      await loadIndex(index, shouldResume, resumeAt, {
-        recordHistory: false,
-        forceFresh: true,
-        skipAdaptive: true,
-      });
+      try {
+        // Resolve stream for new quality in the background without interrupting active playback
+        const direct = await resolveTrackStream(stable, {
+          quality: targetQuality,
+          forceFresh: false,
+          priority: 'high',
+        });
+
+        // Ensure user hasn't skipped or switched tracks while resolving
+        if (
+          currentGen !== loadGenerationRef.current ||
+          indexRef.current !== index ||
+          String(queueRef.current[index]?.id || '') !== String(stable.id)
+        ) {
+          return;
+        }
+
+        // If identical stream URL is returned, update diagnostics and target quality without restarting player
+        if (direct.url === activeStreamUrlRef.current) {
+          if (direct.diagnostics) {
+            setPlaybackDiagnostics(direct.diagnostics);
+            activeProviderRef.current = direct.diagnostics.provider;
+            activeSourceRef.current = direct.diagnostics.source;
+          }
+          setPipelineTargetQuality(targetQuality);
+          return;
+        }
+
+        // Hot swap smoothly at the exact current position
+        const resumeAt = Math.max(
+          0,
+          Number(currentTimeRef.current || lastKnownPositionRef.current || 0)
+        );
+        const shouldResume = Boolean(nativePlayingRef.current || playbackIntentRef.current);
+
+        await loadIndex(index, shouldResume, resumeAt, {
+          recordHistory: false,
+          forceFresh: false,
+          skipAdaptive: true,
+        });
+      } catch {
+        // Safe fallback: keep playing current stream if target quality fails to resolve
+      }
     };
   }, [getOfflineUri, loadIndex]);
 
