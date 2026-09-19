@@ -1120,25 +1120,39 @@ export async function fetchDirectJioSaavnTrendingAlbums({
     fetchDirectJioSaavnTrending({ fetchImpl, signal, timeoutMs }),
   ]);
 
-  const candidates: DirectSaavnAlbumSummary[] = [
-    ...(launchResult.status === 'fulfilled' ? (launchResult.value.newAlbums || []) : []),
+  const trendingCurated: DirectSaavnAlbumSummary[] = [
     ...(launchResult.status === 'fulfilled' ? (launchResult.value.trendingAlbums || []) : []),
     ...(trendingResult.status === 'fulfilled' ? trendingResult.value : []),
+  ];
+
+  const newReleases: DirectSaavnAlbumSummary[] = [
+    ...(launchResult.status === 'fulfilled' ? (launchResult.value.newAlbums || []) : []),
   ];
 
   const seenIds = new Set<string>();
   const seenTitles = new Set<string>();
   const unique: DirectSaavnAlbumSummary[] = [];
 
-  for (const item of candidates) {
+  const add = (item: DirectSaavnAlbumSummary) => {
     const id = String(item.id).trim();
-    const titleKey = item.title.toLowerCase().trim();
-    if (!id || seenIds.has(id) || (titleKey && seenTitles.has(titleKey))) continue;
+    const titleKey = normalizeRecordingTitle(item.title);
+    if (!id || seenIds.has(id) || (titleKey && seenTitles.has(titleKey))) return;
     seenIds.add(id);
     if (titleKey) seenTitles.add(titleKey);
     unique.push(item);
+  };
+
+  // 1. Trending albums rank first so blockbuster soundtracks (e.g. Hanuman Ansh, Dhurandhar)
+  // are never displaced by raw weekly single releases.
+  for (const item of trendingCurated) {
+    add(item);
   }
 
-  return newestAlbumsFirst(unique).slice(0, limit);
+  // 2. Fresh new releases follow sorted by newest release date.
+  for (const item of newestAlbumsFirst(newReleases)) {
+    add(item);
+  }
+
+  return unique.slice(0, limit);
 }
 
