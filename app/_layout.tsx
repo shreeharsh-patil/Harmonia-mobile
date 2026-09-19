@@ -8,8 +8,11 @@ import { OfflineProvider } from '@/src/providers/OfflineProvider';
 import { LocalMusicProvider } from '@/src/providers/LocalMusicProvider';
 import { PreferencesProvider } from '@/src/providers/PreferencesProvider';
 import { AppErrorBoundary } from '@/src/components/AppErrorBoundary';
+import { useOtaUpdates } from '@/src/hooks/useOtaUpdates';
 
 export default function RootLayout() {
+  useOtaUpdates();
+
   return (
     <SafeAreaProvider>
       <AppErrorBoundary>
