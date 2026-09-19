@@ -41,6 +41,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -52,7 +53,11 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          # Phone releases do not need emulator ABIs. Building only ARM cuts
+          # native compilation substantially and keeps the release APK focused
+          # on actual Android devices.
+          ./gradlew assembleRelease --no-daemon --build-cache \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Prepare APK
         run: |
