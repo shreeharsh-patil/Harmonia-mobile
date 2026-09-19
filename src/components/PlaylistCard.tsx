@@ -22,9 +22,11 @@ export const PlaylistCard = memo(function PlaylistCard({
   const isSpotifyOrCurated = playlist.source === 'spotify' || playlist.catalogSource === 'bundled' || Boolean(playlist.sourceUrl?.includes('spotify')) || Boolean(playlist.spotifyId);
   const songCount = rawCount < 35 && isSpotifyOrCurated ? 50 : rawCount;
 
-  // Keep Home playlist rails dense like Harmonia Web on mobile: roughly three
-  // complete covers remain visible at once, while still honoring smaller sizes.
-  const responsiveSize = Math.max(108, Math.floor((PORTRAIT_SCREEN_WIDTH - 54) / 3));
+  // Spotify-style rails leave a little more room for each cover than a dense
+  // three-column grid, making artwork easier to recognise without turning a
+  // rail into oversized tiles. This shared sizing also keeps Home, Search and
+  // Explore visually consistent.
+  const responsiveSize = Math.max(120, Math.floor((PORTRAIT_SCREEN_WIDTH - 42) / 2.7));
   const cardSize = Math.min(size, responsiveSize);
 
   return (
@@ -55,7 +57,7 @@ export const PlaylistCard = memo(function PlaylistCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginRight: 14,
+    marginRight: 16,
     borderRadius: 10,
   },
   artworkWrap: {
