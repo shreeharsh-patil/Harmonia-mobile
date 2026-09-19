@@ -4,10 +4,15 @@ const HOME_SHELF_SPECS = [
   { label: 'Popular Hindi Playlists', title: 'popular hindi playlists', genre: 'hindi' },
   { label: 'New & Trending', title: 'new trending', genre: 'hindi' },
   { label: 'Bollywood Romance', title: 'bollywood romance' },
+  { label: '90s Love & Nostalgia', title: 'popular 90s playlists', genre: 'decades' },
   { label: 'Chill & Sad', title: 'chill sad' },
+  { label: 'Popular Punjabi Playlists', title: 'popular punjabi playlists', genre: 'punjabi' },
+  { label: 'Popular Telugu Playlists', title: 'popular telugu playlists', genre: 'telugu' },
   { label: 'Popular Party Playlists', title: 'popular party playlists', genre: 'hindi' },
+  { label: 'Dance & Electronic', title: 'popular dance electronic playlists', genre: 'dance electronic' },
   { label: 'English Top Hits', title: 'top hits', genre: 'english' },
   { label: 'English New & Trending', title: 'new trending', genre: 'english' },
+  { label: 'Global Pop Hits', title: 'pop hits', genre: 'english' },
   { label: 'Pop Essentials', title: 'all things pop', genre: 'pop' },
 ] as const;
 
