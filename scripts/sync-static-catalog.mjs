@@ -7,8 +7,6 @@ const OWNER = 'shreeharsh-patil';
 const REPO = 'Harmonia-Spotify-Downloader';
 const REF = process.env.HARMONIA_CATALOG_GITHUB_REF || 'main';
 const CATALOG_PATH = 'web-app/harmonia-webclient/data/music-feed-static.json.gz';
-const DEFAULT_PUBLIC_SOURCE =
-  `https://raw.githubusercontent.com/${OWNER}/${REPO}/${REF}/${CATALOG_PATH}`;
 const DEFAULT_PRIVATE_SOURCE =
   `https://api.github.com/repos/${OWNER}/${REPO}/contents/${CATALOG_PATH}?ref=${encodeURIComponent(REF)}`;
 const DEFAULT_LOCAL_SOURCE = path.join(
@@ -23,7 +21,8 @@ const configuredLocalSource = String(process.env.HARMONIA_CATALOG_SOURCE_PATH ||
 const localSourcePath = configuredLocalSource
   ? path.resolve(configuredLocalSource)
   : DEFAULT_LOCAL_SOURCE;
-const sourceUrl = configuredSourceUrl || (token ? DEFAULT_PRIVATE_SOURCE : DEFAULT_PUBLIC_SOURCE);
+const sourceUrl = configuredSourceUrl || DEFAULT_PRIVATE_SOURCE;
+const hasRemoteSource = Boolean(configuredSourceUrl || token);
 const required = process.argv.includes('--required');
 const outputPath = path.join(process.cwd(), 'assets', 'catalog', 'harmonia-catalog.json');
 
@@ -119,6 +118,18 @@ if (!configuredSourceUrl && existsSync(localSourcePath)) {
   compressed = readFileSync(localSourcePath);
   snapshotSource = path.relative(process.cwd(), localSourcePath).replaceAll('\\', '/');
   console.log(`[catalog] using local source ${snapshotSource}`);
+} else if (!hasRemoteSource) {
+  // Harmonia Mobile carries a checked-in catalog snapshot. Do not make a
+  // guaranteed-to-fail request to the private web repository during every
+  // install/EAS build when no sync credentials or source were configured.
+  if (!hasUsableCheckedInCatalog()) {
+    const message =
+      'No catalog sync source is configured and the checked-in catalog asset is missing or invalid.';
+    if (required) throw new Error(message);
+    console.warn(`[catalog] ${message}`);
+  } else {
+    console.log('[catalog] no sync source configured; using checked-in catalog asset');
+  }
 } else {
   const response = await fetch(sourceUrl, {
     headers: {
@@ -132,7 +143,7 @@ if (!configuredSourceUrl && existsSync(localSourcePath)) {
     compressed = Buffer.from(await response.arrayBuffer());
   } else {
     const hint = response.status === 404 && !token
-      ? ' The source repository is private; configure HARMONIA_CATALOG_GITHUB_TOKEN with read-only Contents access.'
+      ? ' Verify HARMONIA_CATALOG_SOURCE_URL or configure HARMONIA_CATALOG_GITHUB_TOKEN with read-only Contents access.'
       : '';
     const message = `Catalog download failed: HTTP ${response.status}.${hint}`;
     if (required && !hasUsableCheckedInCatalog()) throw new Error(message);
