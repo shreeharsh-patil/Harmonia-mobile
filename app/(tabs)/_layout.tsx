@@ -39,7 +39,11 @@ export default function TabsLayout() {
         screenOptions={{
           headerShown: false,
           lazy: true,
-          freezeOnBlur: true,
+          // Android can occasionally resume a frozen native tab without
+          // repainting it after the app returns from the background. Keeping
+          // tabs mounted is a small memory trade-off, but avoids the blank
+          // screen and remains smooth because each long list is virtualized.
+          freezeOnBlur: false,
           sceneStyle: { backgroundColor: colors.background },
           // Web MobileBottomNav: active icons text-foreground, inactive
           // text-muted-foreground (#808080), strokeWidth 2 vs 2.5.

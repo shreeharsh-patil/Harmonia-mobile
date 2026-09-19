@@ -516,10 +516,18 @@ test('cached authenticated sessions unblock cold start before account refresh', 
   assert.match(source, /const result = await fetchMe\(saved\)/);
 });
 
-test('inactive tabs freeze and defer mounting until visited', async () => {
+test('tabs stay lazy but never freeze into a blank screen after Android resume', async () => {
   const source = await readFile('app/(tabs)/_layout.tsx', 'utf8');
   assert.match(source, /lazy: true/);
-  assert.match(source, /freezeOnBlur: true/);
+  assert.match(source, /freezeOnBlur: false/);
+});
+
+test('a root error boundary gives render failures a visible retry state', async () => {
+  const root = await readFile('app/_layout.tsx', 'utf8');
+  const boundary = await readFile('src/components/AppErrorBoundary.tsx', 'utf8');
+  assert.match(root, /<AppErrorBoundary>/);
+  assert.match(boundary, /getDerivedStateFromError/);
+  assert.match(boundary, /Try again/);
 });
 
 test('large music lists use bounded render batches', async () => {

@@ -7,10 +7,12 @@ import { PlayerProvider } from '@/src/providers/PlayerProvider';
 import { OfflineProvider } from '@/src/providers/OfflineProvider';
 import { LocalMusicProvider } from '@/src/providers/LocalMusicProvider';
 import { PreferencesProvider } from '@/src/providers/PreferencesProvider';
+import { AppErrorBoundary } from '@/src/components/AppErrorBoundary';
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
+      <AppErrorBoundary>
       <PreferencesProvider>
       <AuthProvider>
         <LibraryProvider>
@@ -37,6 +39,7 @@ export default function RootLayout() {
         </LibraryProvider>
       </AuthProvider>
       </PreferencesProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }
