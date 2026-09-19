@@ -1,0 +1,37 @@
+name: Remove duplicate playlist load
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/remove-duplicate-playlist-load.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Remove duplicate initial playlist request
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/(tabs)/playlist/[id].tsx')
+          text = path.read_text()
+          old = """  useEffect(() => {\n    setPlaylist(null);\n    setSongs([]);\n    setActionSong(null);\n    setEditing(false);\n    setSearchQuery('');\n    setIsSearchVisible(false);\n    void load();\n    return () => {\n      loadGenerationRef.current += 1;\n    };\n  }, [load]);\n"""
+          new = """  useEffect(() => {\n    setPlaylist(null);\n    setSongs([]);\n    setActionSong(null);\n    setEditing(false);\n    setSearchQuery('');\n    setIsSearchVisible(false);\n    return () => {\n      loadGenerationRef.current += 1;\n    };\n  }, [load]);\n"""
+          if old not in text:
+              raise SystemExit('expected playlist load block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'app/(tabs)/playlist/[id].tsx'
+          git commit -m 'perf: avoid duplicate playlist loads'
+          git push origin HEAD:main
