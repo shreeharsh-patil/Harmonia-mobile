@@ -41,6 +41,19 @@ test('Home pins the requested Spotify catalog shelves in listening order', async
   ]);
 });
 
+test('Home shows the last catalog item first in Popular playlist shelves', async () => {
+  const { selectHomeShelves } = await import('../../src/lib/homeSections');
+  const [shelf] = selectHomeShelves([
+    {
+      name: 'Popular Hindi Playlists',
+      genreName: 'Hindi',
+      playlists: [{ id: 'first', name: 'First' }, { id: 'last', name: 'Last' }],
+    },
+  ] as any);
+
+  assert.deepEqual(shelf.playlists.map((playlist) => playlist.id), ['last', 'first']);
+});
+
 test('home sections prefer every Spotify playlist returned by the database', async () => {
   const { selectDatabaseSpotifySections } = await import('../../src/lib/homeSections');
   const sections = selectDatabaseSpotifySections([

@@ -43,7 +43,12 @@ export function selectHomeShelves(sections: MusicSection[] = []) {
     const chosen = candidates[0];
     if (!chosen) return [];
     used.add(chosen);
-    return [{ ...chosen, name: spec.label }];
+    const reversePopularPlaylists = spec.label.toLowerCase().startsWith('popular ');
+    return [{
+      ...chosen,
+      name: spec.label,
+      playlists: reversePopularPlaylists ? [...(chosen.playlists || [])].reverse() : chosen.playlists,
+    }];
   });
 }
 
