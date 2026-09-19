@@ -45,8 +45,8 @@ export default function TabsLayout() {
           // screen and remains smooth because each long list is virtualized.
           freezeOnBlur: false,
           sceneStyle: { backgroundColor: colors.background },
-          // Web MobileBottomNav: active icons text-foreground, inactive
-          // text-muted-foreground (#808080), strokeWidth 2 vs 2.5.
+          // Compact music-app navigation: black surface, white active state,
+          // and quieter labels so artwork remains the visual priority.
           tabBarActiveTintColor: colors.textStrong,
           tabBarInactiveTintColor: '#808080',
           tabBarHideOnKeyboard: true,
@@ -62,8 +62,8 @@ export default function TabsLayout() {
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            borderTopColor: 'rgba(41,41,41,0.92)',
-            backgroundColor: Platform.OS === 'android' ? colors.background : 'rgba(18,18,18,0.98)',
+            borderTopColor: 'rgba(255,255,255,0.08)',
+            backgroundColor: Platform.OS === 'android' ? '#000000' : 'rgba(0,0,0,0.98)',
             elevation: 0,
           },
           tabBarLabelStyle: {
@@ -134,6 +134,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#121212' },
+  root: { flex: 1, backgroundColor: colors.background },
   miniWrap: { position: 'absolute', left: 8, right: 8 },
 });

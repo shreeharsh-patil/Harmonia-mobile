@@ -103,6 +103,12 @@ export default function HomeScreen() {
   const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -347,7 +353,16 @@ export default function HomeScreen() {
         />
       </View>
       <View style={styles.topBar}>
-        <Text style={styles.topTitle}>Discover</Text>
+        <Text style={styles.topTitle}>{greeting}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open Harmonia settings"
+          onPress={() => router.push('/(tabs)/preferences')}
+          hitSlop={8}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <Ionicons name="settings-outline" size={21} color={colors.textStrong} />
+        </Pressable>
       </View>
 
       <FlatList<MusicSection>
@@ -794,15 +809,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+    justifyContent: 'space-between',
     zIndex: 4,
   },
   // Web section headers: text-xl/2xl font-bold tracking-tight text-foreground
   topTitle: {
     color: colors.text,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '800',
+    letterSpacing: -0.7,
+  },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   content: {
     paddingHorizontal: 12,
@@ -818,20 +842,20 @@ const styles = StyleSheet.create({
   // hairline border-border/10 on the artwork
   quickCard: {
     minHeight: 56,
-    borderRadius: 16,
+    borderRadius: 6,
     padding: 4,
     paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.cardTranslucent,
+    backgroundColor: colors.surfaceRaised,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(41,41,41,0.4)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   // Liked Songs artwork stays a solid vivid tile like the web gradient cover
   likedArtwork: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#9D95D8',
@@ -839,13 +863,13 @@ const styles = StyleSheet.create({
   quickTitle: {
     flex: 1,
     minWidth: 0,
-    color: colors.text,
+    color: colors.textStrong,
     fontSize: 13,
     lineHeight: 17,
-    fontWeight: '700',
+    fontWeight: '800',
     marginLeft: 10,
   },
-  section: { marginBottom: 24 },
+  section: { marginBottom: 28 },
   sectionHead: {
     minHeight: 32,
     flexDirection: 'row',
@@ -858,10 +882,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     flexShrink: 1,
     color: colors.text,
-    fontSize: 20,
-    lineHeight: 25,
-    fontWeight: '700',
-    letterSpacing: -0.4,
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '800',
+    letterSpacing: -0.55,
   },
   sectionSubtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
@@ -888,7 +912,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(36,36,36,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -913,13 +937,13 @@ const styles = StyleSheet.create({
   // Web TrendingSongs rows: p-2 rounded-2xl bg-card/40 border-border/20
   chartRow: {
     minHeight: 60,
-    borderRadius: 16,
-    backgroundColor: colors.cardTranslucent,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
     padding: 4,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(41,41,41,0.3)',
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   chartNumber: {
     width: 26,

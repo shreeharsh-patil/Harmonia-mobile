@@ -6,7 +6,7 @@ import { extractArtworkPalette, type ArtworkPalette } from '@/src/lib/palette';
 /**
  * Dominant-color wash behind detail-screen heroes, mirroring the web's
  * album/playlist/artist pages: the artwork's tuned dominant color fills the
- * top of the screen and fades into the base #121212 background.
+ * top of the screen and fades into Harmonia's near-black background.
  *
  * Renders nothing until extraction resolves, so screens stay on the flat
  * background when there is no artwork (or in battery-saver mode).
@@ -52,8 +52,8 @@ export function ArtworkColorHeader({
           `rgb(${r}, ${g}, ${b})`,
           `rgba(${r}, ${g}, ${b}, 0.72)`,
           `rgba(${sr}, ${sg}, ${sb}, 0.4)`,
-          'rgba(18,18,18,0.55)',
-          '#121212',
+          'rgba(0,0,0,0.60)',
+          '#000000',
         ]}
         locations={[0, 0.35, 0.6, 0.85, 1]}
       />

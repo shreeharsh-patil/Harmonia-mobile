@@ -1,26 +1,26 @@
-// Harmonia app palette mirrored from the web player's dark theme.
-// Mirrors app/globals.css of the Harmonia web client: #121212 background,
-// #171717 cards, emerald primary, saffron+emerald ambient glows.
+// Harmonia's playback-first dark palette. It deliberately follows the familiar
+// contrast and hierarchy of modern music apps while keeping Harmonia's own
+// emerald and red-heart identity.
 export const colors = {
-  // Base surfaces (web `--background`, `--card`, `--secondary`, `--accent`)
-  background: '#121212',
-  surface: '#171717',
-  surfaceRaised: '#242424',
-  surfaceHover: '#313131',
+  // Deeper base layers make artwork and the active playback state the focus.
+  background: '#000000',
+  surface: '#121212',
+  surfaceRaised: '#1F1F1F',
+  surfaceHover: '#2A2A2A',
   // Web cards render as translucent panels over the ambient glows
   // (bg-card/40 hover:bg-card/75) with hairline borders (border-border/20).
-  cardTranslucent: 'rgba(23,23,23,0.55)',
-  cardTranslucentStrong: 'rgba(23,23,23,0.85)',
-  border: '#292929',
-  borderStrong: '#323232',
-  borderFaint: 'rgba(41,41,41,0.35)',
+  cardTranslucent: 'rgba(31,31,31,0.84)',
+  cardTranslucentStrong: 'rgba(31,31,31,0.96)',
+  border: '#282828',
+  borderStrong: '#383838',
+  borderFaint: 'rgba(255,255,255,0.08)',
 
-  text: '#E2E8F0',
-  textStrong: '#FAFAFA',
-  textMuted: '#A2A2A2',
-  textFaint: '#707070',
-  muted: '#A2A2A2',
-  mutedDim: '#707070',
+  text: '#FFFFFF',
+  textStrong: '#FFFFFF',
+  textMuted: '#B3B3B3',
+  textFaint: '#777777',
+  muted: '#B3B3B3',
+  mutedDim: '#777777',
 
   // Web `--primary` family. Emerald accents carry active states everywhere
   // (ring #4ade80, quick-card play buttons bg-primary, active titles
