@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
-  Animated,
   FlatList,
   Pressable,
   RefreshControl,
@@ -30,7 +29,6 @@ import {
   updatePlaylist,
 } from '@/src/lib/api';
 import { playlistTitle } from '@/src/lib/entities';
-import { extractArtworkPalette, type ArtworkPalette } from '@/src/lib/palette';
 import {
   SONG_LIST_BATCHING_PERIOD_MS,
   SONG_LIST_BATCH_SIZE,
@@ -49,8 +47,6 @@ import type { Playlist, Song } from '@/src/types';
 function getId(playlist?: Playlist | null) {
   return String(playlist?._id || playlist?.id || '');
 }
-
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<Song>);
 
 export default function PlaylistScreen() {
   const insets = useSafeAreaInsets();
@@ -84,11 +80,6 @@ export default function PlaylistScreen() {
   const [isShuffle, setIsShuffle] = useState(false);
   const loadGenerationRef = useRef(0);
   const playlistRef = useRef<Playlist | null>(null);
-
-  // Web playlist page: the hero column scales down, drifts up, and fades as
-  // the list scrolls, while a sticky title bar tints with the artwork color.
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const [headerPalette, setHeaderPalette] = useState<ArtworkPalette | null>(null);
 
   useEffect(() => {
     playlistRef.current = playlist;
@@ -209,22 +200,6 @@ export default function PlaylistScreen() {
     () => (playlist ? playlistArtworkUrl(playlist, 64, songs) : ''),
     [playlist, songs]
   );
-
-  // Shares the palette cache with ArtworkColorHeader, so this only resolves
-  // once and the sticky bar tint stays in sync with the hero wash.
-  useEffect(() => {
-    let active = true;
-    if (batterySaver || !paletteCover) {
-      setHeaderPalette(null);
-      return;
-    }
-    void extractArtworkPalette(paletteCover).then((value) => {
-      if (active) setHeaderPalette(value);
-    });
-    return () => {
-      active = false;
-    };
-  }, [batterySaver, paletteCover]);
 
   const filteredSongs = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -377,71 +352,12 @@ export default function PlaylistScreen() {
     .replace(/\bSpotify\b/gi, 'Harmonia')
     .trim();
 
-  // Web-style scroll choreography: the hero column drifts up and fades while
-  // the artwork shrinks, and the sticky title bar fades in past the artwork.
-  const heroTranslateY = scrollY.interpolate({
-    inputRange: [0, 340],
-    outputRange: [0, -56],
-    extrapolate: 'clamp',
-  });
-  const heroOpacity = scrollY.interpolate({
-    inputRange: [0, 300],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-  const artworkScale = scrollY.interpolate({
-    inputRange: [0, 340],
-    outputRange: [1, 0.78],
-    extrapolate: 'clamp',
-  });
-  const stickyTitleOpacity = scrollY.interpolate({
-    inputRange: [220, 290],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const stickyTitleTranslate = stickyTitleOpacity.interpolate({
-    inputRange: [0, 1],
-    outputRange: [8, 0],
-  });
-  const headerTint = headerPalette
-    ? `rgb(${headerPalette.dominantRgb[0]}, ${headerPalette.dominantRgb[1]}, ${headerPalette.dominantRgb[2]})`
-    : '#121212';
-
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ArtworkColorHeader artworkUrl={paletteCover} enabled={!batterySaver} height={330} />
 
-      {/* Sticky title bar that tints with the artwork color (web playlist page). */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.stickyBar,
-          {
-            opacity: stickyTitleOpacity,
-            backgroundColor: headerTint,
-            paddingTop: insets.top + 6,
-          },
-        ]}
-      >
-        <Animated.View
-          style={[
-            styles.stickyBarInner,
-            { opacity: stickyTitleOpacity, transform: [{ translateY: stickyTitleTranslate }] },
-          ]}
-        >
-          <Text numberOfLines={1} style={styles.stickyBarTitle}>
-            {playlistTitle(playlist)}
-          </Text>
-        </Animated.View>
-      </Animated.View>
-
-      <AnimatedFlatList
+      <FlatList
         data={filteredSongs}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
         removeClippedSubviews={true}
         keyExtractor={(item, index) => item.id || String(index)}
         initialNumToRender={SONG_LIST_INITIAL_RENDER}
@@ -495,19 +411,16 @@ export default function PlaylistScreen() {
               </View>
             </View>
 
-            {/* Centered Hero Artwork & Meta (Mirrors Web App) */}
-            <Animated.View
-              style={[styles.heroSection, { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] }]}
-            >
-              <Animated.View style={[styles.artworkContainer, { transform: [{ scale: artworkScale }] }]}>
-                <PlaylistArtwork playlist={playlist} size={224} radius={18} tracks={songs} />
-                <View pointerEvents="none" style={styles.artworkTitleShade} />
-                <Text numberOfLines={2} style={styles.artworkTitleOverlay}>
-                  {playlistTitle(playlist)}
-                </Text>
-              </Animated.View>
+            {/* Keep artwork and title separate, matching the native Spotify playlist layout. */}
+            <View style={styles.heroSection}>
+              <View style={styles.artworkContainer}>
+                <PlaylistArtwork playlist={playlist} size={292} radius={4} tracks={songs} />
+              </View>
 
               <View style={styles.heroCopy}>
+                <Text numberOfLines={2} style={styles.title}>
+                  {playlistTitle(playlist)}
+                </Text>
                 {editing ? (
                   <View style={styles.editBox}>
                     <TextInput
@@ -557,7 +470,7 @@ export default function PlaylistScreen() {
                   </>
                 )}
               </View>
-            </Animated.View>
+            </View>
 
             {/* Action Controls Bar (Web Layout) */}
             {!editing && (
@@ -716,24 +629,7 @@ function BackButton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  stickyBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 30,
-    justifyContent: 'flex-end',
-    paddingBottom: 8,
-    paddingHorizontal: 52,
-  },
-  stickyBarInner: { width: '100%' },
-  stickyBarTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },  list: { paddingBottom: 40 },
+  list: { paddingBottom: 40 },
   top: {
     height: 56,
     paddingHorizontal: 16,
@@ -760,56 +656,37 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     paddingHorizontal: 20,
-    alignItems: 'center',
-    paddingBottom: 10,
+    paddingBottom: 14,
   },
   artworkContainer: {
-    width: 224,
-    height: 224,
-    marginTop: 8,
-    marginBottom: 18,
+    width: 292,
+    height: 292,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 26,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOpacity: 0.36,
+    shadowRadius: 14,
+    elevation: 9,
     overflow: 'hidden',
-    borderRadius: 18,
-  },
-  artworkTitleShade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 94,
-    backgroundColor: 'rgba(0,0,0,0.36)',
-  },
-  artworkTitleOverlay: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 13,
-    color: '#FFFFFF',
-    fontSize: 27,
-    lineHeight: 31,
-    fontWeight: '900',
-    letterSpacing: -0.8,
+    borderRadius: 4,
   },
   heroCopy: { alignItems: 'flex-start', width: '100%' },
   title: {
     color: colors.textStrong,
-    fontSize: 24,
-    lineHeight: 29,
+    fontSize: 28,
+    lineHeight: 33,
     fontWeight: '800',
-    letterSpacing: -0.5,
-    marginBottom: 4,
+    letterSpacing: -0.7,
+    marginBottom: 10,
     width: '100%',
   },
   description: {
     color: 'rgba(255,255,255,0.70)',
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 10,
     width: '100%',
   },
   metaRow: {
@@ -821,12 +698,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   metaDot: { color: colors.textFaint, fontSize: 11 },
-  metaText: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  metaText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   controlsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 16,
-    paddingHorizontal: 4,
+    paddingTop: 12,
+    paddingHorizontal: 20,
     width: '100%',
     gap: 16,
   },
@@ -907,7 +784,7 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: '700',
     letterSpacing: -0.4,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     marginBottom: 8,
     marginTop: 6,
   },
