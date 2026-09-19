@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CatalogEntityCard } from '@/src/components/CatalogEntityCard';
@@ -101,8 +102,9 @@ export default function BrowseCatalogScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: catalog.color }]} edges={['top']}>
       <ScrollView
+        style={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={(
           <RefreshControl
@@ -114,7 +116,11 @@ export default function BrowseCatalogScreen() {
         )}
         contentContainerStyle={{ paddingBottom: contentBottomInset }}
       >
-        <View style={[styles.hero, { backgroundColor: catalog.color }]}>
+        <LinearGradient
+          colors={[catalog.color, '#211923', '#080808']}
+          locations={[0, 0.52, 1]}
+          style={styles.hero}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
@@ -125,7 +131,7 @@ export default function BrowseCatalogScreen() {
             <Ionicons name="chevron-back" size={25} color="#FFF" />
           </Pressable>
           <Text numberOfLines={2} adjustsFontSizeToFit style={styles.heroTitle}>{catalog.name}</Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.sections}>
           {loading && !sections.length ? (
@@ -214,10 +220,11 @@ function CatalogSkeleton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#080808' },
-  hero: { height: 260, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 34, justifyContent: 'space-between' },
+  scroll: { backgroundColor: '#080808' },
+  hero: { height: 214, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 24, justifyContent: 'space-between' },
   backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.22)' },
   heroTitle: { color: '#FFF', fontSize: 54, lineHeight: 60, fontWeight: '900', letterSpacing: -2.2, textShadowColor: 'rgba(0,0,0,0.18)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 3 } },
-  sections: { paddingTop: 26 },
+  sections: { paddingTop: 20 },
   section: { marginBottom: 34 },
   sectionHeader: { minHeight: 36, paddingHorizontal: 16, marginBottom: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   sectionTitle: { flex: 1, color: '#EAEAF0', fontSize: 22, lineHeight: 27, fontWeight: '900', letterSpacing: -0.55 },

@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CatalogEntityCard } from '@/src/components/CatalogEntityCard';
@@ -88,8 +89,12 @@ export default function CatalogSectionScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={[styles.header, { backgroundColor: catalog.color }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: catalog.color }]} edges={['top']}>
+      <LinearGradient
+        colors={[catalog.color, '#211923', '#080808']}
+        locations={[0, 0.58, 1]}
+        style={styles.header}
+      >
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -103,7 +108,7 @@ export default function CatalogSectionScreen() {
           <Text numberOfLines={1} style={styles.catalogName}>{catalog.name}</Text>
           <Text numberOfLines={2} style={styles.title}>{section?.title || 'Collection'}</Text>
         </View>
-      </View>
+      </LinearGradient>
 
       {loading && !section ? (
         <CatalogSectionSkeleton />
@@ -146,7 +151,7 @@ export default function CatalogSectionScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#080808' },
-  header: { minHeight: 142, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 22, flexDirection: 'row', alignItems: 'flex-start' },
+  header: { minHeight: 124, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16, flexDirection: 'row', alignItems: 'flex-start' },
   backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.22)' },
   headerCopy: { flex: 1, minWidth: 0, alignSelf: 'flex-end', marginLeft: 12 },
   catalogName: { color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
