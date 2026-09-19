@@ -87,6 +87,41 @@ function DiagnosticsRow({ label, value }: { label: string; value: string }) {
 // a ref through props; cleared whenever the track (or lyrics) changes.
 const lyricLineLayouts: { current: Record<number, { y: number; height: number }> } = { current: {} };
 
+// Audio status is intentionally sampled at a modest rate for battery life.
+// While the lyrics sheet is visible we interpolate only this small leaf so
+// enhanced LRC word timing feels continuous rather than jumping twice a
+// second. Nothing behind the sheet is re-rendered by this animation.
+function useSmoothLyricPosition(position: number, playing: boolean) {
+  const [smoothPosition, setSmoothPosition] = useState(position);
+  const anchor = useRef({ position, timestamp: Date.now() });
+
+  useEffect(() => {
+    anchor.current = { position, timestamp: Date.now() };
+    if (!playing) setSmoothPosition(position);
+  }, [position, playing]);
+
+  useEffect(() => {
+    if (!playing) return;
+
+    let frame = 0;
+    let lastUpdate = 0;
+    const tick = (timestamp: number) => {
+      // 30 fps is visually smooth for karaoke highlighting while keeping the
+      // work predictable on lower-end phones.
+      if (timestamp - lastUpdate >= 33) {
+        const elapsed = Math.max(0, (Date.now() - anchor.current.timestamp) / 1000);
+        setSmoothPosition(anchor.current.position + elapsed);
+        lastUpdate = timestamp;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [playing]);
+
+  return smoothPosition;
+}
+
 /**
  * Playback position updates twice per second. This timeline is the only
  * always-visible element that needs position, so it subscribes in a memoized
@@ -160,10 +195,12 @@ const LyricLines = memo(function LyricLines({
   onActiveLineChange: (index: number) => void;
 }) {
   const { position } = usePlaybackProgress();
-  const activeLine = useMemo(() => activeLyricIndex(lines, position), [lines, position]);
+  const { isPlaying } = usePlayer();
+  const smoothPosition = useSmoothLyricPosition(position, isPlaying);
+  const activeLine = useMemo(() => activeLyricIndex(lines, smoothPosition), [lines, smoothPosition]);
   const activeWord = useMemo(
-    () => activeLyricWordIndex(lines[activeLine], position),
-    [activeLine, position, lines]
+    () => activeLyricWordIndex(lines[activeLine], smoothPosition),
+    [activeLine, smoothPosition, lines]
   );
 
   useEffect(() => {
@@ -215,6 +252,7 @@ const LyricLines = memo(function LyricLines({
                       style={[
                         active ? styles.lyricsOverlayWordPending : undefined,
                         active && wordIndex <= activeWord ? styles.lyricsOverlayWordActive : undefined,
+                        active && wordIndex === activeWord ? styles.lyricsOverlayWordCurrent : undefined,
                       ]}
                     >
                       {word.text}
@@ -1249,12 +1287,14 @@ const styles = StyleSheet.create({
   lyricsViewport: { flex: 1, position: 'relative', overflow: 'hidden' },
   lyricsOverlayScroll: { flex: 1 },
   lyricsOverlayContent: {
-    paddingTop: 104,
-    paddingBottom: 210,
+    // Large breathing room lets the active phrase settle near the center,
+    // matching Apple Music's focused lyrics rhythm.
+    paddingTop: 128,
+    paddingBottom: 244,
     paddingHorizontal: 24,
   },
   lyricsOverlayLineTap: {
-    minHeight: 78,
+    minHeight: 84,
     justifyContent: 'center',
     alignItems: 'flex-start',
     paddingVertical: 8,
@@ -1262,21 +1302,26 @@ const styles = StyleSheet.create({
   lyricsOverlayLine: {
     width: '100%',
     color: '#FFF',
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 29,
+    lineHeight: 36,
     fontWeight: '750' as any,
     fontFamily: PLAYER_FONT,
     letterSpacing: -0.5,
     textAlign: 'left',
   },
   lyricsOverlayLineActive: {
-    fontSize: 30,
-    lineHeight: 37,
+    fontSize: 32,
+    lineHeight: 39,
     fontWeight: '850' as any,
     letterSpacing: -0.6,
   },
   lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.55)' },
   lyricsOverlayWordActive: { color: '#FFF' },
+  lyricsOverlayWordCurrent: {
+    color: '#FFF',
+    textShadowColor: 'rgba(255,255,255,0.52)',
+    textShadowRadius: 8,
+  },
   lyricsOverlayLoading: {
     flex: 1,
     justifyContent: 'flex-start',
