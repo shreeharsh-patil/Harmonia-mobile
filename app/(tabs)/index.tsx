@@ -93,22 +93,15 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [topColumnIndex, setTopColumnIndex] = useState(0);
   const loadGenerationRef = useRef(0);
   const lastCatalogRefreshRef = useRef(0);
   const lastTrendingRefreshRef = useRef(0);
   const catalogRefreshInFlightRef = useRef(false);
   const trendingRefreshInFlightRef = useRef(false);
   const recentRefreshInFlightRef = useRef(false);
-  const topSongsRef = useRef<FlatList<Song[]> | null>(null);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
+  const featuredWidth = width - 24;
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -297,26 +290,9 @@ export default function HomeScreen() {
     [featuredFallback, recentPlaylists]
   );
 
-  const topColumns = useMemo(() => {
-    const columns: Song[][] = [];
-    for (let index = 0; index < trendingSongs.length; index += 4) {
-      columns.push(trendingSongs.slice(index, index + 4));
-    }
-    return columns;
-  }, [trendingSongs]);
-
-  const topColumnWidth = Math.min(342, Math.max(282, width - 54));
-
   const playRecentSong = useCallback((song: Song) => {
     void playSong(song, recentSongs);
   }, [playSong, recentSongs]);
-
-  const scrollTopSongs = (direction: -1 | 1) => {
-    if (!topColumns.length) return;
-    const nextIndex = Math.max(0, Math.min(topColumns.length - 1, topColumnIndex + direction));
-    setTopColumnIndex(nextIndex);
-    topSongsRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-  };
 
   const hasContent =
     sections.some((section) => Array.isArray(section.playlists) && section.playlists.length > 0) ||
@@ -353,16 +329,16 @@ export default function HomeScreen() {
         />
       </View>
       <View style={styles.topBar}>
-        <Text style={styles.topTitle}>{greeting}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open Harmonia settings"
           onPress={() => router.push('/(tabs)/preferences')}
           hitSlop={8}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}
         >
-          <Ionicons name="settings-outline" size={21} color={colors.textStrong} />
+          <Text style={styles.profileInitial}>H</Text>
         </Pressable>
+        <HomeFilterBar />
       </View>
 
       <FlatList<MusicSection>
@@ -408,6 +384,14 @@ export default function HomeScreen() {
               ))}
             </View>
 
+            {!!quickPlaylists[0] && (
+              <FeaturedMixCard
+                playlist={quickPlaylists[0]}
+                width={featuredWidth}
+                onPress={openPlaylist}
+              />
+            )}
+
             {!!error && (
               <Pressable onPress={() => void load()} style={styles.errorBox}>
                 <Text style={styles.error}>{error}</Text>
@@ -421,119 +405,24 @@ export default function HomeScreen() {
 
             {!loading && (
               <>
-                {!!trendingAlbums.length && (
-                  <AlbumRail
-                    title="Trending Albums"
-                    albums={trendingAlbums}
-                    onPress={openAlbum}
+                {!!trendingSongs.length && (
+                  <StartListeningList
+                    songs={trendingSongs}
+                    currentSongId={currentSong?.id}
+                    playing={isPlaying}
+                    onPress={(song) => {
+                      if (String(currentSong?.id || '') === String(song.id || '')) void togglePlayback();
+                      else void playSong(song, trendingSongs);
+                    }}
                   />
                 )}
 
-                {!!trendingSongs.length && (
-                  <View style={styles.section}>
-                    <View style={styles.topSongsHead}>
-                      <View style={styles.sectionHeadCopy}>
-                        <Text style={styles.sectionTitle}>Latest Songs</Text>
-                        <Text numberOfLines={1} style={styles.sectionSubtitle}>
-                          Fresh from the India chart · refreshed automatically ({trendingSongs.length} {trendingSongs.length === 1 ? 'song' : 'songs'})
-                        </Text>
-                      </View>
-                      <View style={styles.chartActions}>
-                        <Pressable
-                          onPress={() => scrollTopSongs(-1)}
-                          disabled={topColumnIndex === 0}
-                          style={[styles.chartArrow, topColumnIndex === 0 && styles.chartArrowDisabled]}
-                          accessibilityLabel="Previous top songs"
-                        >
-                          <Ionicons name="chevron-back" size={16} color={colors.text} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => scrollTopSongs(1)}
-                          disabled={topColumnIndex >= topColumns.length - 1}
-                          style={[styles.chartArrow, topColumnIndex >= topColumns.length - 1 && styles.chartArrowDisabled]}
-                          accessibilityLabel="Next top songs"
-                        >
-                          <Ionicons name="chevron-forward" size={16} color={colors.text} />
-                        </Pressable>
-                      </View>
-                    </View>
-
-                    <FlatList<Song[]>
-                      ref={topSongsRef}
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      data={topColumns}
-                      keyExtractor={(_, index) => `top-column-${index}`}
-                      initialNumToRender={2}
-                      maxToRenderPerBatch={2}
-                      windowSize={3}
-                      snapToInterval={topColumnWidth + 10}
-                      decelerationRate="fast"
-                      contentContainerStyle={styles.chartRail}
-                      getItemLayout={(_, index) => ({
-                        length: topColumnWidth + 10,
-                        offset: (topColumnWidth + 10) * index,
-                        index,
-                      })}
-                      onMomentumScrollEnd={(event) => {
-                        const next = Math.round(event.nativeEvent.contentOffset.x / (topColumnWidth + 10));
-                        setTopColumnIndex(Math.max(0, Math.min(topColumns.length - 1, next)));
-                      }}
-                      renderItem={({ item: songs, index: columnIndex }) => (
-                        <View style={[styles.chartColumn, { width: topColumnWidth }]}>
-                          {songs.filter(Boolean).map((song, localIndex) => {
-                            const songId = String(song.id || song.songId || song.sourceId || '');
-                            const isCurrent = Boolean(currentSong?.id && String(currentSong.id) === songId);
-                            return (
-                              <Pressable
-                                key={songId || `chart-song-${columnIndex}-${localIndex}`}
-                                accessibilityRole="button"
-                                accessibilityLabel={
-                                  isCurrent && isPlaying
-                                    ? `Pause ${song.name || song.title || 'song'}`
-                                    : `Play ${song.name || song.title || 'song'}`
-                                }
-                                onPress={() => {
-                                  if (isCurrent) {
-                                    void togglePlayback();
-                                  } else {
-                                    void playSong(song, trendingSongs);
-                                  }
-                                }}
-                                style={({ pressed }) => [styles.chartRow, pressed && styles.pressed]}
-                              >
-                                <View style={styles.chartArtworkWrap}>
-                                  <TrackArtwork song={song} size={52} radius={10} />
-                                  {isCurrent && (
-                                    <View style={styles.chartPlaybackOverlay}>
-                                      <Ionicons
-                                        name={isPlaying ? 'pause' : 'play'}
-                                        size={18}
-                                        color="#FFF"
-                                      />
-                                    </View>
-                                  )}
-                                </View>
-                                <Text style={styles.chartNumber}>{columnIndex * 4 + localIndex + 1}</Text>
-                                <View style={styles.chartCopy}>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={[
-                                      styles.chartTitle,
-                                      isCurrent && styles.chartTitleActive,
-                                    ]}
-                                  >
-                                    {song.name || song.title || 'Untitled Track'}
-                                  </Text>
-                                  <Text numberOfLines={1} style={styles.chartArtist}>{artistNames(song)}</Text>
-                                </View>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      )}
-                    />
-                  </View>
+                {!!trendingAlbums.length && (
+                  <AlbumRail
+                    title="Trending albums"
+                    albums={trendingAlbums}
+                    onPress={openAlbum}
+                  />
                 )}
 
                 {!!recentSongs.length && (
@@ -597,6 +486,96 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+function HomeFilterBar() {
+  return (
+    <View style={styles.filterRow} accessibilityRole="tablist">
+      <View style={[styles.filterPill, styles.filterPillActive]} accessibilityRole="tab" accessibilityState={{ selected: true }}>
+        <Text style={styles.filterTextActive}>All</Text>
+      </View>
+      <View style={styles.filterPill} accessibilityRole="tab" accessibilityState={{ selected: false }}>
+        <Text style={styles.filterText}>Music</Text>
+      </View>
+      <View style={styles.filterPill} accessibilityRole="tab" accessibilityState={{ selected: false }}>
+        <Text style={styles.filterText}>Podcasts</Text>
+      </View>
+    </View>
+  );
+}
+
+const FeaturedMixCard = memo(function FeaturedMixCard({
+  playlist,
+  width,
+  onPress,
+}: {
+  playlist: Playlist;
+  width: number;
+  onPress: (playlist: Playlist) => void;
+}) {
+  const title = playlist.name || playlist.title || 'Made for you';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Play ${title}`}
+      onPress={() => onPress(playlist)}
+      style={({ pressed }) => [styles.featuredCard, { width }, pressed && styles.pressed]}
+    >
+      <PlaylistArtwork playlist={playlist} size={width - 28} radius={10} />
+      <View style={styles.featuredFooter}>
+        <View style={styles.featuredCopy}>
+          <Text numberOfLines={1} style={styles.featuredEyebrow}>MADE FOR YOUR TASTE</Text>
+          <Text numberOfLines={1} style={styles.featuredTitle}>{title}</Text>
+        </View>
+        <View style={styles.featuredPlay}>
+          <Ionicons name="play" size={21} color="#000000" />
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
+const StartListeningList = memo(function StartListeningList({
+  songs,
+  currentSongId,
+  playing,
+  onPress,
+}: {
+  songs: Song[];
+  currentSongId?: string;
+  playing: boolean;
+  onPress: (song: Song) => void;
+}) {
+  const visibleSongs = songs.slice(0, 5);
+  if (!visibleSongs.length) return null;
+
+  return (
+    <View style={styles.startSection}>
+      <Text style={styles.startKicker}>Jump into a session based on your tastes</Text>
+      <SectionHeader title="Start listening" />
+      {visibleSongs.map((song, index) => {
+        const active = String(currentSongId || '') === String(song.id || '');
+        return (
+          <Pressable
+            key={String(song.id || `start-${index}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`${active && playing ? 'Pause' : 'Play'} ${song.name || song.title || 'song'}`}
+            onPress={() => onPress(song)}
+            style={({ pressed }) => [styles.startRow, pressed && styles.pressed]}
+          >
+            <TrackArtwork song={song} size={58} radius={4} />
+            <View style={styles.startCopy}>
+              <Text numberOfLines={1} style={[styles.startTitle, active && styles.startTitleActive]}>
+                {song.name || song.title || 'Untitled Track'}
+              </Text>
+              <Text numberOfLines={1} style={styles.startArtist}>{artistNames(song)}</Text>
+            </View>
+            <Ionicons name={active && playing ? 'pause' : 'ellipsis-vertical'} size={21} color={active ? colors.accentBright : colors.muted} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+});
 
 const QuickPlaylistCard = memo(function QuickPlaylistCard({
   playlist,
@@ -812,21 +791,64 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     zIndex: 4,
   },
-  // Web section headers: text-xl/2xl font-bold tracking-tight text-foreground
-  topTitle: {
-    color: colors.text,
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-  },
-  settingsButton: {
+  profileButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: '#F06AA7',
+  },
+  profileInitial: {
+    color: '#151515',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  filterRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 14,
+  },
+  filterPill: {
+    height: 38,
+    paddingHorizontal: 17,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#282828',
+  },
+  filterPillActive: { backgroundColor: colors.accentBright },
+  filterText: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
+  filterTextActive: { color: '#000000', fontSize: 14, fontWeight: '800' },
+  featuredCard: {
+    marginBottom: 30,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#282828',
+  },
+  featuredFooter: {
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+  },
+  featuredCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
+  featuredEyebrow: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  featuredTitle: { color: colors.textStrong, fontSize: 19, fontWeight: '800', marginTop: 3 },
+  featuredPlay: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentBright,
   },
   content: {
     paddingHorizontal: 12,
@@ -888,6 +910,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.55,
   },
   sectionSubtitle: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  startSection: { marginBottom: 30 },
+  startKicker: { color: colors.muted, fontSize: 13, lineHeight: 18, marginBottom: 2 },
+  startRow: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 5,
+  },
+  startCopy: { flex: 1, minWidth: 0 },
+  startTitle: { color: colors.textStrong, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  startTitleActive: { color: colors.accentBright },
+  startArtist: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 1 },
   rail: { paddingHorizontal: 1, paddingBottom: 1 },
   recentSongCard: { width: 140, marginRight: 16 },
   recentSongTitle: { color: colors.text, fontSize: 13, lineHeight: 17, fontWeight: '700', marginTop: 8 },

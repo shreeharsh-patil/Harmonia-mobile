@@ -878,8 +878,8 @@ test('home India chart refreshes dynamically without polling in the background',
   assert.match(home, /AppState\.addEventListener\('change'/);
   assert.match(home, /appStateSubscription\.remove\(\)/);
   assert.match(home, /setInterval\(\(\) => \{/);
-  assert.match(home, /Latest Songs/);
-  assert.match(home, /Fresh from the India chart/);
+  assert.match(home, /Start listening/);
+  assert.match(home, /Jump into a session based on your tastes/);
 });
 
 test('search cancellation does not fall through to provider fallback work', async () => {
