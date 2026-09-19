@@ -560,6 +560,7 @@ export default function PlayerScreen() {
         isPlaying={isPlaying}
         fullScreen
         canvasOnly
+        onCanvasAvailabilityChange={onCanvasAvailabilityChange}
       />
       <View pointerEvents="none" style={styles.canvasTint} />
 

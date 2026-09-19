@@ -610,14 +610,13 @@ test('lyrics overlay uses one artwork-driven gradient and measured line position
   assert.doesNotMatch(source, /textShadowRadius: shadowRadius/);
 });
 
-
 test('Canvas fully unmounts when motion is disabled and proxy work is bounded', async () => {
   const renderer = await readFile('src/components/ArtworkRenderer.tsx', 'utf8');
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
 
   assert.match(renderer, /!!canvasUrl && enableMotion && foreground && !batterySaver && !reduceMotion/);
-  assert.match(renderer, /active=\{foreground && isPlaying\}/);
-  assert.match(renderer, /!enableMotion \|\| !isPlaying/);
+  assert.match(renderer, /active=\{foreground && \(fullScreen \|\| isPlaying\)\}/);
+  assert.match(renderer, /!enableMotion \|\| batterySaver \|\| reduceMotion \|\| !foreground/);
   assert.match(canvas, /CANVAS_TIMEOUT_MS = 10_000/);
   assert.match(canvas, /const controller = new AbortController\(\)/);
   assert.match(canvas, /signal: controller\.signal/);
