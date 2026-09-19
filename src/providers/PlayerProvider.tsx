@@ -740,6 +740,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       player.replace(nativeAudioSource(resolved.url, resolved.headers));
       activeStreamUrlRef.current = resolved.url;
       player.setPlaybackRate(rateRef.current);
+      player.seekTo(startPosition).catch(() => {});
       setPlaybackState('LOADING');
 
       const diagnostics: PlaybackDiagnostics = immediate
@@ -766,9 +767,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       activeSourceRef.current = diagnostics.source;
       lastPlaybackErrorRef.current = null;
       loadedTrackId.current = stable.id;
-      restoredPosition.current = 0;
+      restoredPosition.current = Math.max(0, startPosition);
       lastKnownPositionRef.current = Math.max(0, startPosition);
-      pendingSeek.current = startPosition > 0 ? startPosition : null;
+      currentTimeRef.current = Math.max(0, startPosition);
+      pendingSeek.current = startPosition;
       setLockScreenMetadata(resolved.song);
       if (shouldRecordHistory) {
         pendingHistoryRef.current = {
@@ -822,9 +824,11 @@ export function PlayerProvider({ children }: PropsWithChildren) {
             player.replace(nativeAudioSource(candidate.url, candidate.headers));
             activeStreamUrlRef.current = candidate.url;
             player.setPlaybackRate(rateRef.current);
+            player.seekTo(resumeAt).catch(() => {});
             pendingSeek.current = resumeAt;
             restoredPosition.current = resumeAt;
             lastKnownPositionRef.current = resumeAt;
+            currentTimeRef.current = resumeAt;
 
             const upgradedQueue = [...queueRef.current];
             upgradedQueue[indexRef.current] = normalizeSong(candidate.song as any);
@@ -1382,13 +1386,15 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     const current = Number(status.currentTime || 0);
     if (
       status.isLoaded &&
+      loadedTrackId.current === currentSong?.id &&
       pendingSeek.current == null &&
       Number.isFinite(current) &&
       current >= 0
     ) {
       lastKnownPositionRef.current = current;
+      currentTimeRef.current = current;
     }
-  }, [status.currentTime, status.isLoaded]);
+  }, [currentSong?.id, status.currentTime, status.isLoaded]);
 
   useEffect(() => {
     if (!status.playing || status.error) return;
@@ -1408,12 +1414,13 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   }, [recordHistory, status.error, status.playing]);
 
   useEffect(() => {
-    if (!status.isLoaded || pendingSeek.current == null) return;
+    if (!status.isLoaded || pendingSeek.current == null || loadedTrackId.current !== currentSong?.id) return;
     const target = pendingSeek.current;
     pendingSeek.current = null;
     lastKnownPositionRef.current = target;
+    currentTimeRef.current = target;
     player.seekTo(target).catch(() => {});
-  }, [player, status.isLoaded]);
+  }, [currentSong?.id, player, status.isLoaded]);
 
   useEffect(() => {
     const nativeDuration = Number(status.duration || 0);
@@ -1992,11 +1999,24 @@ export function PlayerProvider({ children }: PropsWithChildren) {
     listeningStats,
   }), [listeningStats]);
 
-  const progressValue = useMemo<PlaybackProgressValue>(() => ({
-    position: status.currentTime || restoredPosition.current || 0,
-    duration: status.duration || currentSong?.duration || 0,
-    sleepRemaining,
-  }), [currentSong?.duration, sleepRemaining, status.currentTime, status.duration]);
+  const progressValue = useMemo<PlaybackProgressValue>(() => {
+    let position = 0;
+    if (loadedTrackId.current === currentSong?.id && !isLoadingTrack) {
+      if (pendingSeek.current != null) {
+        position = pendingSeek.current;
+      } else {
+        position = Number(status.currentTime || 0);
+      }
+    } else {
+      position = Math.max(0, restoredPosition.current, lastKnownPositionRef.current);
+    }
+
+    return {
+      position,
+      duration: status.duration || currentSong?.duration || 0,
+      sleepRemaining,
+    };
+  }, [currentSong?.duration, sleepRemaining, status.currentTime, status.duration]);
 
   return (
     <PlayerContext.Provider value={value}>

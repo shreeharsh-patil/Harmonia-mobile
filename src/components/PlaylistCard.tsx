@@ -18,9 +18,9 @@ export const PlaylistCard = memo(function PlaylistCard({
   size?: number;
 }) {
   const name = playlist.name || playlist.title || 'Playlist';
-  const rawCount = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0);
-  const isSpotifyOrCurated = playlist.source === 'spotify' || playlist.catalogSource === 'bundled' || Boolean(playlist.sourceUrl?.includes('spotify'));
-  const songCount = rawCount <= 1 && isSpotifyOrCurated ? 50 : rawCount;
+  const rawCount = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0, playlist.tracks?.length || 0);
+  const isSpotifyOrCurated = playlist.source === 'spotify' || playlist.catalogSource === 'bundled' || Boolean(playlist.sourceUrl?.includes('spotify')) || Boolean(playlist.spotifyId);
+  const songCount = rawCount < 35 && isSpotifyOrCurated ? 50 : rawCount;
 
   // Keep Home playlist rails dense like Harmonia Web on mobile: roughly three
   // complete covers remain visible at once, while still honoring smaller sizes.

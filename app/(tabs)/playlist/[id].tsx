@@ -343,7 +343,8 @@ export default function PlaylistScreen() {
       ? (owned ? 'You' : 'Harmonia')
       : rawOwner;
 
-  const count = Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0, songs.length);
+  const isCuratedPlaylist = playlist.source === 'spotify' || playlist.catalogSource === 'bundled' || Boolean(playlist.sourceUrl?.includes('spotify')) || Boolean(playlist.spotifyId);
+  const count = songs.length || (isCuratedPlaylist ? 50 : Math.max(Number(playlist.songCount || 0), playlist.songIds?.length || 0));
   const contentBottomInset = getTabContentBottomInset(insets.bottom, Boolean(currentSong));
 
   const cleanDescription = (playlist.description || '')

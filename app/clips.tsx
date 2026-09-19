@@ -116,6 +116,11 @@ export default function ClipsScreen() {
   const userSwipeRef = useRef(false);
   const [songs, setSongs] = useState<Song[]>(() => currentSong ? [currentSong] : []);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [pageHeight, setPageHeight] = useState(height);
+
+  useEffect(() => {
+    setPageHeight(height);
+  }, [height]);
 
   useEffect(() => {
     currentSongRef.current = currentSong;
@@ -160,12 +165,22 @@ export default function ClipsScreen() {
           data={clips}
           pagingEnabled
           disableIntervalMomentum
+          decelerationRate="fast"
+          snapToAlignment="start"
+          bounces={false}
+          overScrollMode="never"
           showsVerticalScrollIndicator={false}
           initialNumToRender={1}
           maxToRenderPerBatch={1}
           windowSize={3}
           keyExtractor={(song) => String(song.id || song.songId)}
-          getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+          onLayout={(event) => {
+            const measuredHeight = Math.round(event.nativeEvent.layout.height);
+            if (measuredHeight > 0 && Math.abs(measuredHeight - pageHeight) > 1) {
+              setPageHeight(measuredHeight);
+            }
+          }}
+          getItemLayout={(_, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
           onScrollBeginDrag={() => {
             userSwipeRef.current = true;
           }}
@@ -174,10 +189,10 @@ export default function ClipsScreen() {
             // Only a real touch gesture is allowed to advance clips/playback.
             if (!userSwipeRef.current) return;
             userSwipeRef.current = false;
-            const nextIndex = Math.round(event.nativeEvent.contentOffset.y / Math.max(1, height));
+            const nextIndex = Math.round(event.nativeEvent.contentOffset.y / Math.max(1, pageHeight));
             setActiveIndex((current) => current === nextIndex ? current : nextIndex);
           }}
-          renderItem={({ item, index }) => <ClipCard song={item} active={index === activeIndex} height={height} />}
+          renderItem={({ item, index }) => <ClipCard song={item} active={index === activeIndex} height={pageHeight} />}
         />
       ) : (
         <SafeAreaView style={styles.empty}>

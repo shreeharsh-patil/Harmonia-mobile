@@ -175,8 +175,8 @@ export default function LibraryScreen() {
     const id = String(item.id || item._id || '');
     const liked = id === 'liked-songs';
     const rawCount = liked ? likedSongs.length : (item.songCount ?? item.songIds?.length ?? 0);
-    const isSpotifyOrCurated = item.source === 'spotify' || item.catalogSource === 'bundled' || Boolean((item as any).sourceUrl?.includes('spotify'));
-    const count = !liked && rawCount <= 1 && isSpotifyOrCurated ? 50 : rawCount;
+    const isSpotifyOrCurated = item.source === 'spotify' || item.catalogSource === 'bundled' || Boolean((item as any).sourceUrl?.includes('spotify')) || Boolean(item.spotifyId);
+    const count = !liked && rawCount < 35 && isSpotifyOrCurated ? 50 : rawCount;
 
     if (viewMode === 'list') {
       return (
