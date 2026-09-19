@@ -25,6 +25,7 @@ import {
 } from '@/src/lib/api';
 import { albumTitle, entityImageUrl } from '@/src/lib/entities';
 import { getStaticHomeSections } from '@/src/lib/staticCatalog';
+import { selectHomeShelves } from '@/src/lib/homeSections';
 import { artistNames } from '@/src/lib/song';
 import { RAIL_BATCH_SIZE, RAIL_INITIAL_RENDER, RAIL_WINDOW_SIZE } from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
@@ -101,6 +102,7 @@ export default function HomeScreen() {
   const recentRefreshInFlightRef = useRef(false);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
+  const homeShelves = useMemo(() => selectHomeShelves(sections), [sections]);
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -280,8 +282,8 @@ export default function HomeScreen() {
   }, []);
 
   const featuredFallback = useMemo(
-    () => sections.flatMap((section) => section.playlists || []).slice(0, 5),
-    [sections]
+    () => homeShelves.flatMap((section) => section.playlists || []).slice(0, 5),
+    [homeShelves]
   );
 
   const quickPlaylists = useMemo(
@@ -294,7 +296,7 @@ export default function HomeScreen() {
   }, [playSong, recentSongs]);
 
   const hasContent =
-    sections.some((section) => Array.isArray(section.playlists) && section.playlists.length > 0) ||
+    homeShelves.some((section) => Array.isArray(section.playlists) && section.playlists.length > 0) ||
     recentSongs.length > 0 ||
     recentPlaylists.length > 0 ||
     trendingAlbums.length > 0 ||
@@ -341,7 +343,7 @@ export default function HomeScreen() {
       </View>
 
       <FlatList<MusicSection>
-        data={sections}
+        data={homeShelves}
         keyExtractor={(section, index) => String(section.id || section._id || `${section.name}-${index}`)}
         initialNumToRender={6}
         maxToRenderPerBatch={6}

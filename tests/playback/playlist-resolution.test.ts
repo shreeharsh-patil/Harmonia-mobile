@@ -1,6 +1,36 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+test('Home pins the requested Spotify catalog shelves in listening order', async () => {
+  const { selectHomeShelves } = await import('../../src/lib/homeSections');
+  const section = (name: string, genreName: string) => ({
+    name,
+    genreName,
+    playlists: [{ id: `${name}-${genreName}`, name: `${name} playlist` }],
+  });
+  const shelves = selectHomeShelves([
+    section('Top Hits', 'English'),
+    section('All Things Pop', 'Pop'),
+    section('New & Trending', 'English'),
+    section('Popular Party playlists', 'Hindi'),
+    section('Chill & Sad', 'Hindi'),
+    section('Bollywood Romance', 'Hindi'),
+    section('New & Trending', 'Hindi'),
+    section('Popular Hindi Playlists', 'Hindi'),
+  ] as any);
+
+  assert.deepEqual(shelves.map((shelf) => shelf.name), [
+    'Popular Hindi Playlists',
+    'New & Trending',
+    'Bollywood Romance',
+    'Chill & Sad',
+    'Popular Party Playlists',
+    'English Top Hits',
+    'English New & Trending',
+    'Pop Essentials',
+  ]);
+});
+
 test('home sections prefer every Spotify playlist returned by the database', async () => {
   const { selectDatabaseSpotifySections } = await import('../../src/lib/homeSections');
   const sections = selectDatabaseSpotifySections([

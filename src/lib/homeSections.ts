@@ -1,5 +1,46 @@
 import type { MusicSection, Playlist } from '@/src/types';
 
+const HOME_SHELF_SPECS = [
+  { label: 'Popular Hindi Playlists', title: 'popular hindi playlists', genre: 'hindi' },
+  { label: 'New & Trending', title: 'new trending', genre: 'hindi' },
+  { label: 'Bollywood Romance', title: 'bollywood romance' },
+  { label: 'Chill & Sad', title: 'chill sad' },
+  { label: 'Popular Party Playlists', title: 'popular party playlists', genre: 'hindi' },
+  { label: 'English Top Hits', title: 'top hits', genre: 'english' },
+  { label: 'English New & Trending', title: 'new trending', genre: 'english' },
+  { label: 'Pop Essentials', title: 'all things pop', genre: 'pop' },
+] as const;
+
+function shelfKey(value: unknown) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Home intentionally shows a concise, music-first collection instead of all
+ * bundled catalog sections. These shelves mirror the curated Hindi, English,
+ * romance, chill, party, and pop rows supplied with Harmonia's Spotify feed.
+ */
+export function selectHomeShelves(sections: MusicSection[] = []) {
+  const used = new Set<MusicSection>();
+
+  return HOME_SHELF_SPECS.flatMap((spec) => {
+    const candidates = sections
+      .filter((section) => !used.has(section) && shelfKey(section.name) === spec.title)
+      .sort((a, b) => {
+        const aGenre = shelfKey((a as any).genreName) === spec.genre ? 1 : 0;
+        const bGenre = shelfKey((b as any).genreName) === spec.genre ? 1 : 0;
+        return bGenre - aGenre || (b.playlists?.length || 0) - (a.playlists?.length || 0);
+      });
+    const chosen = candidates[0];
+    if (!chosen) return [];
+    used.add(chosen);
+    return [{ ...chosen, name: spec.label }];
+  });
+}
+
 function isSpotifyPlaylist(playlist: Playlist) {
   const raw = playlist as any;
   const source = String(
