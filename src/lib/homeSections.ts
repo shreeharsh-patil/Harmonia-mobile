@@ -1,19 +1,18 @@
 import type { MusicSection, Playlist } from '@/src/types';
 
 const HOME_SHELF_SPECS = [
-  { label: 'Popular Hindi Playlists', title: 'popular hindi playlists', genre: 'hindi' },
-  { label: 'New & Trending', title: 'new trending', genre: 'hindi' },
+  { label: 'Popular Hindi Playlists', title: 'popular hindi playlists', genre: 'hindi', sectionId: '6a033dd076732f7db81ee4da' },
+  { label: 'New & Trending', title: 'new trending', genre: 'hindi', sectionId: '6a0348173bcc78e22f236fdb' },
   { label: 'Bollywood Romance', title: 'bollywood romance', sectionId: '6a04102c17b699631f90592a' },
   { label: '90s Love & Nostalgia', title: 'popular 90s playlists', genre: 'decades' },
-  { label: 'Chill & Sad', title: 'chill sad' },
+  { label: 'Chill & Sad', title: 'chill sad', sectionId: '6a041b0d17b699631f905947' },
   { label: 'Popular Punjabi Playlists', title: 'popular punjabi playlists', genre: 'punjabi' },
   { label: 'Popular Telugu Playlists', title: 'popular telugu playlists', genre: 'telugu' },
-  { label: 'Popular Party Playlists', title: 'popular party playlists', genre: 'hindi' },
+  { label: 'Popular Party Playlists', title: 'popular party playlists', sectionId: '6a38b276d0a0b98c1b5c1fd8' },
   { label: 'Dance & Electronic', title: 'popular dance electronic playlists', genre: 'dance electronic' },
   { label: 'English Top Hits', title: 'top hits', genre: 'english' },
   { label: 'English New & Trending', title: 'new trending', genre: 'english' },
-  { label: 'Global Pop Hits', title: 'pop hits', genre: 'english' },
-  { label: 'Pop Essentials', title: 'all things pop', genre: 'pop' },
+  { label: 'Pop Essentials', title: 'pop hits', genre: 'english', sectionId: '6a0680775b5c126be7357acc' },
 ] as const;
 
 function shelfKey(value: unknown) {

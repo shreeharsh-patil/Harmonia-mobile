@@ -36,7 +36,6 @@ test('Home pins the requested Spotify catalog shelves in listening order', async
     'Dance & Electronic',
     'English Top Hits',
     'English New & Trending',
-    'Global Pop Hits',
     'Pop Essentials',
   ]);
 });
