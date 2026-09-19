@@ -486,7 +486,12 @@ export default function PlaylistScreen() {
                   style={({ pressed }) => [styles.controlArtwork, pressed && styles.pressed]}
                   accessibilityLabel="Open Music Clips"
                 >
-                  <PlaylistArtwork playlist={playlist} size={48} radius={5} tracks={songs} />
+                  <View style={styles.clipsArtworkStack}>
+                    <View style={styles.clipsArtworkBack} />
+                    <View style={styles.clipsArtworkFront}>
+                      <PlaylistArtwork playlist={playlist} size={48} radius={5} tracks={songs} />
+                    </View>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -731,11 +736,30 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   controlArtwork: {
+    width: 56,
+    height: 48,
+    marginRight: 2,
+  },
+  clipsArtworkStack: { width: 56, height: 48, position: 'relative', justifyContent: 'center' },
+  clipsArtworkBack: {
+    position: 'absolute',
+    right: 0,
+    top: 5,
+    width: 42,
+    height: 41,
+    borderRadius: 7,
+    backgroundColor: '#AAB9CC',
+  },
+  clipsArtworkFront: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
     width: 48,
     height: 48,
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
-    marginRight: 2,
+    borderWidth: 2,
+    borderColor: '#E7EEF8',
   },
   playButtonCircle: {
     width: 52,
