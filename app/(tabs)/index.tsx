@@ -398,6 +398,14 @@ export default function HomeScreen() {
 
             {!loading && (
               <>
+                {!!trendingAlbums.length && (
+                  <AlbumRail
+                    title="Trending albums"
+                    albums={trendingAlbums}
+                    onPress={openAlbum}
+                  />
+                )}
+
                 {!!trendingSongs.length && (
                   <StartListeningList
                     songs={trendingSongs}
@@ -407,14 +415,6 @@ export default function HomeScreen() {
                       if (String(currentSong?.id || '') === String(song.id || '')) void togglePlayback();
                       else void playSong(song, trendingSongs);
                     }}
-                  />
-                )}
-
-                {!!trendingAlbums.length && (
-                  <AlbumRail
-                    title="Trending albums"
-                    albums={trendingAlbums}
-                    onPress={openAlbum}
                   />
                 )}
 
