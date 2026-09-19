@@ -1562,6 +1562,17 @@ export async function resolvePlayableSong(
 
 const playlistSongsCache = new Map<string, { songs: Song[]; timestamp: number }>();
 
+function hasPlaylistTrackMetadata(song: Song) {
+  const title = String(song.name || song.title || song.songName || '').trim();
+  return Boolean(song.id && title && !/^unknown track$/i.test(title));
+}
+
+function normalizePlaylistTracks(tracks: unknown[]) {
+  return tracks
+    .map((track) => normalizeSong(track as any))
+    .filter(hasPlaylistTrackMetadata);
+}
+
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
   const attemptedSongIds = new Set<string>();
   const resolveSongIds = async (ids: unknown[]) => {
@@ -1587,7 +1598,11 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
   const resolve = async (): Promise<Song[]> => {
     // 1. If playlist already contains a full tracklist (>= 35 songs), return immediately
     if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 35) {
-      return playlist.tracks.map((song) => normalizeSong(song as any));
+      const tracks = normalizePlaylistTracks(playlist.tracks);
+      // Some catalog summaries contain only Spotify IDs. They look like a
+      // complete tracklist by count, but have no title/artist to render or
+      // play. Continue to a provider-backed hydration in that case.
+      if (tracks.length === playlist.tracks.length) return tracks;
     }
     if (Array.isArray(playlist.songIds) && playlist.songIds.length >= 35) {
       const songs = await resolveSongIds(playlist.songIds);
@@ -1608,10 +1623,11 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
             ? value.songs
             : [];
         if (rawTracks.length) {
-          return rawTracks.map((track: any) => {
+          const tracks = rawTracks.map((track: any) => {
             const mappedId = trackMap[track.id] || track.id;
             return normalizeSong({ ...track, id: mappedId });
           });
+          if (tracks.length === rawTracks.length && tracks.every(hasPlaylistTrackMetadata)) return tracks;
         }
       } catch {}
 
@@ -1627,10 +1643,11 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
             ? value.songs
             : [];
         if (rawTracks.length) {
-          return rawTracks.map((track: any) => {
+          const tracks = rawTracks.map((track: any) => {
             const mappedId = trackMap[track.id] || track.id;
             return normalizeSong({ ...track, id: mappedId });
           });
+          if (tracks.length === rawTracks.length && tracks.every(hasPlaylistTrackMetadata)) return tracks;
         }
       } catch {}
     }
@@ -1674,17 +1691,18 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     // 5. Bundled catalog tracks if >= 30
     const bundled = findBundledPlaylistFor(playlist);
     if (bundled?.tracks?.length && bundled.tracks.length >= 30) {
-      return bundled.tracks.map((song) => normalizeSong(song as any));
+      const tracks = normalizePlaylistTracks(bundled.tracks);
+      if (tracks.length === bundled.tracks.length) return tracks;
     }
 
     // 6. Initial songs from memory / songIds / bundled
     let initialSongs: Song[] = [];
     if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
-      initialSongs = playlist.tracks.map((song) => normalizeSong(song as any));
+      initialSongs = normalizePlaylistTracks(playlist.tracks);
     } else if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
       initialSongs = await resolveSongIds(playlist.songIds);
     } else if (bundled?.tracks?.length) {
-      initialSongs = bundled.tracks.map((song) => normalizeSong(song as any));
+      initialSongs = normalizePlaylistTracks(bundled.tracks);
     }
 
     // If initial songs already has >= 35 full tracks, return
