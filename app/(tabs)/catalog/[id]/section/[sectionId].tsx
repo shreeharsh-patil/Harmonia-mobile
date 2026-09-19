@@ -17,6 +17,7 @@ import { CatalogSectionSkeleton } from '@/src/components/CatalogSectionSkeleton'
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
   fetchBrowseCatalogSections,
+  browseCatalogGradient,
   getBrowseCatalog,
   type CatalogSection,
 } from '@/src/lib/browseCatalog';
@@ -91,8 +92,8 @@ export default function CatalogSectionScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: catalog.color }]} edges={['top']}>
       <LinearGradient
-        colors={[catalog.color, '#211923', '#080808']}
-        locations={[0, 0.58, 1]}
+        colors={browseCatalogGradient(catalog)}
+        locations={[0, 0.3, 0.7, 1]}
         style={styles.header}
       >
         <Pressable
@@ -152,7 +153,7 @@ export default function CatalogSectionScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#080808' },
   header: { minHeight: 124, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 16, flexDirection: 'row', alignItems: 'flex-start' },
-  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.22)' },
+  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)' },
   headerCopy: { flex: 1, minWidth: 0, alignSelf: 'flex-end', marginLeft: 12 },
   catalogName: { color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.2 },
   title: { color: '#FFF', fontSize: 28, lineHeight: 33, fontWeight: '900', letterSpacing: -0.8, marginTop: 3 },

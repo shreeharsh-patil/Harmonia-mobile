@@ -97,6 +97,22 @@ export function browseCatalogColor(catalog: BrowseCatalog) {
     : catalog.color;
 }
 
+/**
+ * A soft, category-specific hero gradient for the Search catalog pages.
+ * Every stop is derived from the catalog artwork tone, avoiding a harsh
+ * transition into a fixed color that can clash with genres such as Hindi,
+ * RADAR, Chill, or Pop.
+ */
+export function browseCatalogGradient(catalog: BrowseCatalog) {
+  const base = browseCatalogColor(catalog);
+  return [
+    base,
+    blendHexColors(base, '#111218', 0.36),
+    blendHexColors(base, '#080808', 0.74),
+    '#080808',
+  ] as const;
+}
+
 export type CatalogItem =
   | { kind: 'playlist'; data: Playlist }
   | { kind: 'album'; data: HarmoniaAlbum };

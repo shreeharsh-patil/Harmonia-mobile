@@ -17,6 +17,7 @@ import { CatalogEntityCard } from '@/src/components/CatalogEntityCard';
 import { getTabContentBottomInset } from '@/src/components/MiniPlayer';
 import {
   fetchBrowseCatalogSections,
+  browseCatalogGradient,
   getBrowseCatalog,
   type CatalogSection,
 } from '@/src/lib/browseCatalog';
@@ -117,8 +118,8 @@ export default function BrowseCatalogScreen() {
         contentContainerStyle={{ paddingBottom: contentBottomInset }}
       >
         <LinearGradient
-          colors={[catalog.color, '#211923', '#080808']}
-          locations={[0, 0.52, 1]}
+          colors={browseCatalogGradient(catalog)}
+          locations={[0, 0.28, 0.68, 1]}
           style={styles.hero}
         >
           <Pressable
@@ -222,14 +223,14 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#080808' },
   scroll: { backgroundColor: '#080808' },
   hero: { height: 214, paddingHorizontal: 18, paddingTop: 4, paddingBottom: 24, justifyContent: 'space-between' },
-  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.22)' },
-  heroTitle: { color: '#FFF', fontSize: 54, lineHeight: 60, fontWeight: '900', letterSpacing: -2.2, textShadowColor: 'rgba(0,0,0,0.18)', textShadowRadius: 14, textShadowOffset: { width: 0, height: 3 } },
+  backButton: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)' },
+  heroTitle: { color: '#FFF', fontSize: 54, lineHeight: 60, fontWeight: '900', letterSpacing: -2.2, textShadowColor: 'rgba(0,0,0,0.28)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 3 } },
   sections: { paddingTop: 20 },
   section: { marginBottom: 34 },
   sectionHeader: { minHeight: 36, paddingHorizontal: 16, marginBottom: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   sectionTitle: { flex: 1, color: '#EAEAF0', fontSize: 22, lineHeight: 27, fontWeight: '900', letterSpacing: -0.55 },
   showAllButton: { minHeight: 40, justifyContent: 'center', paddingLeft: 10 },
-  showAllText: { color: '#A6A6AA', fontSize: 14, fontWeight: '800' },
+  showAllText: { color: '#BABAC0', fontSize: 14, fontWeight: '800' },
   rail: { paddingHorizontal: 16, paddingRight: 0 },
   railCard: { marginRight: CARD_GAP },
   errorBox: { marginHorizontal: 16, borderRadius: 14, padding: 16, backgroundColor: '#171010', alignItems: 'flex-start' },
