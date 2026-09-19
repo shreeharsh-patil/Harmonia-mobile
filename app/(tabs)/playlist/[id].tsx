@@ -119,26 +119,48 @@ export default function PlaylistScreen() {
 
     try {
       const detail = await fetchPlaylistDetails(id, token);
-      const nextSongs = await fetchPlaylistSongs(detail);
       if (generation !== loadGenerationRef.current) return;
 
-      const enrichedDetail: Playlist = {
+      // Paint the playlist hero as soon as its stable metadata is available.
+      // Track providers can be slower or temporarily reject a request; that
+      // must not turn a valid Home card into a "Playlist unavailable" screen.
+      const initialTracks = Array.isArray(detail.tracks)
+        ? detail.tracks
+        : Array.isArray((detail as any).songs)
+          ? (detail as any).songs
+          : [];
+      const initialDetail: Playlist = {
         ...detail,
-        tracks: nextSongs.length ? nextSongs : detail.tracks,
-        songs: nextSongs.length ? nextSongs : (detail as any).songs,
-        songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, nextSongs.length),
+        tracks: initialTracks,
+        songs: initialTracks,
+        songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, initialTracks.length),
       };
-
-      setPlaylist(enrichedDetail);
-      setDraftName(playlistTitle(enrichedDetail));
-      setDraftDescription(String(enrichedDetail.description || ''));
-      setSongs(nextSongs);
+      setPlaylist(initialDetail);
+      setDraftName(playlistTitle(initialDetail));
+      setDraftDescription(String(initialDetail.description || ''));
+      setSongs(initialTracks);
 
       if (token) {
         void trackRecentlyPlayedPlaylist(token, {
           ...detail,
-          songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, nextSongs.length),
+          songCount: initialDetail.songCount,
         }).catch(() => {});
+      }
+
+      try {
+        const nextSongs = await fetchPlaylistSongs(detail);
+        if (generation !== loadGenerationRef.current) return;
+        const enrichedDetail: Playlist = {
+          ...detail,
+          tracks: nextSongs.length ? nextSongs : initialTracks,
+          songs: nextSongs.length ? nextSongs : initialTracks,
+          songCount: Math.max(Number(detail.songCount || 0), detail.songIds?.length || 0, nextSongs.length, initialTracks.length),
+        };
+        setPlaylist(enrichedDetail);
+        setSongs(nextSongs.length ? nextSongs : initialTracks);
+      } catch {
+        // Keep the usable metadata and any embedded tracks on screen. Pull to
+        // refresh retries provider resolution without breaking navigation.
       }
     } catch (cause: any) {
       if (generation === loadGenerationRef.current) {
@@ -479,6 +501,10 @@ export default function PlaylistScreen() {
             >
               <Animated.View style={[styles.artworkContainer, { transform: [{ scale: artworkScale }] }]}>
                 <PlaylistArtwork playlist={playlist} size={224} radius={18} tracks={songs} />
+                <View pointerEvents="none" style={styles.artworkTitleShade} />
+                <Text numberOfLines={2} style={styles.artworkTitleOverlay}>
+                  {playlistTitle(playlist)}
+                </Text>
               </Animated.View>
 
               <View style={styles.heroCopy}>
@@ -518,7 +544,6 @@ export default function PlaylistScreen() {
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.title}>{playlistTitle(playlist)}</Text>
                     {!!cleanDescription && (
                       <Text style={styles.description} numberOfLines={2}>
                         {cleanDescription}
@@ -739,6 +764,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   artworkContainer: {
+    width: 224,
+    height: 224,
     marginTop: 8,
     marginBottom: 18,
     shadowColor: '#000',
@@ -746,6 +773,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 12,
+    overflow: 'hidden',
+    borderRadius: 18,
+  },
+  artworkTitleShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 94,
+    backgroundColor: 'rgba(0,0,0,0.36)',
+  },
+  artworkTitleOverlay: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 13,
+    color: '#FFFFFF',
+    fontSize: 27,
+    lineHeight: 31,
+    fontWeight: '900',
+    letterSpacing: -0.8,
   },
   heroCopy: { alignItems: 'flex-start', width: '100%' },
   title: {
