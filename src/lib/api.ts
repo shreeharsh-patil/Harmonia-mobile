@@ -1123,6 +1123,30 @@ export async function fetchArtistAlbums(id: string, limit = 30): Promise<Harmoni
   }));
 }
 
+function playlistLookupIds(playlist: any): string[] {
+  const sourceUrl = String(
+    playlist.sourceUrl || playlist.source_url || playlist.spotifyUrl || playlist.url || ''
+  );
+  const spotifyId = sourceUrl.match(/open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/i)?.[1] || '';
+  return [...new Set([
+    playlist.id,
+    playlist._id,
+    playlist.spotifyId,
+    playlist.spotify_id,
+    playlist.sourceId,
+    playlist.source_id,
+    spotifyId,
+  ].map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function findBundledPlaylistFor(playlist: any): Playlist | null {
+  for (const candidate of playlistLookupIds(playlist)) {
+    const bundled = findStaticPlaylist(candidate);
+    if (bundled) return bundled;
+  }
+  return null;
+}
+
 export async function fetchPlaylistDetails(id: string, token?: string | null): Promise<Playlist> {
   if (token && hasHarmoniaApi()) {
     try {
@@ -1135,6 +1159,11 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
       if (error instanceof ApiError && error.status === 401) throw error;
     }
   }
+
+  // Home cards are backed by the bundled catalog. Resolve this before a
+  // direct-provider request as well: some provider playlist ids are numeric.
+  const bundled = findBundledPlaylistFor({ id, _id: id });
+  if (bundled) return bundled;
 
   if (id && (/^\d+$/.test(id) || id.startsWith('direct-'))) {
     const direct = await fetchDirectJioSaavnPlaylist(id.replace('direct-', ''));
@@ -1156,6 +1185,16 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
   }
 
   if (hasHarmoniaApi()) {
+    // Catalog cards carry a database id even when their source is Spotify.
+    // This endpoint contains the imported trackMap/tracks and is far faster
+    // than re-scraping the public Spotify page on every open.
+    try {
+      const payload = await requestJson<{ success: true; data: Playlist }>(
+        `/api/playlists/${encodeURIComponent(id)}`
+      );
+      if (payload.data) return payload.data;
+    } catch {}
+
     // 1. Harmonia Web database playlist endpoint
     try {
       const payload = await requestJson<{ success: true; data: Playlist }>(
@@ -1198,9 +1237,6 @@ export async function fetchPlaylistDetails(id: string, token?: string | null): P
       catalogSource: 'provider',
     };
   }
-
-  const bundled = findStaticPlaylist(id);
-  if (bundled) return bundled;
 
   throw new ApiError('Playlist is unavailable.', 404);
 }
@@ -1539,6 +1575,40 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
     if (songs.length >= 25) return songs;
   }
 
+  // Catalog tracks are local and already normalized.  Prefer them before any
+  // network fallback, including when a backend represents the same Spotify
+  // playlist with a database id instead of its public Spotify id.
+  const bundled = findBundledPlaylistFor(playlist);
+  if (bundled?.tracks?.length) {
+    return bundled.tracks.map((song) => normalizeSong(song as any));
+  }
+
+  // Catalog playlists are stored by database id while preserving Spotify as
+  // their source. Get the already-imported tracks first; otherwise the old
+  // path could wait on a Spotify scrape and briefly render an empty playlist.
+  if (hasHarmoniaApi() && id) {
+    try {
+      const payload = await requestJson<{ success: true; data: any }>(
+        `/api/playlists/${encodeURIComponent(id)}`,
+        { timeoutMs: 8_000 }
+      );
+      const value = payload.data || {};
+      const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
+      const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
+        ? value.tracks
+        : (Array.isArray(value.songs) && value.songs.length)
+          ? value.songs
+          : [];
+
+      if (rawTracks.length) {
+        return rawTracks.map((track: any) => normalizeSong({
+          ...track,
+          id: trackMap[track.id] || track.id,
+        }));
+      }
+    } catch {}
+  }
+
   // 2. Direct JioSaavn playlist by numeric ID (fetches all 50-100 full tracks directly)
   if (id && (/^\d+$/.test(id) || playlist.source === 'jiosaavn')) {
     const direct = await fetchDirectJioSaavnPlaylist(id);
@@ -1672,14 +1742,14 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
 
   // 9. Check bundled static catalog / small tracklists as fallback
   if (id) {
-    const bundled = findStaticPlaylist(id);
-    if (bundled?.tracks?.length) {
-      const bundledTracks = bundled.tracks.map((song) => normalizeSong(song as any));
+    const bundledFallback = findBundledPlaylistFor(playlist);
+    if (bundledFallback?.tracks?.length) {
+      const bundledTracks = bundledFallback.tracks.map((song) => normalizeSong(song as any));
       if (bundledTracks.length >= 25) return bundledTracks;
       return populateSpotifyPlaylistSongs(playlist, bundledTracks, 30);
     }
-    if (bundled?.songIds?.length) {
-      const songs = await resolveSongIds(bundled.songIds);
+    if (bundledFallback?.songIds?.length) {
+      const songs = await resolveSongIds(bundledFallback.songIds);
       if (songs.length >= 25) return songs;
       if (songs.length) return populateSpotifyPlaylistSongs(playlist, songs, 30);
     }

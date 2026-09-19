@@ -266,8 +266,45 @@ test('playlist loading continues to catalog details when summary song IDs do not
     assert.ok(requests.includes('https://catalog.test/api/playlists/catalog-playlist'));
     assert.equal(
       requests.filter((url) => url.startsWith('https://catalog.test/api/songs?')).length,
-      1,
+      0,
+      'Imported playlist tracks should be requested before unresolved summary ids.'
     );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousApiUrl === undefined) delete process.env.EXPO_PUBLIC_HARMONIA_API_URL;
+    else process.env.EXPO_PUBLIC_HARMONIA_API_URL = previousApiUrl;
+  }
+});
+
+test('Spotify catalog playlists fetch imported backend tracks before scrape fallbacks', async () => {
+  const previousApiUrl = process.env.EXPO_PUBLIC_HARMONIA_API_URL;
+  const previousFetch = globalThis.fetch;
+  const requests: string[] = [];
+  process.env.EXPO_PUBLIC_HARMONIA_API_URL = 'https://catalog-fast.test';
+
+  globalThis.fetch = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    requests.push(url);
+    if (url === 'https://catalog-fast.test/api/playlists/catalog-db-id') {
+      return Response.json({
+        success: true,
+        data: { tracks: [{ id: 'catalog-track', name: 'Imported track', artist: 'Harmonia' }] },
+      });
+    }
+    throw new Error(`Unexpected slow fallback: ${url}`);
+  };
+
+  try {
+    const { fetchPlaylistSongs } = await import('../../src/lib/api');
+    const songs = await fetchPlaylistSongs({
+      id: 'catalog-db-id',
+      name: 'Catalog Playlist',
+      source: 'spotify',
+      sourceUrl: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M',
+    });
+
+    assert.deepEqual(songs.map((song) => song.id), ['catalog-track']);
+    assert.deepEqual(requests, ['https://catalog-fast.test/api/playlists/catalog-db-id']);
   } finally {
     globalThis.fetch = previousFetch;
     if (previousApiUrl === undefined) delete process.env.EXPO_PUBLIC_HARMONIA_API_URL;
