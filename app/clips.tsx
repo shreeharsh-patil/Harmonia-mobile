@@ -126,7 +126,21 @@ const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }
 
   return (
     <View style={[styles.clip, { height, backgroundColor: palette.secondary }]}>
-      {!!cover && <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} blurRadius={28} contentFit="cover" transition={0} />}
+      <LinearGradient
+        colors={[palette.dominant, palette.secondary, '#060606']}
+        locations={[0, 0.48, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      {!canvasUrl && !!cover && (
+        <Image
+          source={{ uri: cover }}
+          style={[StyleSheet.absoluteFill, styles.backdropArtwork]}
+          blurRadius={34}
+          contentFit="cover"
+          transition={0}
+          cachePolicy="memory-disk"
+        />
+      )}
       <View style={styles.backdropShade} />
       {!!canvasUrl && active && <ClipVideo url={canvasUrl} active />}
       {!canvasUrl && (
@@ -152,7 +166,7 @@ const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }
           </View>
         </View>
       )}
-      <LinearGradient colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.20)', 'rgba(0,0,0,0.92)']} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(0,0,0,0.02)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0.9)']} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFill} />
 
       <SafeAreaView style={styles.clipSafe} edges={['top', 'bottom']}>
         <View style={styles.clipHeader}>
@@ -302,7 +316,8 @@ export default function ClipsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#050505' },
   clip: { width: '100%', overflow: 'hidden', backgroundColor: '#090909' },
-  backdropShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.58)' },
+  backdropShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.12)' },
+  backdropArtwork: { opacity: 0.16 },
   fallbackStage: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   fallbackHalo: { position: 'absolute', width: '88%', aspectRatio: 1, borderRadius: 999, opacity: 0.48, transform: [{ scale: 1.25 }] },
   artworkFrame: { width: '68%', maxWidth: 360, aspectRatio: 1, borderRadius: 22, overflow: 'hidden', elevation: 18, shadowColor: '#000', shadowOpacity: 0.42, shadowRadius: 22, shadowOffset: { width: 0, height: 14 } },
