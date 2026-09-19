@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   LayoutChangeEvent,
   Platform,
   Pressable,
@@ -180,6 +181,106 @@ const PlaybackTimeline = memo(function PlaybackTimeline({
 });
 
 /**
+ * Single animated lyric line — opacity and scale run on the native thread
+ * via Animated.spring, matching Apple Music's characteristic smooth falloff.
+ * Lines far from the active one fade toward invisible; the active line sits
+ * at full brightness with its words highlighted word-by-word.
+ */
+const AnimatedLyricLine = memo(function AnimatedLyricLine({
+  line,
+  index,
+  activeLine,
+  activeWord,
+  onPress,
+  onLayout,
+}: {
+  line: LyricLine;
+  index: number;
+  activeLine: number;
+  activeWord: number;
+  onPress: () => void;
+  onLayout: (y: number, height: number) => void;
+}) {
+  const opacityAnim = useRef(new Animated.Value(0.14)).current;
+  const scaleAnim = useRef(new Animated.Value(0.97)).current;
+
+  const active = index === activeLine;
+  const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
+
+  const targetOpacity = active
+    ? 1
+    : distance === 1
+      ? 0.52
+      : distance === 2
+        ? 0.28
+        : distance === 3
+          ? 0.16
+          : 0.09;
+
+  const targetScale = active ? 1 : distance === 1 ? 0.99 : 0.975;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(opacityAnim, {
+        toValue: targetOpacity,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 12,
+        overshootClamping: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: targetScale,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 12,
+        overshootClamping: true,
+      }),
+    ]).start();
+  }, [targetOpacity, targetScale, opacityAnim, scaleAnim]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onLayout={(event) => {
+        onLayout(event.nativeEvent.layout.y, event.nativeEvent.layout.height);
+      }}
+      style={styles.lyricsOverlayLineTap}
+    >
+      <Animated.Text
+        style={[
+          styles.lyricsOverlayLine,
+          active && styles.lyricsOverlayLineActive,
+          {
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        {line.words?.length
+          ? line.words.map((word, wordIndex) => {
+              const isPast = active && wordIndex < activeWord;
+              const isCurrent = active && wordIndex === activeWord;
+              const isPending = active && wordIndex > activeWord;
+              return (
+                <Text
+                  key={`${word.time}-${wordIndex}`}
+                  style={[
+                    isPending ? styles.lyricsOverlayWordPending : undefined,
+                    isPast ? styles.lyricsOverlayWordActive : undefined,
+                    isCurrent ? styles.lyricsOverlayWordCurrent : undefined,
+                  ]}
+                >
+                  {word.text}
+                </Text>
+              );
+            })
+          : line.text}
+      </Animated.Text>
+    </Pressable>
+  );
+});
+
+/**
  * Synced-lyrics line list. Position is consumed here (inside the lyrics
  * overlay only) and the resolved active line is reported upward for the
  * auto-scroll effect, so per-tick karaoke updates never re-render the
@@ -209,60 +310,19 @@ const LyricLines = memo(function LyricLines({
 
   return (
     <>
-      {lines.map((line, index) => {
-        const active = index === activeLine;
-        const distance = activeLine < 0 ? 3 : Math.abs(index - activeLine);
-        const opacity = active
-          ? 1
-          : distance === 1
-            ? 0.55
-            : distance === 2
-              ? 0.35
-              : distance === 3
-                ? 0.24
-                : 0.14;
-        const scale = active ? 1 : distance === 1 ? 0.99 : 0.97;
-
-        return (
-          <Pressable
-            key={`${line.time}-${index}`}
-            onPress={() => onLinePress(line.time)}
-            onLayout={(event) => {
-              lyricLineLayouts.current[index] = {
-                y: event.nativeEvent.layout.y,
-                height: event.nativeEvent.layout.height,
-              };
-            }}
-            style={styles.lyricsOverlayLineTap}
-          >
-            <Text
-              style={[
-                styles.lyricsOverlayLine,
-                active && styles.lyricsOverlayLineActive,
-                {
-                  opacity,
-                  transform: [{ scale }],
-                },
-              ]}
-            >
-              {line.words?.length
-                ? line.words.map((word, wordIndex) => (
-                    <Text
-                      key={`${word.time}-${wordIndex}`}
-                      style={[
-                        active ? styles.lyricsOverlayWordPending : undefined,
-                        active && wordIndex <= activeWord ? styles.lyricsOverlayWordActive : undefined,
-                        active && wordIndex === activeWord ? styles.lyricsOverlayWordCurrent : undefined,
-                      ]}
-                    >
-                      {word.text}
-                    </Text>
-                  ))
-                : line.text}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {lines.map((line, index) => (
+        <AnimatedLyricLine
+          key={`${line.time}-${index}`}
+          line={line}
+          index={index}
+          activeLine={activeLine}
+          activeWord={activeWord}
+          onPress={() => onLinePress(line.time)}
+          onLayout={(y, height) => {
+            lyricLineLayouts.current[index] = { y, height };
+          }}
+        />
+      ))}
     </>
   );
 });
@@ -1302,25 +1362,30 @@ const styles = StyleSheet.create({
   lyricsOverlayLine: {
     width: '100%',
     color: '#FFF',
-    fontSize: 29,
-    lineHeight: 36,
+    fontSize: 31,
+    lineHeight: 38,
     fontWeight: '750' as any,
     fontFamily: PLAYER_FONT,
     letterSpacing: -0.5,
     textAlign: 'left',
   },
   lyricsOverlayLineActive: {
-    fontSize: 32,
-    lineHeight: 39,
+    fontSize: 34,
+    lineHeight: 42,
     fontWeight: '850' as any,
-    letterSpacing: -0.6,
+    letterSpacing: -0.65,
   },
-  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.55)' },
+  // Word-by-word highlight states (inside the active line only)
+  // pending  → text will light up soon — muted
+  // active   → already spoken — full brightness
+  // current  → the word being spoken right now — bright + glow
+  lyricsOverlayWordPending: { color: 'rgba(255,255,255,0.40)' },
   lyricsOverlayWordActive: { color: '#FFF' },
   lyricsOverlayWordCurrent: {
     color: '#FFF',
-    textShadowColor: 'rgba(255,255,255,0.52)',
-    textShadowRadius: 8,
+    textShadowColor: 'rgba(255,255,255,0.60)',
+    textShadowRadius: 10,
+    textShadowOffset: { width: 0, height: 0 },
   },
   lyricsOverlayLoading: {
     flex: 1,
