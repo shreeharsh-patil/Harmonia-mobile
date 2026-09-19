@@ -101,7 +101,6 @@ export default function HomeScreen() {
   const recentRefreshInFlightRef = useRef(false);
   const recentSongs = useMemo(() => uniqueRecentSongs(history), [history]);
   const quickCardWidth = Math.floor((width - 32) / 2);
-  const featuredWidth = width - 24;
 
   const load = useCallback(async (refresh = false) => {
     const generation = ++loadGenerationRef.current;
@@ -384,14 +383,6 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            {!!quickPlaylists[0] && (
-              <FeaturedMixCard
-                playlist={quickPlaylists[0]}
-                width={featuredWidth}
-                onPress={openPlaylist}
-              />
-            )}
-
             {!!error && (
               <Pressable onPress={() => void load()} style={styles.errorBox}>
                 <Text style={styles.error}>{error}</Text>
@@ -502,37 +493,6 @@ function HomeFilterBar() {
     </View>
   );
 }
-
-const FeaturedMixCard = memo(function FeaturedMixCard({
-  playlist,
-  width,
-  onPress,
-}: {
-  playlist: Playlist;
-  width: number;
-  onPress: (playlist: Playlist) => void;
-}) {
-  const title = playlist.name || playlist.title || 'Made for you';
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Play ${title}`}
-      onPress={() => onPress(playlist)}
-      style={({ pressed }) => [styles.featuredCard, { width }, pressed && styles.pressed]}
-    >
-      <PlaylistArtwork playlist={playlist} size={width - 28} radius={10} />
-      <View style={styles.featuredFooter}>
-        <View style={styles.featuredCopy}>
-          <Text numberOfLines={1} style={styles.featuredEyebrow}>MADE FOR YOUR TASTE</Text>
-          <Text numberOfLines={1} style={styles.featuredTitle}>{title}</Text>
-        </View>
-        <View style={styles.featuredPlay}>
-          <Ionicons name="play" size={21} color="#000000" />
-        </View>
-      </View>
-    </Pressable>
-  );
-});
 
 const StartListeningList = memo(function StartListeningList({
   songs,
@@ -822,34 +782,6 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: colors.accentBright },
   filterText: { color: colors.textStrong, fontSize: 14, fontWeight: '700' },
   filterTextActive: { color: '#000000', fontSize: 14, fontWeight: '800' },
-  featuredCard: {
-    marginBottom: 30,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: '#282828',
-  },
-  featuredFooter: {
-    minHeight: 62,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 12,
-  },
-  featuredCopy: { flex: 1, minWidth: 0, paddingRight: 12 },
-  featuredEyebrow: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-  },
-  featuredTitle: { color: colors.textStrong, fontSize: 19, fontWeight: '800', marginTop: 3 },
-  featuredPlay: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentBright,
-  },
   content: {
     paddingHorizontal: 12,
     paddingTop: 4,
