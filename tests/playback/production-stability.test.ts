@@ -663,19 +663,21 @@ test('settings no longer exposes a search-history control', async () => {
 });
 
 
-test('Spotify Canvas bypasses Harmonia backend and persists device-side results', async () => {
+test('Spotify Canvas resolves title-only search tracks through the cached Harmonia fallback', async () => {
   const config = await readFile('src/config.ts', 'utf8');
   const canvas = await readFile('src/lib/canvas.ts', 'utf8');
 
   assert.match(config, /EXPO_PUBLIC_SPOTIFY_CANVAS_API_URL/);
   assert.match(canvas, /HAS_SPOTIFY_CANVAS_API/);
+  assert.match(canvas, /HAS_HARMONIA_API/);
   assert.match(canvas, /SPOTIFY_CANVAS_API_URL/);
+  assert.match(canvas, /api\/proxy\/spotify-canvas/);
+  assert.match(canvas, /trackName=/);
+  assert.match(canvas, /spotifyTrackId/);
   assert.match(canvas, /harmonia\.mobile\.spotify-canvas\.v1/);
   assert.match(canvas, /AsyncStorage\.getItem\(CANVAS_CACHE_KEY\)/);
   assert.match(canvas, /AsyncStorage\.setItem\(CANVAS_CACHE_KEY/);
   assert.match(canvas, /\?trackId=/);
-  assert.doesNotMatch(canvas, /api\/proxy\/spotify-canvas/);
-  assert.doesNotMatch(canvas, /HARMONIA_API_URL/);
 });
 
 

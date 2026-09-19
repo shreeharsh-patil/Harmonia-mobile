@@ -1,8 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  HARMONIA_API_URL,
+  HAS_HARMONIA_API,
   HAS_SPOTIFY_CANVAS_API,
   SPOTIFY_CANVAS_API_URL,
 } from '@/src/config';
+import { artistNames } from '@/src/lib/song';
 import type { Song } from '@/src/types';
 
 export type CanvasMedia = {
@@ -150,6 +153,10 @@ function canvasEndpoint() {
     : `${SPOTIFY_CANVAS_API_URL}/api/canvas`;
 }
 
+function catalogCanvasEndpoint() {
+  return `${HARMONIA_API_URL}/api/proxy/spotify-canvas`;
+}
+
 export function spotifyTrackId(song: Song | null | undefined) {
   if (!song) return null;
 
@@ -174,13 +181,21 @@ export function spotifyTrackId(song: Song | null | undefined) {
 }
 
 export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promise<CanvasMedia | null> {
-  if (!HAS_SPOTIFY_CANVAS_API) return null;
-
   const trackId = spotifyTrackId(song);
-  if (!trackId) return null;
+  // Direct Spotify results use their existing identifier. Search results from
+  // JioSaavn/catalog sources often have no Spotify id at all, so resolve them
+  // by their recording metadata through Harmonia's cached Canvas endpoint.
+  if (!trackId && !HAS_HARMONIA_API) return null;
+  if (trackId && !HAS_SPOTIFY_CANVAS_API) return null;
 
-  const cached = await readCachedCanvas(trackId);
-  if (cached.hit) return cached.media;
+  if (trackId) {
+    const cached = await readCachedCanvas(trackId);
+    if (cached.hit) return cached.media;
+  }
+
+  const trackName = String(song.name || song.title || '').trim();
+  const artistName = artistNames(song).trim();
+  if (!trackId && (!trackName || trackName === 'Unknown track')) return null;
 
   const controller = new AbortController();
   const abortFromParent = () => controller.abort();
@@ -189,8 +204,11 @@ export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promis
   const timeout = setTimeout(() => controller.abort(), CANVAS_TIMEOUT_MS);
 
   try {
+    const url = trackId
+      ? `${canvasEndpoint()}?trackId=${encodeURIComponent(trackId)}`
+      : `${catalogCanvasEndpoint()}?trackName=${encodeURIComponent(trackName)}&artistName=${encodeURIComponent(artistName === 'Unknown artist' ? '' : artistName)}`;
     const response = await fetch(
-      `${canvasEndpoint()}?trackId=${encodeURIComponent(trackId)}`,
+      url,
       { headers: { Accept: 'application/json' }, signal: controller.signal }
     );
     if (!response.ok) return null;
@@ -202,9 +220,10 @@ export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promis
       payload?.canvas ??
       payload;
 
-    const canvasUrl = candidateString(directCanvas?.canvasUrl);
+    const canvasUrl = candidateString(directCanvas?.canvasUrl || payload?.canvasUrl);
+    const resolvedTrackId = trackId || candidateString(payload?.spotifyTrackId);
     if (!/^https:\/\//i.test(canvasUrl)) {
-      await cacheCanvas(trackId, null);
+      if (SPOTIFY_TRACK_ID.test(resolvedTrackId)) await cacheCanvas(resolvedTrackId, null);
       return null;
     }
 
@@ -212,10 +231,11 @@ export async function fetchCanvasMedia(song: Song, signal?: AbortSignal): Promis
       id: candidateString(directCanvas?.id) || undefined,
       url: canvasUrl,
       trackUri:
-        candidateString(directCanvas?.trackUri) || `spotify:track:${trackId}`,
+        candidateString(directCanvas?.trackUri) ||
+        (SPOTIFY_TRACK_ID.test(resolvedTrackId) ? `spotify:track:${resolvedTrackId}` : undefined),
     };
 
-    await cacheCanvas(trackId, media);
+    if (SPOTIFY_TRACK_ID.test(resolvedTrackId)) await cacheCanvas(resolvedTrackId, media);
     return media;
   } finally {
     clearTimeout(timeout);
