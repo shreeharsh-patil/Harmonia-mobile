@@ -23,7 +23,9 @@ import { usePreferences } from '@/src/providers/PreferencesProvider';
 export const MINI_PLAYER_HEIGHT = 60;
 export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_MIN_BOTTOM = 0;
-export const TAB_BAR_TO_MINI_GAP = 6;
+// Keep the mini player visually attached to the translucent navigation dock.
+// The reference treats both controls as one continuous playback surface.
+export const TAB_BAR_TO_MINI_GAP = 0;
 export const TAB_CONTENT_EXTRA_GAP = 18;
 
 export function getTabContentBottomInset(bottomInset: number, hasMiniPlayer: boolean) {
