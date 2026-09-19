@@ -420,6 +420,15 @@ test('embedded CDN failure does not blacklist the fresh provider fallback', asyn
   assert.match(source, /attempt >= 2/);
 });
 
+test('native sharing never includes the configured Harmonia backend URL', async () => {
+  const source = await readFile('src/lib/share.ts', 'utf8');
+
+  assert.doesNotMatch(source, /HARMONIA_API_URL|HAS_HARMONIA_API/);
+  assert.doesNotMatch(source, /\/music\/(?:search|playlists)/);
+  assert.match(source, /https:\/\/open\.spotify\.com/);
+  assert.match(source, /publicSpotifyUrl\('playlist', playlist\)/);
+});
+
 test('music videos use direct YouTube services without a Vercel proxy', async () => {
   const player = await readFile('app/player.tsx', 'utf8');
   const settings = await readFile('app/settings.tsx', 'utf8');
