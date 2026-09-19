@@ -112,6 +112,7 @@ export default function ClipsScreen() {
   const playlistMode = Boolean(playlistId);
   const { currentSong, queue, playSong } = usePlayer();
   const currentSongRef = useRef(currentSong);
+  const playlistFeedIdRef = useRef<string | null>(null);
   const [songs, setSongs] = useState<Song[]>(() => currentSong ? [currentSong] : []);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -121,9 +122,13 @@ export default function ClipsScreen() {
 
   useEffect(() => {
     if (playlistMode) {
-      // Playlist Clips receives the exact player queue from its source page;
-      // never append general trending songs to this dedicated feed.
-      setSongs(uniqueSongs(queue));
+      // Capture the playlist queue once. Audio resolution can replace queue
+      // items with refreshed metadata; mirroring those updates into FlatList
+      // makes Android reset its paging position and appear to auto-scroll.
+      if (playlistFeedIdRef.current !== playlistId && queue.length) {
+        playlistFeedIdRef.current = playlistId || null;
+        setSongs(uniqueSongs(queue));
+      }
       return;
     }
 
@@ -135,7 +140,7 @@ export default function ClipsScreen() {
       })
       .catch(() => {});
     return () => { mounted = false; };
-  }, [playlistMode, queue]);
+  }, [playlistId, playlistMode, queue]);
 
   const activeSongId = currentSong?.id;
   const clips = useMemo(() => uniqueSongs(songs), [songs]);
@@ -159,7 +164,10 @@ export default function ClipsScreen() {
           windowSize={3}
           keyExtractor={(song) => String(song.id || song.songId)}
           getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
-          onMomentumScrollEnd={(event) => setActiveIndex(Math.round(event.nativeEvent.contentOffset.y / Math.max(1, height)))}
+          onMomentumScrollEnd={(event) => {
+            const nextIndex = Math.round(event.nativeEvent.contentOffset.y / Math.max(1, height));
+            setActiveIndex((current) => current === nextIndex ? current : nextIndex);
+          }}
           renderItem={({ item, index }) => <ClipCard song={item} active={index === activeIndex} height={height} />}
         />
       ) : (
