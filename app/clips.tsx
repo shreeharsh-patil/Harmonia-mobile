@@ -121,7 +121,7 @@ export default function ClipsScreen() {
   const currentSongRef = useRef(currentSong);
   const playlistFeedIdRef = useRef<string | null>(null);
   const userSwipeRef = useRef(false);
-  const [songs, setSongs] = useState<Song[]>(() => currentSong ? [currentSong] : []);
+  const [songs, setSongs] = useState<Song[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageHeight, setPageHeight] = useState(height);
 
@@ -155,9 +155,15 @@ export default function ClipsScreen() {
     void fetchTrendingHomeContent()
       .then((content) => {
         if (!mounted) return;
-        setSongs(uniqueSongs([...(currentSongRef.current ? [currentSongRef.current] : []), ...content.songs]));
+        // The Clips tab is a chart feed, not a continuation of whatever was
+        // last playing. Start at the number-one trending song and preserve the
+        // provider's chart order for every following swipe.
+        const trending = uniqueSongs(content.songs);
+        setSongs(trending.length ? trending : uniqueSongs(currentSongRef.current ? [currentSongRef.current] : []));
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted && currentSongRef.current) setSongs([currentSongRef.current]);
+      });
     return () => { mounted = false; };
   }, [playlistId, playlistMode, queue]);
 
