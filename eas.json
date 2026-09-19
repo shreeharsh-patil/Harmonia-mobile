@@ -10,7 +10,8 @@
       "env": {
         "EXPO_PUBLIC_HARMONIA_API_URL": "https://harmonia-mobile-backend.vercel.app",
         "EXPO_PUBLIC_HARMONIA_STREAM_API_URL": "https://harmonia-mobile-backend.vercel.app"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -20,14 +21,16 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_HARMONIA_API_URL": "https://harmonia-mobile-backend.vercel.app",
         "EXPO_PUBLIC_HARMONIA_STREAM_API_URL": "https://harmonia-mobile-backend.vercel.app"
-      }
+      },
+      "channel": "production"
     }
   }
 }

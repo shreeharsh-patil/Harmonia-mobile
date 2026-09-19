@@ -14,8 +14,12 @@
       "policy": "appVersion"
     },
     "updates": {
-      "checkAutomatically": "NEVER",
-      "fallbackToCacheTimeout": 0
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/ddd559f3-3767-44df-a4ea-5a9a1a481129",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "plugins": [
       "expo-router",
@@ -79,6 +83,13 @@
     "experiments": {
       "typedRoutes": true
     },
-    "icon": "./assets/harmonia-icon.png"
+    "icon": "./assets/harmonia-icon.png",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ddd559f3-3767-44df-a4ea-5a9a1a481129"
+      }
+    },
+    "owner": "shreeharsh17"
   }
 }
