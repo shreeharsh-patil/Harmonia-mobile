@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -18,10 +18,20 @@ import {
   fetchHomeSections,
   fetchRecommendedMixes,
 } from '@/src/lib/api';
+import {
+  RAIL_BATCH_SIZE,
+  RAIL_INITIAL_RENDER,
+  RAIL_WINDOW_SIZE,
+} from '@/src/lib/listPerformance';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { usePlaybackHistory, usePlayer, type PlaybackHistoryEntry } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import type { MusicSection, Playlist, RecommendedMix, Song } from '@/src/types';
+
+const EXPLORE_REFRESH_MS = 10 * 60_000;
+const SECTION_INITIAL_RENDER = 4;
+const SECTION_BATCH_SIZE = 4;
+const SECTION_WINDOW_SIZE = 5;
 
 function uniqueRecentSongs(history: PlaybackHistoryEntry[]) {
   const seen = new Set<string>();
@@ -73,15 +83,10 @@ export default function ExploreScreen() {
     setRefreshing(false);
   }, [token]);
 
-  useEffect(() => {
-    void load();
-    return () => {
-      loadGenerationRef.current += 1;
-    };
-  }, [load]);
-
   useFocusEffect(
     useCallback(() => {
+      // Focus is the single initial-load path. Keeping this separate from a
+      // mount effect avoids issuing the same catalog request twice on open.
       void load(false);
 
       const sub = AppState.addEventListener('change', (state) => {
@@ -94,26 +99,94 @@ export default function ExploreScreen() {
         if (AppState.currentState === 'active') {
           void load(true);
         }
-      }, 10 * 60_000);
+      }, EXPLORE_REFRESH_MS);
 
       return () => {
+        loadGenerationRef.current += 1;
         sub.remove();
         clearInterval(interval);
       };
     }, [load])
   );
 
-  const openPlaylist = (playlist: Playlist) => {
+  const openPlaylist = useCallback((playlist: Playlist) => {
     const id = String(playlist.id || playlist._id || '');
     if (!id) return;
     router.push({ pathname: '/playlist/[id]', params: { id } });
-  };
+  }, []);
 
-  const openMix = (mix: RecommendedMix) => {
+  const openMix = useCallback((mix: RecommendedMix) => {
     const id = String(mix._mixId || mix.id || '');
     if (!id) return;
     router.push({ pathname: '/mix/[id]', params: { id } });
-  };
+  }, []);
+
+  const header = (
+    <>
+      <View style={styles.hero}>
+        <Text style={styles.heroKicker}>HARMONIA EXPLORE</Text>
+        <Text style={styles.heroTitle}>Find the next thing worth playing.</Text>
+        <Text style={styles.heroBody}>
+          Curated shelves, your Harmonia mixes and recent listening live together without changing the existing catalog or playback pipeline.
+        </Text>
+      </View>
+
+      {!!error && (
+        <Pressable onPress={() => void load()} style={styles.errorBox}>
+          <Text style={styles.error}>{error}</Text>
+          <Text style={styles.retry}>Tap to retry</Text>
+        </Pressable>
+      )}
+
+      {loading && !sections.length ? (
+        <ExploreSkeleton />
+      ) : (
+        <>
+          {!!recentSongs.length && (
+            <View style={styles.section}>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>Jump back in</Text>
+                <Text style={styles.sectionMeta}>{recentSongs.length} tracks</Text>
+              </View>
+              <View style={styles.songList}>
+                {recentSongs.slice(0, 6).map((song) => (
+                  <SongRow
+                    key={song.id}
+                    song={song}
+                    active={currentSong?.id === song.id}
+                    onPress={() => void playSong(song, recentSongs)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
+          {!!mixes.length && (
+            <View style={styles.section}>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionTitle}>Made for you</Text>
+                <Text style={styles.sectionMeta}>Personal mixes</Text>
+              </View>
+              <FlatList
+                horizontal
+                data={mixes}
+                keyExtractor={(mix, index) => String(mix._mixId || mix.id || index)}
+                renderItem={({ item }) => (
+                  <PlaylistCard playlist={item} onPress={() => openMix(item)} />
+                )}
+                initialNumToRender={RAIL_INITIAL_RENDER}
+                maxToRenderPerBatch={RAIL_BATCH_SIZE}
+                windowSize={RAIL_WINDOW_SIZE}
+                removeClippedSubviews
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+              />
+            </View>
+          )}
+        </>
+      )}
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -127,97 +200,67 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
+        data={loading && !sections.length ? [] : sections}
+        keyExtractor={(section, index) => String(section.id || section._id || section.name || index)}
+        renderItem={({ item }) => (
+          <ExploreSection section={item} onOpenPlaylist={openPlaylist} />
+        )}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          !loading && !mixes.length && !recentSongs.length && !error ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Nothing to explore yet</Text>
+              <Text style={styles.emptyBody}>Play a few songs or pull to refresh the catalog.</Text>
+            </View>
+          ) : null
+        }
+        initialNumToRender={SECTION_INITIAL_RENDER}
+        maxToRenderPerBatch={SECTION_BATCH_SIZE}
+        windowSize={SECTION_WINDOW_SIZE}
+        removeClippedSubviews
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor="#FFF" />}
-      >
-        <View style={styles.hero}>
-          <Text style={styles.heroKicker}>HARMONIA EXPLORE</Text>
-          <Text style={styles.heroTitle}>Find the next thing worth playing.</Text>
-          <Text style={styles.heroBody}>
-            Curated shelves, your Harmonia mixes and recent listening live together without changing the existing catalog or playback pipeline.
-          </Text>
-        </View>
-
-        {!!error && (
-          <Pressable onPress={() => void load()} style={styles.errorBox}>
-            <Text style={styles.error}>{error}</Text>
-            <Text style={styles.retry}>Tap to retry</Text>
-          </Pressable>
-        )}
-
-        {loading && !sections.length ? (
-          <ExploreSkeleton />
-        ) : (
-          <>
-            {!!recentSongs.length && (
-              <View style={styles.section}>
-                <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>Jump back in</Text>
-                  <Text style={styles.sectionMeta}>{recentSongs.length} tracks</Text>
-                </View>
-                <View style={styles.songList}>
-                  {recentSongs.slice(0, 6).map((song) => (
-                    <SongRow
-                      key={song.id}
-                      song={song}
-                      active={currentSong?.id === song.id}
-                      onPress={() => void playSong(song, recentSongs)}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {!!mixes.length && (
-              <View style={styles.section}>
-                <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>Made for you</Text>
-                  <Text style={styles.sectionMeta}>Personal mixes</Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                  {mixes.map((mix, index) => (
-                    <PlaylistCard
-                      key={String(mix._mixId || mix.id || index)}
-                      playlist={mix}
-                      onPress={() => openMix(mix)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {sections.map((section) => (
-              <View key={String(section.id || section._id || section.name)} style={styles.section}>
-                <View style={styles.sectionHead}>
-                  <Text style={styles.sectionTitle}>{section.name}</Text>
-                  <Text style={styles.sectionMeta}>{section.playlists?.length || 0} playlists</Text>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
-                  {(section.playlists || []).map((playlist, index) => (
-                    <PlaylistCard
-                      key={String(playlist.id || playlist._id || `${section.name}-${index}`)}
-                      playlist={playlist}
-                      onPress={() => openPlaylist(playlist)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            ))}
-
-            {!sections.length && !mixes.length && !recentSongs.length && !error && (
-              <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>Nothing to explore yet</Text>
-                <Text style={styles.emptyBody}>Play a few songs or pull to refresh the catalog.</Text>
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor="#FFF" />
+        }
+      />
     </SafeAreaView>
   );
 }
+
+const ExploreSection = memo(function ExploreSection({
+  section,
+  onOpenPlaylist,
+}: {
+  section: MusicSection;
+  onOpenPlaylist: (playlist: Playlist) => void;
+}) {
+  const playlists = section.playlists || [];
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>{section.name}</Text>
+        <Text style={styles.sectionMeta}>{playlists.length} playlists</Text>
+      </View>
+      <FlatList
+        horizontal
+        data={playlists}
+        keyExtractor={(playlist, index) => String(playlist.id || playlist._id || `${section.name}-${index}`)}
+        renderItem={({ item }) => (
+          <PlaylistCard playlist={item} onPress={() => onOpenPlaylist(item)} />
+        )}
+        initialNumToRender={RAIL_INITIAL_RENDER}
+        maxToRenderPerBatch={RAIL_BATCH_SIZE}
+        windowSize={RAIL_WINDOW_SIZE}
+        removeClippedSubviews
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rail}
+      />
+    </View>
+  );
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
