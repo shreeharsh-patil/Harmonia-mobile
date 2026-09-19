@@ -27,11 +27,12 @@ export function selectHomeShelves(sections: MusicSection[] = []) {
   const used = new Set<MusicSection>();
 
   return HOME_SHELF_SPECS.flatMap((spec) => {
+    const desiredGenre = 'genre' in spec ? spec.genre : '';
     const candidates = sections
       .filter((section) => !used.has(section) && shelfKey(section.name) === spec.title)
       .sort((a, b) => {
-        const aGenre = shelfKey((a as any).genreName) === spec.genre ? 1 : 0;
-        const bGenre = shelfKey((b as any).genreName) === spec.genre ? 1 : 0;
+        const aGenre = desiredGenre !== '' && shelfKey((a as any).genreName) === desiredGenre ? 1 : 0;
+        const bGenre = desiredGenre !== '' && shelfKey((b as any).genreName) === desiredGenre ? 1 : 0;
         return bGenre - aGenre || (b.playlists?.length || 0) - (a.playlists?.length || 0);
       });
     const chosen = candidates[0];
