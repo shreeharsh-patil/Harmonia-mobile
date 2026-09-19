@@ -868,11 +868,10 @@ export function PlayerProvider({ children }: PropsWithChildren) {
         setAdaptivePipelineStatus('upgrade-failed');
         setPlaybackErrorType(typed.type);
         setPlaybackState('ERROR');
-        setError(
-          typed.type === PlaybackErrorType.NETWORK_ERROR
-            ? 'Network connection interrupted. Harmonia will retry when possible.'
-            : typed.message
-        );
+        // A resolver failure is not final yet: the recovery effect immediately
+        // tries alternate streams/providers. Avoid flashing a misleading
+        // “track unavailable” error when that automatic recovery succeeds.
+        setError(null);
       }
       return false;
     } finally {
@@ -1715,7 +1714,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
   ]);
 
   useEffect(() => {
-    const hasResolutionFailure = Boolean(error && playbackErrorType);
+    const hasResolutionFailure = Boolean(playbackErrorType);
     const hasNativeFailure = Boolean(status.error);
     const trackId = currentSong?.id;
     if (

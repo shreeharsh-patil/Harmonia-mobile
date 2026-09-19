@@ -93,11 +93,9 @@ export default function PlaylistScreen() {
   const load = useCallback(async (isManualRefresh = false) => {
     const generation = ++loadGenerationRef.current;
     if (!id) {
-      setPlaylist(null);
-      setSongs([]);
-      setLoading(false);
-      setRefreshing(false);
-      setError('This playlist link is incomplete.');
+      // Route params can briefly be unavailable during native transitions.
+      // Keep the loading shell instead of flashing a false unavailable state.
+      setLoading(true);
       return;
     }
 
@@ -175,7 +173,7 @@ export default function PlaylistScreen() {
     return () => {
       loadGenerationRef.current += 1;
     };
-  }, [load]);
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
