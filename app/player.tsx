@@ -22,6 +22,7 @@ import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
 import { findDirectYouTubeMusicCandidates } from '@/src/lib/playback/youtubeMusicDirect';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc, type LyricLine } from '@/src/lib/lyrics';
+import { shareLyrics, shareSong } from '@/src/lib/share';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlaybackHistory, usePlaybackProgress, usePlayer, type SleepTimerMode } from '@/src/providers/PlayerProvider';
@@ -467,6 +468,21 @@ export default function PlayerScreen() {
     void toggleLike(currentSong);
   };
 
+  const handleShareSong = () => {
+    Haptics.selectionAsync().catch(() => {});
+    void shareSong(currentSong);
+  };
+
+  const handleShareLyrics = () => {
+    const activeText = activeLine >= 0 ? syncedLines[activeLine]?.text : undefined;
+    const fallbackText = lyrics?.plainLyrics
+      ?.split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+    Haptics.selectionAsync().catch(() => {});
+    void shareLyrics(currentSong, activeText || fallbackText);
+  };
+
   const recoverFromMusicVideoError = async () => {
     // A YouTube ID can be restricted for embedding in a region even when the
     // music search result is valid. Try another highly ranked match first.
@@ -691,6 +707,9 @@ export default function PlayerScreen() {
               <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
               <Text numberOfLines={1} style={styles.artist}>{artistNames(currentSong)}</Text>
             </View>
+            <Pressable onPress={handleShareSong} style={styles.likeButton} accessibilityLabel="Share song">
+              <Ionicons name="share-outline" size={22} color="rgba(255,255,255,0.75)" />
+            </Pressable>
             <Pressable onPress={handleLike} style={styles.likeButton} accessibilityLabel={isLiked(currentSong.id) ? 'Unlike song' : 'Like song'}>
               <Ionicons
                 name={isLiked(currentSong.id) ? 'heart' : 'heart-outline'}
@@ -1104,6 +1123,14 @@ export default function PlayerScreen() {
                   <Text numberOfLines={1} style={styles.lyricsSongTitle}>{currentSong.name}</Text>
                   <Text numberOfLines={1} style={styles.lyricsSongArtist}>{artistNames(currentSong)}</Text>
                 </View>
+              </Pressable>
+
+              <Pressable
+                onPress={handleShareLyrics}
+                style={styles.lyricsPlayButton}
+                accessibilityLabel="Share lyrics"
+              >
+                <Ionicons name="share-outline" size={20} color="#FFF" />
               </Pressable>
 
               <Pressable
