@@ -139,12 +139,9 @@ async function cacheCanvas(trackId: string, media: CanvasMedia | null) {
       now + (media ? POSITIVE_CANVAS_CACHE_MS : NEGATIVE_CANVAS_CACHE_MS),
   });
   trimCanvasCache();
-
-  try {
-    await persistCanvasCache();
-  } catch {
-    // Canvas is an optional enhancement. Storage failures must not affect playback.
-  }
+  // A Canvas lookup is on the interaction path. Persist after returning the
+  // result rather than making a swipe wait for AsyncStorage serialization.
+  void persistCanvasCache();
 }
 
 function canvasEndpoint() {

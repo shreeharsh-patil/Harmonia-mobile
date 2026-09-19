@@ -46,7 +46,12 @@ function ClipVideo({ url, active }: { url: string; active: boolean }) {
   return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
 }
 
-function ClipCard({ song, active, height }: { song: Song; active: boolean; height: number }) {
+function ClipCard({ song, active, shouldPrefetch, height }: {
+  song: Song;
+  active: boolean;
+  shouldPrefetch: boolean;
+  height: number;
+}) {
   const { batterySaver } = usePreferences();
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,10 +59,12 @@ function ClipCard({ song, active, height }: { song: Song; active: boolean; heigh
   const cover = artworkUrl(song, 720);
 
   useEffect(() => {
-    if (!active || batterySaver) return;
+    if (!shouldPrefetch || batterySaver) return;
     const controller = new AbortController();
     const request = ++requestRef.current;
-    setLoading(true);
+    // Only the visible clip shows a spinner. The next clip resolves quietly
+    // while the user is watching this one, so its Canvas is ready on swipe.
+    setLoading(active);
     setCanvasUrl(null);
 
     void fetchCanvasMedia(song, controller.signal)
@@ -75,13 +82,13 @@ function ClipCard({ song, active, height }: { song: Song; active: boolean; heigh
       controller.abort();
       requestRef.current += 1;
     };
-  }, [active, batterySaver, song]);
+  }, [batterySaver, shouldPrefetch, song]);
 
   return (
     <View style={[styles.clip, { height }]}>
       {!!cover && <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} blurRadius={18} contentFit="cover" />}
       <View style={styles.backdropShade} />
-      {!!canvasUrl && <ClipVideo url={canvasUrl} active={active} />}
+      {!!canvasUrl && active && <ClipVideo url={canvasUrl} active />}
       <LinearGradient colors={['rgba(0,0,0,0.06)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.92)']} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFill} />
 
       <SafeAreaView style={styles.clipSafe} edges={['top', 'bottom']}>
@@ -198,7 +205,16 @@ export default function ClipsScreen() {
             const nextIndex = Math.round(event.nativeEvent.contentOffset.y / Math.max(1, pageHeight));
             setActiveIndex((current) => current === nextIndex ? current : nextIndex);
           }}
-          renderItem={({ item, index }) => <ClipCard song={item} active={index === activeIndex} height={pageHeight} />}
+          renderItem={({ item, index }) => (
+            <ClipCard
+              song={item}
+              active={index === activeIndex}
+              // Keep exactly one upcoming Canvas warm. This gives a quick
+              // next swipe without decoding several videos in the background.
+              shouldPrefetch={index === activeIndex || index === activeIndex + 1}
+              height={pageHeight}
+            />
+          )}
         />
       ) : (
         <SafeAreaView style={styles.empty}>
