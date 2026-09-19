@@ -30,7 +30,6 @@ import {
   SONG_LIST_INITIAL_RENDER,
   SONG_LIST_WINDOW_SIZE,
 } from '@/src/lib/listPerformance';
-import { shareAlbum } from '@/src/lib/share';
 import { artistNames } from '@/src/lib/song';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -190,13 +189,6 @@ export default function AlbumScreen() {
             <View style={styles.top}>
               <BackButton />
               <View style={styles.headerActions}>
-                <Pressable
-                  onPress={() => void shareAlbum(album)}
-                  style={styles.headerAction}
-                  accessibilityLabel="Share album"
-                >
-                  <Ionicons name="share-outline" size={20} color={colors.textStrong} />
-                </Pressable>
                 <Pressable
                   onPress={() => {
                     void toggleAlbumLike(album);

@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import {
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -79,26 +78,6 @@ export default function ReplayScreen() {
   const topQueue = topTracks.map((item) => item.song);
   const activeDays = days.filter((day) => day.seconds > 0).length;
 
-  const shareReplay = async () => {
-    const topTrack = topTracks[0];
-    const topArtist = topArtists[0];
-    const lines = [
-      'My Harmonia Replay',
-      `${minutes(listeningStats.totalSeconds)} minutes listened`,
-      `${listeningStats.playCount} tracks started`,
-      `${activeDays}/7 active listening days`,
-      topTrack ? `Top track: ${topTrack.song.name} — ${artistNames(topTrack.song)}` : null,
-      topArtist ? `Top artist: ${topArtist[0]}` : null,
-      '',
-      'Made with Harmonia Mobile',
-    ].filter(Boolean);
-
-    await Share.share({
-      title: 'My Harmonia Replay',
-      message: lines.join('\n'),
-    });
-  };
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -132,14 +111,6 @@ export default function ReplayScreen() {
               <Text style={styles.metricLabel}>top artists</Text>
             </View>
           </View>
-          <Pressable
-            onPress={() => void shareReplay()}
-            style={({ pressed }) => [styles.shareReplay, pressed && styles.pressed]}
-            accessibilityLabel="Share Harmonia Replay"
-          >
-            <Ionicons name="share-outline" size={16} color="#061108" />
-            <Text style={styles.shareReplayText}>Share Replay</Text>
-          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -269,17 +240,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingTop: 14,
   },
-  shareReplay: {
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.accentBright,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  shareReplayText: { color: '#061108', fontSize: 13, fontWeight: '800' },
   heroMetric: { flex: 1, alignItems: 'center' },
   metricValue: { color: colors.textStrong, fontSize: 18, fontWeight: '800' },
   metricLabel: { color: colors.textFaint, fontSize: 10, marginTop: 3, textAlign: 'center' },

@@ -26,7 +26,6 @@ import {
   SONG_LIST_INITIAL_RENDER,
   SONG_LIST_WINDOW_SIZE,
 } from '@/src/lib/listPerformance';
-import { shareArtist } from '@/src/lib/share';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
@@ -162,9 +161,6 @@ export default function ArtistScreen() {
             <View style={styles.top}>
               <BackButton />
               <View style={styles.headerActions}>
-                <Pressable onPress={() => void shareArtist(artist)} style={styles.headerAction} accessibilityLabel="Share artist">
-                  <Ionicons name="share-outline" size={20} color="#E8E8E8" />
-                </Pressable>
                 <Pressable
                   onPress={() => {
                     void toggleArtistLike(artist);

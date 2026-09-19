@@ -35,7 +35,6 @@ import {
   SONG_LIST_INITIAL_RENDER,
   SONG_LIST_WINDOW_SIZE,
 } from '@/src/lib/listPerformance';
-import { sharePlaylist } from '@/src/lib/share';
 import { artistNames } from '@/src/lib/song';
 import { useAuth } from '@/src/providers/AuthProvider';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -379,13 +378,6 @@ export default function PlaylistScreen() {
             <View style={styles.top}>
               <BackButton />
               <View style={styles.headerActions}>
-                <Pressable
-                  onPress={() => void sharePlaylist(playlist)}
-                  style={styles.headerAction}
-                  accessibilityLabel="Share playlist"
-                >
-                  <Ionicons name="share-outline" size={20} color={colors.textStrong} />
-                </Pressable>
                 {owned ? (
                   <Pressable
                     onPress={() => setEditing((value) => !value)}

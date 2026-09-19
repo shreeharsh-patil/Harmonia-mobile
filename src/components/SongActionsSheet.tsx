@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { TrackArtwork } from '@/src/components/TrackArtwork';
 import { artistNames } from '@/src/lib/song';
-import { shareSong } from '@/src/lib/share';
 import { useLibrary } from '@/src/providers/LibraryProvider';
 import { useOffline } from '@/src/providers/OfflineProvider';
 import { usePlayer } from '@/src/providers/PlayerProvider';
@@ -131,7 +130,6 @@ export function SongActionsSheet({ song, visible, onClose }: Props) {
             <View style={styles.actions}>
               <Action label="Play next" detail="Play after the current track" glyph="↳" onPress={() => finish(() => playNext(song), 'Playing next')} />
               <Action label="Add to queue" detail="Add to the end of your queue" glyph="+" onPress={() => finish(() => addToQueue(song), 'Added to queue')} />
-              <Action label="Share" detail="Send this track with the native share sheet" glyph="↗" onPress={() => { void shareSong(song); close(); }} />
               <Action
                 label={isLiked(song.id) ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
                 detail="Sync with your Harmonia account"
