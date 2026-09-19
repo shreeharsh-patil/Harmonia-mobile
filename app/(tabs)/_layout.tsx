@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { router, Tabs } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -113,6 +113,12 @@ export default function TabsLayout() {
           name="library"
           options={{
             title: 'Library',
+            // This Library-position control is the quick entry point for
+            // full-screen Music Clips. The Library stays available through
+            // existing Home/Profile entries and deep links.
+            tabBarButton: (props) => (
+              <Pressable {...props} onPress={() => router.push('/clips')} />
+            ),
             tabBarIcon: ({ color, focused }) => (
               <LibraryIcon color={String(color)} focused={focused} />
             ),
