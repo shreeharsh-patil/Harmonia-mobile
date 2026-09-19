@@ -1,7 +1,9 @@
 import type { HarmoniaImage, Playlist, Song } from '@/src/types';
 import { normalizeSong } from '@/src/lib/song';
 import {
+  fetchDirectJioSaavnPlaylist,
   searchDirectJioSaavn,
+  searchDirectJioSaavnPlaylists,
   type DirectSaavnSearchTrack,
   type DirectSaavnTrack,
 } from '@/src/lib/playback/jiosaavnDirect';
@@ -342,7 +344,7 @@ export async function fetchDirectSpotifyPlaylist(
 export async function populateSpotifyPlaylistSongs(
   playlist: Playlist,
   existingSongs: Song[] = [],
-  targetMin = 30
+  targetMin = 50
 ): Promise<Song[]> {
   const current = [...existingSongs];
   const seenIds = new Set(current.map((s) => String(s.id)));
@@ -352,10 +354,11 @@ export async function populateSpotifyPlaylistSongs(
 
   const id = String(playlist.id || playlist._id || '').trim();
   const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || (playlist as any).spotifyUrl || '');
+  const spotifyId = String(playlist.spotifyId || '').trim();
 
   // 1. If we have fewer than targetMin and it has a Spotify identifier, fetch direct Spotify tracks
   if (current.length < targetMin) {
-    const parsed = parseSpotifyId(sourceUrl || id);
+    const parsed = parseSpotifyId(sourceUrl || spotifyId || id);
     if (parsed && parsed.type === 'playlist') {
       const directSpotify = await fetchDirectSpotifyPlaylist(parsed.id);
       if (directSpotify?.tracks?.length) {
@@ -371,20 +374,52 @@ export async function populateSpotifyPlaylistSongs(
     }
   }
 
-  // 2. If still fewer than targetMin songs, search popular/trending tracks by playlist title or genre
+  // 2. Curated JioSaavn playlist search by title (each curated match provides 50-100 full tracks)
   if (current.length < targetMin) {
     const query = String(playlist.name || playlist.title || '').trim();
     if (query) {
-      const searchResults = await searchDirectJioSaavn(query, { limit: targetMin * 2 });
-      for (const track of searchResults) {
-        const song = directTrackToSong(track);
-        const key = `${(song.name || '').toLowerCase()}|${(song.primaryArtists || '').toLowerCase()}`;
-        if (!seenIds.has(String(song.id)) && !seenKeys.has(key)) {
-          seenIds.add(String(song.id));
-          seenKeys.add(key);
-          current.push(song);
+      try {
+        const matches = await searchDirectJioSaavnPlaylists(query, { limit: 4 });
+        for (const match of matches) {
+          if (match?.id) {
+            const matchDetails = await fetchDirectJioSaavnPlaylist(match.id);
+            for (const t of matchDetails?.tracks || []) {
+              const song = directTrackToSong(t);
+              const key = `${(song.name || '').toLowerCase()}|${(song.primaryArtists || '').toLowerCase()}`;
+              if (!seenIds.has(String(song.id)) && !seenKeys.has(key)) {
+                seenIds.add(String(song.id));
+                seenKeys.add(key);
+                current.push(song);
+                if (current.length >= targetMin) break;
+              }
+            }
+          }
           if (current.length >= targetMin) break;
         }
+      } catch {}
+    }
+  }
+
+  // 3. Search popular/trending tracks by playlist title and expanded keywords
+  if (current.length < targetMin) {
+    const query = String(playlist.name || playlist.title || '').trim();
+    if (query) {
+      const queries = [query, `${query} songs`, `${query} hits`];
+      for (const q of queries) {
+        if (current.length >= targetMin) break;
+        try {
+          const searchResults = await searchDirectJioSaavn(q, { limit: 50 });
+          for (const track of searchResults) {
+            const song = directTrackToSong(track);
+            const key = `${(song.name || '').toLowerCase()}|${(song.primaryArtists || '').toLowerCase()}`;
+            if (!seenIds.has(String(song.id)) && !seenKeys.has(key)) {
+              seenIds.add(String(song.id));
+              seenKeys.add(key);
+              current.push(song);
+              if (current.length >= targetMin) break;
+            }
+          }
+        } catch {}
       }
     }
   }
