@@ -5,6 +5,14 @@ module.exports = defineConfig([
   expoConfig,
   {
     ignores: ['.expo/**', 'dist/**', 'node_modules/**'],
+    settings: {
+      // Expo native modules ship their entry point in package.json. Keep the
+      // import resolver aware of normal Node package entries as well as TS
+      // files so expo-updates is linted like the rest of the runtime.
+      'import/resolver': {
+        node: { extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'] },
+      },
+    },
     rules: {
       // These compiler-oriented rules reject intentional React Native patterns
       // used throughout the app: synchronizing async native state in effects
