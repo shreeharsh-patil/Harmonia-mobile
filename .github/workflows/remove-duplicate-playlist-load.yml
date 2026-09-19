@@ -1,4 +1,4 @@
-name: Remove duplicate playlist load
+name: Repair Expo dependencies
 
 on:
   push:
@@ -13,25 +13,29 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
-      - name: Remove duplicate initial playlist request
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+      - name: Install current dependency graph
+        run: npm ci --no-audit --no-fund
+      - name: Align packages with Expo SDK 57
+        run: npx expo install --fix
+      - name: Align package metadata with app version
+        run: npm version 0.3.5 --no-git-tag-version --allow-same-version
+      - name: Verify Expo dependency compatibility
+        run: npx expo install --check
+      - name: Commit repaired dependency graph
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('app/(tabs)/playlist/[id].tsx')
-          text = path.read_text()
-          old = """  useEffect(() => {\n    setPlaylist(null);\n    setSongs([]);\n    setActionSong(null);\n    setEditing(false);\n    setSearchQuery('');\n    setIsSearchVisible(false);\n    void load();\n    return () => {\n      loadGenerationRef.current += 1;\n    };\n  }, [load]);\n"""
-          new = """  useEffect(() => {\n    setPlaylist(null);\n    setSongs([]);\n    setActionSong(null);\n    setEditing(false);\n    setSearchQuery('');\n    setIsSearchVisible(false);\n    return () => {\n      loadGenerationRef.current += 1;\n    };\n  }, [load]);\n"""
-          if old not in text:
-              raise SystemExit('expected playlist load block not found')
-          path.write_text(text.replace(old, new, 1))
-          PY
-      - name: Commit repair
-        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo 'Dependencies already compatible'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'app/(tabs)/playlist/[id].tsx'
-          git commit -m 'perf: avoid duplicate playlist loads'
+          git add package.json package-lock.json
+          git commit -m 'fix: align Expo SDK dependencies'
           git push origin HEAD:main
