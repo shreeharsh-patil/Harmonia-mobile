@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,7 +12,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchTrendingHomeContent } from '@/src/lib/api';
 import { fetchCanvasMedia } from '@/src/lib/canvas';
@@ -48,12 +48,10 @@ function ClipVideo({ url, active }: { url: string; active: boolean }) {
 
 function ClipCard({ song, active, height }: { song: Song; active: boolean; height: number }) {
   const { batterySaver } = usePreferences();
-  const { currentSong, isPlaying, playSong, togglePlayback } = usePlayer();
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef(0);
   const cover = artworkUrl(song, 720);
-  const isCurrent = String(currentSong?.id || '') === String(song.id || '');
 
   useEffect(() => {
     if (!active || batterySaver) return;
@@ -79,11 +77,6 @@ function ClipCard({ song, active, height }: { song: Song; active: boolean; heigh
     };
   }, [active, batterySaver, song]);
 
-  const play = useCallback(() => {
-    if (isCurrent) void togglePlayback();
-    else void playSong(song, [song]);
-  }, [isCurrent, playSong, song, togglePlayback]);
-
   return (
     <View style={[styles.clip, { height }]}>
       {!!cover && <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} blurRadius={18} contentFit="cover" />}
@@ -106,10 +99,6 @@ function ClipCard({ song, active, height }: { song: Song; active: boolean; heigh
           <Text numberOfLines={2} style={styles.songTitle}>{song.name || song.title || 'Untitled track'}</Text>
           <Text numberOfLines={1} style={styles.artist}>{artistNames(song)}</Text>
           <Text style={styles.hint}>Swipe for the next clip</Text>
-          <Pressable onPress={play} style={styles.playButton} accessibilityLabel={isCurrent && isPlaying ? 'Pause song' : `Play ${song.name || song.title || 'song'}`}>
-            <Ionicons name={isCurrent && isPlaying ? 'pause' : 'play'} size={25} color="#061108" style={!isCurrent || !isPlaying ? styles.playIcon : undefined} />
-            <Text style={styles.playText}>{isCurrent && isPlaying ? 'Pause' : 'Play song'}</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     </View>
@@ -118,23 +107,45 @@ function ClipCard({ song, active, height }: { song: Song; active: boolean; heigh
 
 export default function ClipsScreen() {
   const { height } = useWindowDimensions();
-  const { currentSong } = usePlayer();
+  const params = useLocalSearchParams<{ playlistId?: string }>();
+  const playlistId = Array.isArray(params.playlistId) ? params.playlistId[0] : params.playlistId;
+  const playlistMode = Boolean(playlistId);
+  const { currentSong, queue, playSong } = usePlayer();
+  const currentSongRef = useRef(currentSong);
   const [songs, setSongs] = useState<Song[]>(() => currentSong ? [currentSong] : []);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
+    currentSongRef.current = currentSong;
+  }, [currentSong]);
+
+  useEffect(() => {
+    if (playlistMode) {
+      // Playlist Clips receives the exact player queue from its source page;
+      // never append general trending songs to this dedicated feed.
+      setSongs(uniqueSongs(queue));
+      return;
+    }
+
     let mounted = true;
     void fetchTrendingHomeContent()
       .then((content) => {
         if (!mounted) return;
-        setSongs(uniqueSongs([...(currentSong ? [currentSong] : []), ...content.songs]));
+        setSongs(uniqueSongs([...(currentSongRef.current ? [currentSongRef.current] : []), ...content.songs]));
       })
       .catch(() => {});
     return () => { mounted = false; };
-  }, [currentSong]);
+  }, [playlistMode, queue]);
 
   const activeSongId = currentSong?.id;
   const clips = useMemo(() => uniqueSongs(songs), [songs]);
+
+  useEffect(() => {
+    const activeSong = clips[activeIndex];
+    if (!activeSong || String(activeSong.id) === String(currentSong?.id || '')) return;
+    // Every full-screen swipe immediately advances audio to the matching clip.
+    void playSong(activeSong, clips);
+  }, [activeIndex, clips, currentSong?.id, playSong]);
 
   return (
     <View style={styles.root}>
@@ -179,9 +190,6 @@ const styles = StyleSheet.create({
   songTitle: { color: '#FFF', fontSize: 28, lineHeight: 33, fontWeight: '900', marginTop: 7 },
   artist: { color: 'rgba(255,255,255,0.84)', fontSize: 15, fontWeight: '600', marginTop: 4 },
   hint: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 12 },
-  playButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#1ED760' },
-  playIcon: { marginLeft: 2 },
-  playText: { color: '#061108', fontSize: 14, fontWeight: '900' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28 },
   emptyTitle: { color: '#FFF', fontSize: 21, fontWeight: '800', marginTop: 16 },
   emptyBody: { color: '#A2A2A2', fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 21 },

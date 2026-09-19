@@ -479,7 +479,7 @@ export default function PlaylistScreen() {
                       // Clips begins with the selected playlist's first song,
                       // then continues into the short-form Canvas feed.
                       if (songs[0]) await playSong(songs[0], songs);
-                      router.push('/clips');
+                      router.push({ pathname: '/clips', params: { playlistId: id } });
                     })();
                   }}
                   style={({ pressed }) => [styles.controlArtwork, pressed && styles.pressed]}
