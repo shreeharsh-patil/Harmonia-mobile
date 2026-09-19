@@ -56,7 +56,12 @@ function ClipCard({ song, active, shouldPrefetch, height }: {
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef(0);
+  const activeRef = useRef(active);
   const cover = artworkUrl(song, 720);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     if (!shouldPrefetch || batterySaver) return;
@@ -64,7 +69,7 @@ function ClipCard({ song, active, shouldPrefetch, height }: {
     const request = ++requestRef.current;
     // Only the visible clip shows a spinner. The next clip resolves quietly
     // while the user is watching this one, so its Canvas is ready on swipe.
-    setLoading(active);
+    setLoading(activeRef.current);
     setCanvasUrl(null);
 
     void fetchCanvasMedia(song, controller.signal)
