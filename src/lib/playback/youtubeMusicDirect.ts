@@ -427,6 +427,35 @@ export async function searchDirectYouTubeMusic(
   }
 }
 
+export async function findDirectYouTubeMusicCandidates(
+  target: {
+    title: string;
+    artist?: string | null;
+    duration?: number | null;
+  },
+  options: {
+    fetchImpl?: FetchLike;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  } = {}
+): Promise<DirectYouTubeMusicSearchTrack[]> {
+  const query = [target.title, target.artist].filter(Boolean).join(' ').trim();
+  if (!query) return [];
+
+  const results = await searchDirectYouTubeMusic(query, {
+    ...options,
+    limit: 12,
+  });
+  return results
+    .map((track) => ({ track, score: matchScore(track, target) }))
+    .sort((a, b) => b.score - a.score)
+    // Keep weak keyword matches out, but retain alternatives: a YouTube ID can
+    // be correctly matched yet unavailable for embedding in a user's region.
+    .filter(({ score }) => score >= 35)
+    .map(({ track }) => track)
+    .slice(0, 3);
+}
+
 export async function findDirectYouTubeMusicTrack(
   target: {
     title: string;
@@ -439,18 +468,9 @@ export async function findDirectYouTubeMusicTrack(
     timeoutMs?: number;
   } = {}
 ) {
-  const query = [target.title, target.artist].filter(Boolean).join(' ').trim();
-  if (!query) return null;
-
-  const results = await searchDirectYouTubeMusic(query, {
-    ...options,
-    limit: 12,
-  });
-  const ranked = results
-    .map((track) => ({ track, score: matchScore(track, target) }))
-    .sort((a, b) => b.score - a.score);
-
-  return ranked[0]?.score >= 50 ? ranked[0].track : null;
+  const candidates = await findDirectYouTubeMusicCandidates(target, options);
+  const best = candidates[0];
+  return best && matchScore(best, target) >= 50 ? best : null;
 }
 
 function formatCodecPreference(mimeType: string) {

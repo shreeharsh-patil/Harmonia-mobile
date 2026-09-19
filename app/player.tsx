@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArtworkRenderer } from '@/src/components/ArtworkRenderer';
 import { PlaybackProgressFill } from '@/src/components/PlaybackProgressFill';
 import { fetchLyrics, type LyricsResult, type StreamQuality } from '@/src/lib/api';
-import { findDirectYouTubeMusicTrack } from '@/src/lib/playback/youtubeMusicDirect';
+import { findDirectYouTubeMusicCandidates } from '@/src/lib/playback/youtubeMusicDirect';
 import { activeLyricIndex, activeLyricWordIndex, parseLrc, type LyricLine } from '@/src/lib/lyrics';
 import { artistNames, artworkUrl, durationLabel } from '@/src/lib/song';
 import { useLibrary } from '@/src/providers/LibraryProvider';
@@ -318,6 +318,7 @@ export default function PlayerScreen() {
   const positionRef = useRef(0);
   const musicVideoPausedAudioRef = useRef(false);
   const musicVideoRequestRef = useRef(0);
+  const musicVideoFallbackIdsRef = useRef<string[]>([]);
   const playingFromLabel = useMemo(() => {
     const value = Array.isArray(params.from) ? params.from[0] : params.from;
     return String(value || 'Music').trim() || 'Music';
@@ -352,6 +353,7 @@ export default function PlayerScreen() {
     setMusicVideoError(null);
     setMusicVideoLoading(false);
     musicVideoPausedAudioRef.current = false;
+    musicVideoFallbackIdsRef.current = [];
   }, [canvasTrackKey]);
 
   useEffect(() => {
@@ -452,9 +454,17 @@ export default function PlayerScreen() {
   };
 
   const recoverFromMusicVideoError = async () => {
-    // A YouTube embed can be unavailable in a region or restricted by YouTube.
-    // Restore the audio path immediately instead of leaving the user in a
-    // paused, unusable video state.
+    // A YouTube ID can be restricted for embedding in a region even when the
+    // music search result is valid. Try another highly ranked match first.
+    const nextVideoId = musicVideoFallbackIdsRef.current.shift();
+    if (nextVideoId) {
+      setMusicVideoError('Trying another matching video…');
+      setMusicVideoId(nextVideoId);
+      return;
+    }
+
+    // No alternative video is available: restore audio rather than leaving
+    // the user in a paused, unusable video state.
     const shouldResumeAudio = musicVideoPausedAudioRef.current;
     musicVideoPausedAudioRef.current = false;
     setMusicVideoId(null);
@@ -467,6 +477,7 @@ export default function PlayerScreen() {
 
     if (musicVideoId) {
       musicVideoRequestRef.current += 1;
+      musicVideoFallbackIdsRef.current = [];
       setMusicVideoId(null);
       if (musicVideoPausedAudioRef.current) {
         musicVideoPausedAudioRef.current = false;
@@ -480,15 +491,18 @@ export default function PlayerScreen() {
     const request = ++musicVideoRequestRef.current;
     try {
       const explicitId = String(currentSong.videoId || currentSong.youtubeId || '').trim();
-      const match = /^[A-Za-z0-9_-]{11}$/.test(explicitId)
-        ? { id: explicitId }
-        : await findDirectYouTubeMusicTrack({
-          title: currentSong.name,
-          artist: artistNames(currentSong),
-          duration: currentSong.duration,
-        });
+      const artist = artistNames(currentSong);
+      const target = {
+        title: currentSong.name,
+        artist: /^unknown artist$/i.test(artist) ? undefined : artist,
+        duration: currentSong.duration,
+      };
+      const candidates = /^[A-Za-z0-9_-]{11}$/.test(explicitId)
+        ? [{ id: explicitId }]
+        : await findDirectYouTubeMusicCandidates(target);
       if (request !== musicVideoRequestRef.current) return;
-      if (!match?.id) {
+      const videoIds = [...new Set(candidates.map((match) => match.id).filter(Boolean))];
+      if (!videoIds.length) {
         setMusicVideoError('No matching YouTube video found');
         return;
       }
@@ -496,7 +510,8 @@ export default function PlayerScreen() {
       musicVideoPausedAudioRef.current = isPlaying;
       if (isPlaying) await togglePlayback();
       if (request !== musicVideoRequestRef.current) return;
-      setMusicVideoId(match.id);
+      musicVideoFallbackIdsRef.current = videoIds.slice(1);
+      setMusicVideoId(videoIds[0]);
     } catch {
       if (request === musicVideoRequestRef.current) {
         setMusicVideoError('Could not find a playable YouTube video');
@@ -602,6 +617,7 @@ export default function PlayerScreen() {
               {musicVideoId ? (
                 <View style={styles.musicVideoFrame}>
                   <YoutubePlayer
+                    key={musicVideoId}
                     height={Math.max(200, Math.round(artworkSize * 9 / 16))}
                     width={artworkSize}
                     videoId={musicVideoId}
