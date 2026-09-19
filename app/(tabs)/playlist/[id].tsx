@@ -474,9 +474,16 @@ export default function PlaylistScreen() {
             {!editing && (
               <View style={styles.controlsBar}>
                 <Pressable
-                  onPress={() => setActionSong(songs[0] || null)}
+                  onPress={() => {
+                    void (async () => {
+                      // Clips begins with the selected playlist's first song,
+                      // then continues into the short-form Canvas feed.
+                      if (songs[0]) await playSong(songs[0], songs);
+                      router.push('/clips');
+                    })();
+                  }}
                   style={({ pressed }) => [styles.controlArtwork, pressed && styles.pressed]}
-                  accessibilityLabel="Playlist actions"
+                  accessibilityLabel="Open Music Clips"
                 >
                   <PlaylistArtwork playlist={playlist} size={48} radius={5} tracks={songs} />
                 </Pressable>
