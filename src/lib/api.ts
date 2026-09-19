@@ -799,6 +799,19 @@ function trendingPlaylistScore(title: string) {
 }
 
 async function fetchDirectTrendingSongs(limit = 30): Promise<Song[]> {
+  try {
+    const launchData = await fetchDirectJioSaavnLaunchData();
+    const candidateCharts = [...(launchData.charts || []), ...(launchData.topPlaylists || [])];
+    const topChart = candidateCharts.find((c) =>
+      /top\s*50|superhits|trending/i.test(c.title || '') && !/devotional|bhajan|podcast/i.test(c.title || '')
+    );
+    if (topChart?.id) {
+      const playlist = await fetchDirectJioSaavnPlaylist(topChart.id);
+      const songs = (playlist?.tracks || []).map(directTrackToSong);
+      if (songs.length >= 8) return mergeSongs(songs, [], limit);
+    }
+  } catch {}
+
   const queryResults = await Promise.allSettled([
     searchDirectJioSaavnPlaylists('Top 50 India', { limit: 6 }),
     searchDirectJioSaavnPlaylists('India Top 50', { limit: 6 }),
