@@ -48,14 +48,25 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Verify Expo Android autolinking
+        working-directory: android
+        run: |
+          # Run Expo's inline-module mirror before Gradle loads its JVMs. This
+          # surfaces the real CLI error and prepares the generated empty list.
+          node --no-warnings --eval "require('expo/bin/autolinking')" \
+            expo-modules-autolinking mirror-kotlin-inline-modules \
+            --kotlin-files-mirror-directory "$GITHUB_WORKSPACE/node_modules/expo/android/src/main/java/inline/modules" \
+            --inline-modules-list-directory "$GITHUB_WORKSPACE/node_modules/expo/android/build/inline/modules" \
+            --watched-directories-serialized '[]'
+
       - name: Tune Gradle memory for the release build
         run: |
-          # Keep Gradle and its Kotlin daemon within the 7 GB hosted-runner
-          # budget. A 4 GB Gradle heap starves Expo's Node autolinking process.
+          # Keep compilation in one bounded JVM. Separate Gradle and Kotlin
+          # daemons exhaust the 7 GB hosted runner before Expo invokes Node.
           cat >> android/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8
-          kotlin.daemon.jvmargs=-Xmx1024m -XX:MaxMetaspaceSize=384m
-          org.gradle.workers.max=2
+          org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8
+          kotlin.compiler.execution.strategy=in-process
+          org.gradle.workers.max=1
           EOF
 
       - name: Cache Gradle
@@ -76,7 +87,7 @@ jobs:
           # native compilation substantially and keeps the release APK focused
           # on actual Android devices.
           ./gradlew assembleRelease --no-daemon --build-cache --stacktrace \
-            --max-workers=2 \
+            --max-workers=1 \
             -x lintVitalRelease \
             -x lintVitalAnalyzeRelease \
             -x lintVitalReportRelease \
