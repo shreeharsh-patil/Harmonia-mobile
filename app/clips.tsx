@@ -1,6 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AccessibilityInfo,
+  Animated,
+  Easing,
   FlatList,
   Pressable,
   StyleSheet,
@@ -16,6 +19,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchTrendingHomeContent } from '@/src/lib/api';
 import { fetchCanvasMedia } from '@/src/lib/canvas';
+import { useArtworkPalette } from '@/src/lib/palette';
 import { artworkUrl, artistNames } from '@/src/lib/song';
 import { usePlayer } from '@/src/providers/PlayerProvider';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
@@ -55,13 +59,44 @@ const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }
   const { batterySaver } = usePreferences();
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const requestRef = useRef(0);
   const activeRef = useRef(active);
+  const artworkMotion = useRef(new Animated.Value(0)).current;
   const cover = artworkUrl(song, 720);
+  const palette = useArtworkPalette(song, 64);
 
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => { if (mounted) setReduceMotion(enabled); })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    artworkMotion.stopAnimation();
+    artworkMotion.setValue(0);
+    // The fallback stays deliberately lightweight: a native-driver transform
+    // rather than a JS animation or another video decoder.
+    if (!active || batterySaver || reduceMotion || canvasUrl) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(artworkMotion, { toValue: 1, duration: 3200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(artworkMotion, { toValue: 0, duration: 3200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [active, artworkMotion, batterySaver, canvasUrl, reduceMotion]);
 
   useEffect(() => {
     if (!shouldPrefetch || batterySaver) return;
@@ -90,11 +125,34 @@ const ClipCard = memo(function ClipCard({ song, active, shouldPrefetch, height }
   }, [batterySaver, shouldPrefetch, song]);
 
   return (
-    <View style={[styles.clip, { height }]}>
-      {!!cover && <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} blurRadius={18} contentFit="cover" />}
+    <View style={[styles.clip, { height, backgroundColor: palette.secondary }]}>
+      {!!cover && <Image source={{ uri: cover }} style={StyleSheet.absoluteFill} blurRadius={28} contentFit="cover" transition={0} />}
       <View style={styles.backdropShade} />
       {!!canvasUrl && active && <ClipVideo url={canvasUrl} active />}
-      <LinearGradient colors={['rgba(0,0,0,0.06)', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.92)']} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFill} />
+      {!canvasUrl && (
+        <View pointerEvents="none" style={styles.fallbackStage}>
+          <View style={[styles.fallbackHalo, { backgroundColor: palette.dominant }]} />
+          {!!cover && (
+            <Animated.View
+              style={[
+                styles.artworkFrame,
+                {
+                  transform: [
+                    { scale: artworkMotion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] }) },
+                    { rotate: artworkMotion.interpolate({ inputRange: [0, 1], outputRange: ['-0.8deg', '0.8deg'] }) },
+                  ],
+                },
+              ]}
+            >
+              <Image source={{ uri: cover }} style={styles.fallbackArtwork} contentFit="cover" transition={0} cachePolicy="memory-disk" />
+            </Animated.View>
+          )}
+          <View style={[styles.equalizer, { opacity: active && !batterySaver && !reduceMotion ? 1 : 0.55 }]}>
+            {[0, 1, 2].map((bar) => <View key={bar} style={[styles.equalizerBar, bar === 1 && styles.equalizerBarTall]} />)}
+          </View>
+        </View>
+      )}
+      <LinearGradient colors={['rgba(0,0,0,0.10)', 'rgba(0,0,0,0.20)', 'rgba(0,0,0,0.92)']} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFill} />
 
       <SafeAreaView style={styles.clipSafe} edges={['top', 'bottom']}>
         <View style={styles.clipHeader}>
@@ -245,6 +303,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#050505' },
   clip: { width: '100%', overflow: 'hidden', backgroundColor: '#090909' },
   backdropShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.58)' },
+  fallbackStage: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
+  fallbackHalo: { position: 'absolute', width: '88%', aspectRatio: 1, borderRadius: 999, opacity: 0.48, transform: [{ scale: 1.25 }] },
+  artworkFrame: { width: '68%', maxWidth: 360, aspectRatio: 1, borderRadius: 22, overflow: 'hidden', elevation: 18, shadowColor: '#000', shadowOpacity: 0.42, shadowRadius: 22, shadowOffset: { width: 0, height: 14 } },
+  fallbackArtwork: { width: '100%', height: '100%' },
+  equalizer: { position: 'absolute', bottom: '33%', flexDirection: 'row', alignItems: 'center', gap: 9 },
+  equalizerBar: { width: 6, height: 28, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.92)' },
+  equalizerBarTall: { height: 44 },
   clipSafe: { flex: 1, justifyContent: 'space-between' },
   clipHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8 },
   clipTitle: { color: '#FFF', fontSize: 17, fontWeight: '800' },
