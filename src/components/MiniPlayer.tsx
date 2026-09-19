@@ -21,7 +21,9 @@ import { usePlaybackProgress, usePlayer } from '@/src/providers/PlayerProvider';
 import { colors } from '@/src/theme';
 import { usePreferences } from '@/src/providers/PreferencesProvider';
 
-export const MINI_PLAYER_HEIGHT = 74;
+// Keep this genuinely "mini": output-device status is compact enough to fit
+// without making the player taller than the original Spotify-style dock.
+export const MINI_PLAYER_HEIGHT = 60;
 export const TAB_BAR_HEIGHT = 64;
 export const TAB_BAR_MIN_BOTTOM = 0;
 // Keep the mini player visually attached to the translucent navigation dock.
@@ -180,7 +182,7 @@ export function MiniPlayer() {
           onPress={() => openPlayer()}
           style={styles.info}
         >
-          <TrackArtwork song={currentSong} size={48} radius={5} />
+          <TrackArtwork song={currentSong} size={40} radius={5} />
           <View style={styles.copy}>
             <View style={styles.titleRow}>
               <Text numberOfLines={1} style={styles.title}>{currentSong.name}</Text>
@@ -254,7 +256,7 @@ const styles = StyleSheet.create({
   shell: {
     height: MINI_PLAYER_HEIGHT,
     backgroundColor: '#1E1E1E',
-    borderRadius: 10,
+    borderRadius: 9,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.24,
@@ -277,7 +279,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
-    paddingVertical: 7,
+    paddingVertical: 4,
   },
   info: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   copy: { flex: 1, marginLeft: 9, minWidth: 0 },
@@ -301,16 +303,16 @@ const styles = StyleSheet.create({
   title: {
     color: '#FFF',
     fontWeight: '600',
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 15,
     flexShrink: 1,
   },
-  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 11, marginTop: 1, lineHeight: 13 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, minWidth: 0 },
-  routeName: { flexShrink: 1, color: colors.accentBright, fontSize: 11, lineHeight: 13, fontWeight: '700' },
-  smallControl: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
-  playControl: { width: 34, height: 38, alignItems: 'center', justifyContent: 'center' },
-  nextControl: { width: 36, height: 38, alignItems: 'center', justifyContent: 'center' },
+  artist: { color: 'rgba(255,255,255,0.70)', fontSize: 10, marginTop: 0, lineHeight: 12 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 0, minWidth: 0 },
+  routeName: { flexShrink: 1, color: colors.accentBright, fontSize: 10, lineHeight: 12, fontWeight: '700' },
+  smallControl: { width: 26, height: 32, alignItems: 'center', justifyContent: 'center' },
+  playControl: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center' },
+  nextControl: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center' },
   progressTrack: {
     position: 'absolute',
     left: 8,
