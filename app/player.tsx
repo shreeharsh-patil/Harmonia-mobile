@@ -94,7 +94,10 @@ const lyricLineLayouts: { current: Record<number, { y: number; height: number }>
 // second. Nothing behind the sheet is re-rendered by this animation.
 function useSmoothLyricPosition(position: number, playing: boolean) {
   const [smoothPosition, setSmoothPosition] = useState(position);
-  const anchor = useRef({ position, timestamp: Date.now() });
+  // Date.now() must not be called directly during render (react-hooks/purity).
+  // Initialise with a sentinel; the effect below overwrites it before the
+  // first animation frame fires, so the interpolated position is always valid.
+  const anchor = useRef({ position, timestamp: 0 });
 
   useEffect(() => {
     anchor.current = { position, timestamp: Date.now() };

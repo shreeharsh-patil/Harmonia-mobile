@@ -2068,7 +2068,7 @@ export function PlayerProvider({ children }: PropsWithChildren) {
       duration: status.duration || currentSong?.duration || 0,
       sleepRemaining,
     };
-  }, [currentSong?.duration, sleepRemaining, status.currentTime, status.duration]);
+  }, [currentSong?.duration, currentSong?.id, isLoadingTrack, sleepRemaining, status.currentTime, status.duration]);
 
   return (
     <PlayerContext.Provider value={value}>

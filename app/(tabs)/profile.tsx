@@ -58,7 +58,7 @@ function formatBytes(bytes: number) {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, token, loading, signOut, refreshUser } = useAuth();
-  const { playlists, likedSongs, likedAlbums, likedArtists, refreshing, refresh } = useLibrary();
+  const { playlists, likedSongs, refreshing, refresh } = useLibrary();
   const {
     currentSong,
     playbackRate,
