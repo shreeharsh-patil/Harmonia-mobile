@@ -112,7 +112,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="library"
           options={{
-            title: 'Library',
+            title: 'Clips',
             // This Library-position control is the quick entry point for
             // full-screen Music Clips. The Library stays available through
             // existing Home/Profile entries and deep links.
