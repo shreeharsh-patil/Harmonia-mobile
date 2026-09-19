@@ -317,6 +317,7 @@ export default function PlayerScreen() {
   // actions, kept fresh by the PlaybackTimeline leaf without re-rendering it.
   const positionRef = useRef(0);
   const musicVideoPausedAudioRef = useRef(false);
+  const musicVideoRequestRef = useRef(0);
   const playingFromLabel = useMemo(() => {
     const value = Array.isArray(params.from) ? params.from[0] : params.from;
     return String(value || 'Music').trim() || 'Music';
@@ -346,6 +347,7 @@ export default function PlayerScreen() {
   useEffect(() => {
     // A video belongs to a single track. Never carry a matching YouTube video
     // into the next item in the queue.
+    musicVideoRequestRef.current += 1;
     setMusicVideoId(null);
     setMusicVideoError(null);
     setMusicVideoLoading(false);
@@ -446,10 +448,22 @@ export default function PlayerScreen() {
     void toggleLike(currentSong);
   };
 
+  const recoverFromMusicVideoError = async () => {
+    // A YouTube embed can be unavailable in a region or restricted by YouTube.
+    // Restore the audio path immediately instead of leaving the user in a
+    // paused, unusable video state.
+    const shouldResumeAudio = musicVideoPausedAudioRef.current;
+    musicVideoPausedAudioRef.current = false;
+    setMusicVideoId(null);
+    setMusicVideoError('This video is unavailable. Switched back to audio.');
+    if (shouldResumeAudio && !isPlaying) await togglePlayback();
+  };
+
   const toggleMusicVideo = async () => {
     if (!musicVideosEnabled || musicVideoLoading) return;
 
     if (musicVideoId) {
+      musicVideoRequestRef.current += 1;
       setMusicVideoId(null);
       if (musicVideoPausedAudioRef.current) {
         musicVideoPausedAudioRef.current = false;
@@ -460,6 +474,7 @@ export default function PlayerScreen() {
 
     setMusicVideoLoading(true);
     setMusicVideoError(null);
+    const request = ++musicVideoRequestRef.current;
     try {
       const explicitId = String(currentSong.videoId || currentSong.youtubeId || '').trim();
       const match = /^[A-Za-z0-9_-]{11}$/.test(explicitId)
@@ -469,6 +484,7 @@ export default function PlayerScreen() {
           artist: artistNames(currentSong),
           duration: currentSong.duration,
         });
+      if (request !== musicVideoRequestRef.current) return;
       if (!match?.id) {
         setMusicVideoError('No matching YouTube video found');
         return;
@@ -476,11 +492,14 @@ export default function PlayerScreen() {
 
       musicVideoPausedAudioRef.current = isPlaying;
       if (isPlaying) await togglePlayback();
+      if (request !== musicVideoRequestRef.current) return;
       setMusicVideoId(match.id);
     } catch {
-      setMusicVideoError('Could not load a YouTube video');
+      if (request === musicVideoRequestRef.current) {
+        setMusicVideoError('Could not find a playable YouTube video');
+      }
     } finally {
-      setMusicVideoLoading(false);
+      if (request === musicVideoRequestRef.current) setMusicVideoLoading(false);
     }
   };
 
@@ -595,7 +614,7 @@ export default function PlayerScreen() {
                       start: Math.max(0, Math.floor(positionRef.current)),
                       rel: false,
                     }}
-                    onError={() => setMusicVideoError('This YouTube video cannot be played in the app')}
+                    onError={() => { void recoverFromMusicVideoError(); }}
                     webViewProps={{
                       allowsFullscreenVideo: true,
                       allowsInlineMediaPlayback: true,

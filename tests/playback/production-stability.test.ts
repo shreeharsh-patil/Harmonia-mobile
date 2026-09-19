@@ -438,6 +438,9 @@ test('music videos use direct YouTube services without a Vercel proxy', async ()
   assert.match(player, /YoutubePlayer/);
   assert.match(player, /react-native-youtube-iframe/);
   assert.match(player, /allowsInlineMediaPlayback/);
+  assert.match(player, /musicVideoRequestRef/);
+  assert.match(player, /recoverFromMusicVideoError/);
+  assert.match(player, /Switched back to audio/);
   assert.doesNotMatch(player, /\/api\/yt-stream|vercel\.app|vercel\.com/);
 });
 
