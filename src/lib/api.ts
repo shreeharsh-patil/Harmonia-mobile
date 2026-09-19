@@ -1560,6 +1560,8 @@ export async function resolvePlayableSong(
   };
 }
 
+const playlistSongsCache = new Map<string, { songs: Song[]; timestamp: number }>();
+
 export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
   const attemptedSongIds = new Set<string>();
   const resolveSongIds = async (ids: unknown[]) => {
@@ -1572,112 +1574,129 @@ export async function fetchPlaylistSongs(playlist: Playlist): Promise<Song[]> {
   const id = String(playlist.id || playlist._id || '').trim();
   const sourceUrl = String(playlist.sourceUrl || (playlist as any).source_url || (playlist as any).spotifyUrl || '');
   const spotifyId = String(playlist.spotifyId || '').trim();
+  const title = String(playlist.name || playlist.title || '').trim();
+  const cacheKey = `${id}|${spotifyId}|${sourceUrl}|${title}`;
 
-  // 1. If playlist already contains a full tracklist (>= 35 songs), return immediately
-  if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 35) {
-    return playlist.tracks.map((song) => normalizeSong(song as any));
-  }
-  if (Array.isArray(playlist.songIds) && playlist.songIds.length >= 35) {
-    const songs = await resolveSongIds(playlist.songIds);
-    if (songs.length >= 35) return songs;
-  }
-
-  // 2. Query Harmonia backend endpoints if configured (handles MongoDB catalog playlists & trackMaps)
-  if (hasHarmoniaApi() && id) {
-    try {
-      const payload = await requestJson<{ success: true; data: any }>(
-        `/api/playlists/${encodeURIComponent(id)}`
-      );
-      const value = payload.data || {};
-      const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
-      const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
-        ? value.tracks
-        : (Array.isArray(value.songs) && value.songs.length)
-          ? value.songs
-          : [];
-      if (rawTracks.length) {
-        return rawTracks.map((track: any) => {
-          const mappedId = trackMap[track.id] || track.id;
-          return normalizeSong({ ...track, id: mappedId });
-        });
-      }
-    } catch {}
-
-    try {
-      const payload = await requestJson<{ success: true; data: any }>(
-        `/api/spotify-playlists/${encodeURIComponent(id)}`
-      );
-      const value = payload.data || {};
-      const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
-      const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
-        ? value.tracks
-        : (Array.isArray(value.songs) && value.songs.length)
-          ? value.songs
-          : [];
-      if (rawTracks.length) {
-        return rawTracks.map((track: any) => {
-          const mappedId = trackMap[track.id] || track.id;
-          return normalizeSong({ ...track, id: mappedId });
-        });
-      }
-    } catch {}
+  if (cacheKey.length > 3) {
+    const cached = playlistSongsCache.get(cacheKey);
+    if (cached && cached.songs.length >= 25 && Date.now() - cached.timestamp < 15 * 60 * 1000) {
+      return cached.songs;
+    }
   }
 
-  // 3. Direct Spotify Embed scraper: fetch all 50-100 tracks directly from Spotify embed if Spotify ID/URL exists
-  const effectiveSpotifyId = spotifyId || (sourceUrl ? parseSpotifyId(sourceUrl)?.id : (parseSpotifyId(id)?.id || ''));
-  if (effectiveSpotifyId) {
-    // Check scrape endpoint if backend is available
-    if (hasHarmoniaApi()) {
+  const resolve = async (): Promise<Song[]> => {
+    // 1. If playlist already contains a full tracklist (>= 35 songs), return immediately
+    if (Array.isArray(playlist.tracks) && playlist.tracks.length >= 35) {
+      return playlist.tracks.map((song) => normalizeSong(song as any));
+    }
+    if (Array.isArray(playlist.songIds) && playlist.songIds.length >= 35) {
+      const songs = await resolveSongIds(playlist.songIds);
+      if (songs.length >= 35) return songs;
+    }
+
+    // 2. Query Harmonia backend endpoints if configured (handles MongoDB catalog playlists & trackMaps)
+    if (hasHarmoniaApi() && id) {
       try {
-        const payload = await requestJson<{ success?: boolean; data?: { tracks?: any[]; songs?: any[] } }>(
-          '/api/scrape-playlist',
-          {
-            method: 'POST',
-            body: JSON.stringify({ playlistUrl: `https://open.spotify.com/playlist/${effectiveSpotifyId}` }),
-            timeoutMs: 15_000,
-          }
+        const payload = await requestJson<{ success: true; data: any }>(
+          `/api/playlists/${encodeURIComponent(id)}`
         );
-        const rawTracks = payload.data?.tracks || payload.data?.songs || [];
-        if (rawTracks.length >= 25) {
-          const mapped = rawTracks.map((track: any) => normalizeSong(track));
-          return await ensureCanonicalSpotifyArtwork(mapped);
+        const value = payload.data || {};
+        const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
+        const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
+          ? value.tracks
+          : (Array.isArray(value.songs) && value.songs.length)
+            ? value.songs
+            : [];
+        if (rawTracks.length) {
+          return rawTracks.map((track: any) => {
+            const mappedId = trackMap[track.id] || track.id;
+            return normalizeSong({ ...track, id: mappedId });
+          });
+        }
+      } catch {}
+
+      try {
+        const payload = await requestJson<{ success: true; data: any }>(
+          `/api/spotify-playlists/${encodeURIComponent(id)}`
+        );
+        const value = payload.data || {};
+        const trackMap = (value.trackMap && typeof value.trackMap === 'object') ? value.trackMap : {};
+        const rawTracks = (Array.isArray(value.tracks) && value.tracks.length)
+          ? value.tracks
+          : (Array.isArray(value.songs) && value.songs.length)
+            ? value.songs
+            : [];
+        if (rawTracks.length) {
+          return rawTracks.map((track: any) => {
+            const mappedId = trackMap[track.id] || track.id;
+            return normalizeSong({ ...track, id: mappedId });
+          });
         }
       } catch {}
     }
 
-    const directSpotify = await fetchDirectSpotifyPlaylist(effectiveSpotifyId);
-    if (directSpotify?.tracks?.length && directSpotify.tracks.length >= 15) {
-      return directSpotify.tracks;
+    // 3. Direct Spotify Embed scraper: fetch all 50-100 tracks directly from Spotify embed if Spotify ID/URL exists
+    const effectiveSpotifyId = spotifyId || (sourceUrl ? parseSpotifyId(sourceUrl)?.id : (parseSpotifyId(id)?.id || ''));
+    if (effectiveSpotifyId) {
+      // Check scrape endpoint if backend is available
+      if (hasHarmoniaApi()) {
+        try {
+          const payload = await requestJson<{ success?: boolean; data?: { tracks?: any[]; songs?: any[] } }>(
+            '/api/scrape-playlist',
+            {
+              method: 'POST',
+              body: JSON.stringify({ playlistUrl: `https://open.spotify.com/playlist/${effectiveSpotifyId}` }),
+              timeoutMs: 15_000,
+            }
+          );
+          const rawTracks = payload.data?.tracks || payload.data?.songs || [];
+          if (rawTracks.length >= 25) {
+            const mapped = rawTracks.map((track: any) => normalizeSong(track));
+            return await ensureCanonicalSpotifyArtwork(mapped);
+          }
+        } catch {}
+      }
+
+      const directSpotify = await fetchDirectSpotifyPlaylist(effectiveSpotifyId);
+      if (directSpotify?.tracks?.length && directSpotify.tracks.length >= 15) {
+        return directSpotify.tracks;
+      }
     }
-  }
 
-  // 4. Direct JioSaavn playlist by numeric ID (fetches 50-100 full tracks directly)
-  if (id && (/^\d+$/.test(id) || playlist.source === 'jiosaavn')) {
-    const direct = await fetchDirectJioSaavnPlaylist(id);
-    if (direct?.tracks?.length && direct.tracks.length >= 15) {
-      return direct.tracks.map(directTrackToSong);
+    // 4. Direct JioSaavn playlist by numeric ID (fetches 50-100 full tracks directly)
+    if (id && (/^\d+$/.test(id) || playlist.source === 'jiosaavn')) {
+      const direct = await fetchDirectJioSaavnPlaylist(id);
+      if (direct?.tracks?.length && direct.tracks.length >= 15) {
+        return direct.tracks.map(directTrackToSong);
+      }
     }
+
+    // 5. Bundled catalog tracks if >= 30
+    const bundled = findBundledPlaylistFor(playlist);
+    if (bundled?.tracks?.length && bundled.tracks.length >= 30) {
+      return bundled.tracks.map((song) => normalizeSong(song as any));
+    }
+
+    // 6. Initial songs from memory / songIds / bundled
+    let initialSongs: Song[] = [];
+    if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
+      initialSongs = playlist.tracks.map((song) => normalizeSong(song as any));
+    } else if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
+      initialSongs = await resolveSongIds(playlist.songIds);
+    } else if (bundled?.tracks?.length) {
+      initialSongs = bundled.tracks.map((song) => normalizeSong(song as any));
+    }
+
+    // If initial songs already has >= 35 full tracks, return
+    if (initialSongs.length >= 35) return initialSongs;
+
+    // 7. Populate small/sparse playlist (6, 10 songs) into a full 50+ song tracklist
+    return populateSpotifyPlaylistSongs(playlist, initialSongs, 50);
+  };
+
+  const results = await resolve();
+  if (results.length >= 10 && cacheKey.length > 3) {
+    playlistSongsCache.set(cacheKey, { songs: results, timestamp: Date.now() });
   }
-
-  // 5. Bundled catalog tracks if >= 30
-  const bundled = findBundledPlaylistFor(playlist);
-  if (bundled?.tracks?.length && bundled.tracks.length >= 30) {
-    return bundled.tracks.map((song) => normalizeSong(song as any));
-  }
-
-  // 6. Initial songs from memory / songIds / bundled
-  let initialSongs: Song[] = [];
-  if (Array.isArray(playlist.tracks) && playlist.tracks.length) {
-    initialSongs = playlist.tracks.map((song) => normalizeSong(song as any));
-  } else if (Array.isArray(playlist.songIds) && playlist.songIds.length) {
-    initialSongs = await resolveSongIds(playlist.songIds);
-  } else if (bundled?.tracks?.length) {
-    initialSongs = bundled.tracks.map((song) => normalizeSong(song as any));
-  }
-
-  // If initial songs already has >= 35 full tracks, return
-  if (initialSongs.length >= 35) return initialSongs;
-
-  // 7. Populate small/sparse playlist (6, 10 songs) into a full 50+ song tracklist
-  return populateSpotifyPlaylistSongs(playlist, initialSongs, 50);
+  return results;
 }

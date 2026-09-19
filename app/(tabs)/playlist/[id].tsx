@@ -583,18 +583,25 @@ export default function PlaylistScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No matching tracks' : 'No tracks yet'}
-            </Text>
-            <Text style={styles.emptyBody}>
-              {searchQuery
-                ? `No songs match "${searchQuery}".`
-                : owned
-                ? 'Add songs from Search or Now Playing.'
-                : 'No playable tracks are available in this playlist.'}
-            </Text>
-          </View>
+          loading || (!songs.length && !error) ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={colors.accent} size="large" />
+              <Text style={styles.loadingStateText}>Loading tracks...</Text>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>
+                {searchQuery ? 'No matching tracks' : 'No tracks yet'}
+              </Text>
+              <Text style={styles.emptyBody}>
+                {searchQuery
+                  ? `No songs match "${searchQuery}".`
+                  : owned
+                  ? 'Add songs from Search or Now Playing.'
+                  : 'No playable tracks are available in this playlist.'}
+              </Text>
+            </View>
+          )
         }
         renderItem={({ item, index }) => (
           <View style={styles.songRowWrap}>
@@ -835,6 +842,8 @@ const styles = StyleSheet.create({
   },
   inlineError: { color: colors.danger, fontSize: 12 },
   retryInline: { color: colors.textFaint, fontSize: 11, marginTop: 3 },
+  loadingState: { paddingVertical: 48, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingStateText: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   empty: { paddingVertical: 52, alignItems: 'center' },
   emptyTitle: { color: colors.textStrong, fontSize: 16, fontWeight: '800' },
   emptyBody: { color: colors.textMuted, fontSize: 13, marginTop: 6, textAlign: 'center' },

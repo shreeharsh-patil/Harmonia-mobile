@@ -116,9 +116,10 @@ export default function TabsLayout() {
             // This Library-position control is the quick entry point for
             // full-screen Music Clips. The Library stays available through
             // existing Home/Profile entries and deep links.
-            tabBarButton: (props) => (
-              <Pressable {...props} onPress={() => router.push('/clips')} />
-            ),
+            tabBarButton: (props) => {
+              const { ref: _ref, ...rest } = (props || {}) as any;
+              return <Pressable {...rest} onPress={() => router.push('/clips')} />;
+            },
             tabBarIcon: ({ color, focused }) => (
               <LibraryIcon color={String(color)} focused={focused} />
             ),
